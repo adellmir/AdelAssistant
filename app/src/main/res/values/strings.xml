@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">دستیار عادل</string>
+
+    <string name="home_title">دستیار عادل</string>
+    <string name="section_work">کاری</string>
+    <string name="section_finance">مالی</string>
+
+    <string name="work_tunnel">تونل</string>
+    <string name="work_free">آزاد</string>
+    <string name="work_tasks">تسک‌ها</string>
+
+    <string name="finance_tunnel">تونل</string>
+    <string name="finance_free">آزاد</string>
+    <string name="finance_receivables">مطالبات کلی</string>
+
+    <string name="coming_soon">این بخش به‌زودی تکمیل می‌شود</string>
+    <string name="back">بازگشت</string>
+</resources>
