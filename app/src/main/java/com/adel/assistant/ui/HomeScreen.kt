@@ -27,6 +27,23 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.AppMenu
 import com.adel.assistant.data.MenuItem
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.theme.BorderColor
+import com.adel.assistant.ui.theme.Surface as SurfaceColor
+import com.adel.assistant.ui.theme.SurfaceHigh
+import com.adel.assistant.ui.theme.TextMuted
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import java.util.Calendar
+
+private fun timeBasedGreeting(): String {
+    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 5..10 -> "صبح بخیر"
+        in 11..13 -> "ظهر بخیر"
+        in 14..18 -> "عصر بخیر"
+        else -> "شب بخیر"
+    }
+}
 
 @Composable
 fun HomeScreen(onNavigate: (String) -> Unit) {
@@ -43,7 +60,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             .fillMaxSize()
             .background(Background)
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+            Text(
+                "${timeBasedGreeting()} مهندس پورمیر",
+                style = MaterialTheme.typography.titleLarge,
+                color = TextPrimary
+            )
+        }
 
         if (tabs.size > 1) {
             Row(
@@ -59,8 +82,8 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .weight(1f)
                             .clickable { tabIndex = index },
                         shape = RoundedCornerShape(12.dp),
-                        color = if (selected) section.color.copy(alpha = 0.15f) else Color.Transparent,
-                        border = if (!selected) BorderStroke(0.5.dp, Color(0xFFDDDDDD)) else null
+                        color = if (selected) section.color.copy(alpha = 0.18f) else Color.Transparent,
+                        border = if (!selected) BorderStroke(0.5.dp, BorderColor) else null
                     ) {
                         Text(
                             tab.title,
@@ -68,7 +91,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 .padding(vertical = 10.dp)
                                 .fillMaxWidth(),
                             textAlign = TextAlign.Center,
-                            color = if (selected) section.color else Color(0xFF6B6B6B),
+                            color = if (selected) section.color else TextSecondary,
                             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
                         )
                     }
@@ -91,7 +114,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 Surface(
                     modifier = Modifier.clickable { onNavigate(item.route) },
                     shape = RoundedCornerShape(12.dp),
-                    color = Color.White
+                    color = SurfaceColor
                 ) {
                     Column(
                         modifier = Modifier
@@ -104,18 +127,18 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         Text(
                             item.title,
                             textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextPrimary
                         )
                     }
                 }
             }
         }
 
-        // نوار پایین ثابت: راست=مالی، وسط=نقشه‌برداری، چپ=ابزار (به‌ترتیب لیست sections با راست‌چین بودن اپ)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(SurfaceHigh)
                 .padding(vertical = 10.dp)
         ) {
             sections.forEachIndexed { index, s ->
@@ -132,13 +155,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     Icon(
                         s.icon,
                         contentDescription = s.title,
-                        tint = if (selected) s.color else Color(0xFFAAAAAA)
+                        tint = if (selected) s.color else TextMuted
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         s.title,
                         fontSize = 11.sp,
-                        color = if (selected) s.color else Color(0xFFAAAAAA)
+                        color = if (selected) s.color else TextMuted
                     )
                 }
             }
