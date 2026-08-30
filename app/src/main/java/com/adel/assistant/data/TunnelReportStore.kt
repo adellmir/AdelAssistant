@@ -5,43 +5,45 @@ import kotlin.math.abs
 
 data class ReportEntry(
     val year: String, val month: String, val day: String,
-    val shaft: String, val side: String, val pointNo: String, val length: Double
+    val shaft: String, val side: String, val pointNo: String, val length: Double,
+    val deviation: String = "", val collapse: String = ""
 ) {
     val key: String get() = "$shaft-$side"
-    val dateSortKey: String get() = "%s%02d%02d".format(year, month.toIntOrNull() ?: 0, day.toIntOrNull() ?: 0)
+    val dateSortKey: String get() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
 }
 
 data class ShaftEntry(val name: String, val fixedKm: Double, val type: String)
 
 object TunnelReportStore {
     private const val REPORT_CSV = "survey_tunnel_report"
-    private const val SHAFTS_CSV = "tunnel_shafts"
     private const val POINTS_TXT = "tunnel_points"
 
     fun saveEntry(context: Context, e: ReportEntry) {
-        CsvStore.appendRow(context, REPORT_CSV, listOf(e.year, e.month, e.day, e.shaft, e.side, e.pointNo, e.length.toString()))
+        CsvStore.appendRow(context, REPORT_CSV, listOf(
+            e.year, e.month, e.day, e.shaft, e.side, e.pointNo, e.length.toString(), e.deviation, e.collapse
+        ))
     }
 
     fun allEntries(context: Context): List<ReportEntry> {
         return CsvStore.readAll(context, REPORT_CSV).mapNotNull { row ->
             if (row.size < 7) return@mapNotNull null
-            try { ReportEntry(row[0], row[1], row[2], row[3], row[4], row[5], row[6].toDouble()) }
-            catch (e: Exception) { null }
+            try {
+                ReportEntry(row[0], row[1], row[2], row[3], row[4], row[5], row[6].toDouble(),
+                    row.getOrElse(7) { "" }, row.getOrElse(8) { "" })
+            } catch (e: Exception) { null }
         }
     }
 
-    /** رکوردهای ثبت‌شده برای یک تاریخ مشخص */
     fun entriesForDate(context: Context, year: String, month: String, day: String): List<ReportEntry> {
-        val key = "%s%02d%02d".format(year, month.toIntOrNull() ?: 0, day.toIntOrNull() ?: 0)
+        val key = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
         return allEntries(context).filter { it.dateSortKey == key }
     }
 
-    /** جایگزینی رکوردهای یک روز خاص با مجموعه‌ی جدید (برای ویرایش روزهای گذشته) */
     fun replaceEntriesForDate(context: Context, year: String, month: String, day: String, newEntries: List<ReportEntry>) {
-        val dateKey = "%s%02d%02d".format(year, month.toIntOrNull() ?: 0, day.toIntOrNull() ?: 0)
+        val dateKey = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
         val kept = allEntries(context).filter { it.dateSortKey != dateKey }
         val all = kept + newEntries
-        val rows = all.map { listOf(it.year, it.month, it.day, it.shaft, it.side, it.pointNo, it.length.toString()) }
+        val rows = all.map { listOf(it.year, it.month, it.day, it.shaft, it.side, it.pointNo, it.length.toString(), it.deviation, it.collapse) }
         CsvStore.overwriteAll(context, REPORT_CSV, rows)
     }
 
@@ -64,18 +66,20 @@ object TunnelReportStore {
         return allShafts(context).firstOrNull { it.name == shaft }?.fixedKm
     }
 
+    /** شفت‌ها و دهانه‌ها اکنون مستقیم از فایل نقاط استخراج می‌شوند:
+     *  نوع نقطه = "sh<عدد>" => شفت با همان عدد به‌عنوان نام
+     *  نوع نقطه = "start" یا "end" => دهانه‌ی شروع/پایان مسیر */
     fun allShafts(context: Context): List<ShaftEntry> {
-        return CsvStore.readAll(context, SHAFTS_CSV).mapNotNull { row ->
-            if (row.size < 3) return@mapNotNull null
-            try { ShaftEntry(row[0], row[1].toDouble(), row[2]) } catch (e: Exception) { null }
+        return allPoints(context).mapNotNull { p ->
+            val t = p.type.trim()
+            when {
+                t.startsWith("sh") && t.drop(2).toIntOrNullFa() != null -> ShaftEntry(t.drop(2), p.km, "شفت")
+                t == "start" || t == "end" -> ShaftEntry(t, p.km, "دهانه")
+                else -> null
+            }
         }
     }
 
-    fun saveShaft(context: Context, s: ShaftEntry) {
-        CsvStore.appendRow(context, SHAFTS_CSV, listOf(s.name, s.fixedKm.toString(), s.type))
-    }
-
-    /** آخرین کیلومتر فعلیِ هر شفت-سمت (بدون محدودیت تاریخ) */
     fun currentKm(context: Context, shaft: String, side: String): Double {
         return lastKmBefore(context, shaft, side) ?: shaftFixedKm(context, shaft) ?: 0.0
     }
@@ -101,7 +105,6 @@ object TunnelReportStore {
             p.z.toString(), p.km.toString(), p.elevDiff, p.slope, p.type))
     }
 
-    /** جایگزینی کامل نقطه‌ای موجود (برای ویرایش) */
     fun replacePoint(context: Context, oldPointNo: String, updated: TunnelPoint) {
         val kept = allPoints(context).filter { it.pointNo != oldPointNo }
         val all = kept + updated
@@ -132,15 +135,6 @@ object TunnelReportStore {
     fun searchByKeyword(context: Context, keyword: String): List<TunnelPoint> =
         allPoints(context).filter { it.type.contains(keyword) || it.pointNo.contains(keyword) }
 
-    /** پیدا کردن نزدیک‌ترین X,Y (برای جستجوی معکوس مختصات→کیلومتراژ) */
-    fun nearestByXY(context: Context, x: Double, y: Double): TunnelPoint? {
-        return allPoints(context).minByOrNull {
-            val dx = it.x - x; val dy = it.y - y
-            dx * dx + dy * dy
-        }
-    }
-
-    /** شماره‌ی نقطه‌ی جدید نزدیک یک نقطه‌ی موجود (۳۱۲ -> ۳۱۲.۱ -> ۳۱۲.۲ ...) */
     fun nextSubPointNo(context: Context, baseNo: String): String {
         val existing = allPoints(context).map { it.pointNo }
         var n = 1
