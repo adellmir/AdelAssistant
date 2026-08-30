@@ -7,11 +7,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.screens.AreaScreen
+import com.adel.assistant.ui.screens.ChainageScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
 import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.SimpleRecordScreen
+import com.adel.assistant.ui.screens.TunnelPointsScreen
+import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.theme.FinancePrimary
@@ -33,46 +36,26 @@ fun AppNavigation() {
             DailyReportScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_CHAINAGE) {
-            ViaClaudeScreen(
-                title = "کیلومتراژ/چینیج",
-                color = WorkPrimary,
-                description = "این صفحه در حال تکمیل است — به‌زودی مستقیم از فایل نقاط تونل محاسبه می‌شود.",
-                onBack = { navController.popBackStack() }
-            )
+            ChainageScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_EVENTS) {
-            SimpleRecordScreen(
-                title = "ثبت وقایع تونل",
-                color = WorkPrimary,
-                csvName = "survey_tunnel_events",
-                fields = listOf("تاریخ", "شرح واقعه"),
-                onBack = { navController.popBackStack() }
-            )
+            TunnelPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_STATUS) {
-            ViaClaudeScreen(
-                title = "وضعیت تونل",
-                color = WorkPrimary,
-                description = "این صفحه در حال تکمیل است — نمودار پیشرفت شفت‌ها به‌زودی اضافه می‌شود.",
-                onBack = { navController.popBackStack() }
-            )
+            TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
 
         // ---- نقشه‌برداری: پروژه‌ها ----
         composable(Routes.SURVEY_PROJECT_REGISTER) {
             SimpleRecordScreen(
-                title = "ثبت پروژه",
-                color = WorkPrimary,
-                csvName = "survey_project_register",
+                title = "ثبت پروژه", color = WorkPrimary, csvName = "survey_project_register",
                 fields = listOf("نام پروژه", "نام کارفرما", "تاریخ", "آدرس/توضیح"),
                 onBack = { navController.popBackStack() }
             )
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
             SimpleRecordScreen(
-                title = "ثبت وقایع پروژه",
-                color = WorkPrimary,
-                csvName = "survey_project_events",
+                title = "ثبت وقایع پروژه", color = WorkPrimary, csvName = "survey_project_events",
                 fields = listOf("نام پروژه", "تاریخ", "شرح واقعه"),
                 onBack = { navController.popBackStack() }
             )
@@ -81,27 +64,21 @@ fun AppNavigation() {
         // ---- مالی: تونل ----
         composable(Routes.FIN_TUNNEL_WORKLOG) {
             SimpleRecordScreen(
-                title = "کارکرد ماهانه (تونل)",
-                color = FinancePrimary,
-                csvName = "tunnel_monthly_work",
+                title = "کارکرد ماهانه (تونل)", color = FinancePrimary, csvName = "tunnel_monthly_work",
                 fields = listOf("ماه", "سال", "کارکرد", "مبلغ واحد", "کسورات"),
                 onBack = { navController.popBackStack() }
             )
         }
         composable(Routes.FIN_TUNNEL_RECEIPTS) {
             SimpleRecordScreen(
-                title = "دریافتی‌های تونل",
-                color = FinancePrimary,
-                csvName = "tunnel_receipts",
+                title = "دریافتی‌های تونل", color = FinancePrimary, csvName = "tunnel_receipts",
                 fields = listOf("تاریخ", "مبلغ", "توضیحات"),
                 onBack = { navController.popBackStack() }
             )
         }
         composable(Routes.FIN_TUNNEL_SUMMARY) {
             SimpleRecordScreen(
-                title = "خلاصه مطالبات تونل",
-                color = FinancePrimary,
-                csvName = "tunnel_receipts",
+                title = "خلاصه مطالبات تونل", color = FinancePrimary, csvName = "tunnel_receipts",
                 fields = listOf("توضیح"),
                 readOnlyNote = "این اطلاعات اکنون در «دریافتی‌های تونل» نمایش داده می‌شود.",
                 onBack = { navController.popBackStack() }
@@ -110,53 +87,28 @@ fun AppNavigation() {
 
         // ---- مالی: پروژه‌ها ----
         composable(Routes.FIN_PROJECT_INVOICE) {
-            ViaClaudeScreen(
-                title = "صدور فاکتور",
-                color = FinancePrimary,
-                description = "این صفحه در حال تکمیل است.",
-                onBack = { navController.popBackStack() }
-            )
+            ViaClaudeScreen(title = "صدور فاکتور", color = FinancePrimary, description = "این صفحه در حال تکمیل است.", onBack = { navController.popBackStack() })
         }
         composable(Routes.FIN_PROJECT_RECEIPT) {
             SimpleRecordScreen(
-                title = "ثبت دریافتی",
-                color = FinancePrimary,
-                csvName = "project_partial_payments",
+                title = "ثبت دریافتی", color = FinancePrimary, csvName = "project_partial_payments",
                 fields = listOf("نام پروژه", "مبلغ", "تاریخ"),
                 onBack = { navController.popBackStack() }
             )
         }
         composable(Routes.FIN_PROJECT_RECEIVABLES) {
-            ViaClaudeScreen(
-                title = "مطالبات کلی",
-                color = FinancePrimary,
-                description = "این صفحه در حال تکمیل است.",
-                onBack = { navController.popBackStack() }
-            )
+            ViaClaudeScreen(title = "مطالبات کلی", color = FinancePrimary, description = "این صفحه در حال تکمیل است.", onBack = { navController.popBackStack() })
         }
         composable(Routes.FIN_PROJECT_STATUS) {
-            ViaClaudeScreen(
-                title = "وضعیت مالی",
-                color = FinancePrimary,
-                description = "این صفحه در حال تکمیل است.",
-                onBack = { navController.popBackStack() }
-            )
+            ViaClaudeScreen(title = "وضعیت مالی", color = FinancePrimary, description = "این صفحه در حال تکمیل است.", onBack = { navController.popBackStack() })
         }
 
         // ---- ابزار ----
         composable(Routes.TOOL_DXF) {
-            ViaClaudeScreen(
-                title = "تبدیل به DXF", color = ToolPrimary,
-                description = "آپلود فایل نقاط و گرفتن خروجی DXF فعلاً از طریق چت با کلود انجام می‌شود.",
-                onBack = { navController.popBackStack() }
-            )
+            ViaClaudeScreen(title = "تبدیل به DXF", color = ToolPrimary, description = "آپلود فایل نقاط و گرفتن خروجی DXF فعلاً از طریق چت با کلود انجام می‌شود.", onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_LINES) {
-            ViaClaudeScreen(
-                title = "ترسیم خطوط", color = ToolPrimary,
-                description = "بازسازی خطوط پیوسته از روی ابر نقاط فعلاً از طریق چت با کلود انجام می‌شود.",
-                onBack = { navController.popBackStack() }
-            )
+            ViaClaudeScreen(title = "ترسیم خطوط", color = ToolPrimary, description = "بازسازی خطوط پیوسته از روی ابر نقاط فعلاً از طریق چت با کلود انجام می‌شود.", onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_GSI) {
             GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

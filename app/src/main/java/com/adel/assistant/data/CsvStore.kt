@@ -23,5 +23,20 @@ object CsvStore {
         return f.readLines().filter { it.isNotBlank() }.map { it.split(",") }
     }
 
+    /** بازنویسی کامل فایل با یک لیست جدید از ردیف‌ها (برای ویرایش/حذف رکوردهای گذشته) */
+    fun overwriteAll(context: Context, name: String, rows: List<List<String>>) {
+        val f = file(context, name)
+        val text = rows.joinToString("\n") { row ->
+            row.map { it.replace(",", "،").replace("\n", " ") }.joinToString(",")
+        }
+        f.writeText(if (text.isBlank()) "" else text + "\n")
+    }
+
+    /** جایگزینی محتوای فایل با یک فایل خارجی که کاربر آپلود/انتخاب کرده (ایمپورت) */
+    fun importRawText(context: Context, name: String, rawText: String) {
+        val f = file(context, name)
+        f.writeText(rawText)
+    }
+
     fun getFile(context: Context, name: String): File = file(context, name)
 }
