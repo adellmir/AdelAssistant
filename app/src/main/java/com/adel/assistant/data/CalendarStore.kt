@@ -3,13 +3,14 @@ package com.adel.assistant.data
 import android.content.Context
 import java.util.Calendar
 
+
 object CalendarStore {
     private const val CSV = "calendar"
 
     /** اسم روز هفته برای یک روز/ماه شمسی، از فایل تقویم آپلودشده */
     fun weekdayFor(context: Context, day: String, month: String): String? {
-        val d = day.toIntOrNull() ?: return null
-        val m = month.toIntOrNull() ?: return null
+        val d = day.toIntOrNullFa() ?: return null
+        val m = month.toIntOrNullFa() ?: return null
         return CsvStore.readAll(context, CSV).firstOrNull { row ->
             row.size >= 3 && row[0].toIntOrNull() == d && row[1].toIntOrNull() == m
         }?.get(2)

@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -115,8 +116,8 @@ private fun RangeStatus(context: android.content.Context, color: Color) {
         Spacer(modifier = Modifier.height(8.dp))
         Button(
             onClick = {
-                val fromKey = "%s%02d%02d".format(fromYear, fromMonth.toIntOrNull() ?: 0, fromDay.toIntOrNull() ?: 0)
-                val toKey = "%s%02d%02d".format(toYear, toMonth.toIntOrNull() ?: 0, toDay.toIntOrNull() ?: 0)
+                val fromKey = "%s%02d%02d".format(fromYear, fromMonth.toIntOrNullFa() ?: 0, fromDay.toIntOrNullFa() ?: 0)
+                val toKey = "%s%02d%02d".format(toYear, toMonth.toIntOrNullFa() ?: 0, toDay.toIntOrNullFa() ?: 0)
                 results = TunnelReportStore.allShafts(context).filter { it.type == "شفت" }.map { s ->
                     val fromKm1 = TunnelReportStore.lastKmBefore(context, s.name, "1", fromKey) ?: s.fixedKm
                     val toKm1 = TunnelReportStore.lastKmBefore(context, s.name, "1", toKey) ?: s.fixedKm

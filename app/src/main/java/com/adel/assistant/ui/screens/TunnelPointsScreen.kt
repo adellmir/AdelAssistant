@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.TunnelReportStore.TunnelPoint
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -48,7 +49,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     fun search() {
         val byNo = if (pointNo.isNotBlank()) TunnelReportStore.findByPointNo(context, pointNo) else null
         if (byNo != null) { autofillFromPoint(byNo); results = listOf(byNo); return }
-        val byKm = km.toDoubleOrNull()?.let { TunnelReportStore.findByKm(context, it) }
+        val byKm = km.toDoubleOrNullFa()?.let { TunnelReportStore.findByKm(context, it) }
         if (byKm != null) { autofillFromPoint(byKm); results = listOf(byKm); return }
         if (description.isNotBlank()) {
             results = TunnelReportStore.searchByKeyword(context, description)
@@ -58,9 +59,9 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun register() {
-        val kmVal = km.toDoubleOrNull() ?: return
-        val xVal = x.toDoubleOrNull() ?: 0.0
-        val yVal = y.toDoubleOrNull() ?: 0.0
+        val kmVal = km.toDoubleOrNullFa() ?: return
+        val xVal = x.toDoubleOrNullFa() ?: 0.0
+        val yVal = y.toDoubleOrNullFa() ?: 0.0
         if (isEditMode && editingOriginalNo != null) {
             val updated = TunnelPoint(pointNo, xVal, yVal, 0.0, kmVal, elevDiff, slope, description)
             TunnelReportStore.replacePoint(context, editingOriginalNo!!, updated)

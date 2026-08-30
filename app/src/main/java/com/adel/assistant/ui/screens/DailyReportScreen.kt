@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
+import com.adel.assistant.data.toDoubleOrNullFa
+import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.ui.ScreenTopBar
@@ -54,7 +56,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         val existingKeys = existing.map { it.key }.toSet()
         val fromExisting = existing.map { e ->
             val prevKm = TunnelReportStore.lastKmBefore(context, e.shaft, e.side,
-                "%s%02d%02d".format(year, month.toIntOrNull() ?: 0, (day.toIntOrNull() ?: 0) - 1))
+                "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, (day.toIntOrNullFa() ?: 0) - 1))
                 ?: TunnelReportStore.shaftFixedKm(context, e.shaft) ?: 0.0
             val todayKm = prevKm + e.length
             val fixedKm = TunnelReportStore.shaftFixedKm(context, e.shaft) ?: prevKm
@@ -76,10 +78,10 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     LaunchedEffect(day, month, year) { loadDay() }
 
     fun addOrUpdateRow() {
-        val len = length.toDoubleOrNull() ?: return
+        val len = length.toDoubleOrNullFa() ?: return
         if (shaft.isBlank() || side.isBlank()) return
         val prevKm = TunnelReportStore.lastKmBefore(context, shaft, side,
-            "%s%02d%02d".format(year, month.toIntOrNull() ?: 0, (day.toIntOrNull() ?: 0) - 1))
+            "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, (day.toIntOrNullFa() ?: 0) - 1))
             ?: TunnelReportStore.shaftFixedKm(context, shaft) ?: 0.0
         val todayKm = prevKm + len
         val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: prevKm

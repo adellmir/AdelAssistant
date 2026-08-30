@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -64,7 +65,7 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> hasPermission = granted }
 
     fun calc() {
-        val km = kmInput.toDoubleOrNull()
+        val km = kmInput.toDoubleOrNullFa()
         if (km == null) { result = "کیلومتراژ نامعتبر است"; return }
         val p = TunnelReportStore.findByKm(context, km)
         if (p == null) { result = "داده‌ای برای این کیلومتراژ موجود نیست (فایل نقاط آپلود شده؟)"; return }
