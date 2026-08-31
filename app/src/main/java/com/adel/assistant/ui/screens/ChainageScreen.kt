@@ -2,19 +2,26 @@ package com.adel.assistant.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.TunnelReportStore
@@ -24,7 +31,6 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.*
 
-/** تبدیل ساده‌ی UTM (Zone 40N, WGS84) به Lat/Lon */
 private fun utmToLatLon(x: Double, y: Double): Pair<Double, Double> {
     val a = 6378137.0
     val f = 1 / 298.257223563
@@ -48,30 +54,37 @@ private fun utmToLatLon(x: Double, y: Double): Pair<Double, Double> {
             (61 + 90 * t1 + 298 * c1 + 45 * t1.pow(2) - 252 * e1sq - 3 * c1.pow(2)) * d.pow(6) / 720)
     val lon = (d - (1 + 2 * t1 + c1) * d.pow(3) / 6 +
             (5 - 2 * c1 + 28 * t1 - 3 * c1.pow(2) + 8 * e1sq + 24 * t1.pow(2)) * d.pow(5) / 120) / cos(fp)
-    val zoneCentralMeridian = 57.0 // Zone 40N
+    val zoneCentralMeridian = 57.0
     return Pair(Math.toDegrees(lat), zoneCentralMeridian + Math.toDegrees(lon))
 }
 
 @Composable
 fun ChainageScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     var kmInput by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf<String?>(null) }
-    var myLocationResult by remember { mutableStateOf<String?>(null) }
 
+    var coordText by remember { mutableStateOf<String?>(null) }
+    var detailText by remember { mutableStateOf<String?>(null) }
+    var mapsUrl by remember { mutableStateOf<String?>(null) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    var myLocationResult by remember { mutableStateOf<String?>(null) }
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> hasPermission = granted }
 
     fun calc() {
+        errorText = null; coordText = null; detailText = null; mapsUrl = null
         val km = kmInput.toDoubleOrNullFa()
-        if (km == null) { result = "کیلومتراژ نامعتبر است"; return }
+        if (km == null) { errorText = "کیلومتراژ نامعتبر است"; return }
         val p = TunnelReportStore.findByKm(context, km)
-        if (p == null) { result = "داده‌ای برای این کیلومتراژ موجود نیست (فایل نقاط آپلود شده؟)"; return }
+        if (p == null) { errorText = "داده‌ای برای این کیلومتراژ موجود نیست (فایل نقاط آپلود شده؟)"; return }
         val (lat, lon) = utmToLatLon(p.x, p.y)
-        result = "X: %.3f   Y: %.3f\nZ: %.3f   اختلاف‌تراز: %s\nشیب: %s   نوع نقطه: %s\nLat/Lon: %.6f, %.6f\nhttps://maps.google.com/?q=%.6f,%.6f"
-            .format(p.x, p.y, p.z, p.elevDiff, p.slope, p.type, lat, lon, lat, lon)
+        coordText = "X: %.3f   Y: %.3f".format(p.x, p.y)
+        detailText = "Z: %.3f   اختلاف‌تراز: %s\nشیب: %s   نوع نقطه: %s\nLat/Lon: %.6f, %.6f".format(p.z, p.elevDiff, p.slope, p.type, lat, lon)
+        mapsUrl = "https://maps.google.com/?q=%.6f,%.6f".format(lat, lon)
     }
 
     fun findMyLocation() {
@@ -84,10 +97,8 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
                 if (best == null || loc.accuracy < best!!.accuracy) best = loc
             }
             if (best == null) { myLocationResult = "موقعیتی دریافت نشد، کمی صبر کن"; return }
-            // این یک تبدیل ساده‌ی معکوس نیست — نزدیک‌ترین نقطه بر اساس فاصله‌ی تقریبی محاسبه می‌شود
             val points = TunnelReportStore.allPoints(context)
             if (points.isEmpty()) { myLocationResult = "فایل نقاط آپلود نشده"; return }
-            // تقریب: نزدیک‌ترین نقطه بر اساس فاصله‌ی درجه‌ای (برای دقت بالاتر نیاز به تبدیل دقیق‌تر lat/lon->UTM است)
             myLocationResult = "دقت GPS ارتفاع/موقعیت تقریبی است (خطای ۱۰-۲۰ متر). این محاسبه در نسخه‌ی بعد کامل می‌شود."
         } catch (e: SecurityException) {
             myLocationResult = "دسترسی موقعیت داده نشده"
@@ -111,11 +122,48 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
             Text("محاسبه")
         }
         Spacer(modifier = Modifier.height(12.dp))
-        result?.let {
+
+        errorText?.let {
+            Text(it, color = Color(0xFFC2685E), style = MaterialTheme.typography.bodySmall)
+        }
+
+        coordText?.let { txt ->
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = SurfaceColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        clipboard.setText(AnnotatedString(txt))
+                    }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(txt, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("(ضربه بزن تا کپی بشه)", style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                }
+            }
+        }
+        detailText?.let {
+            Spacer(modifier = Modifier.height(8.dp))
             Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                 Text(it, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall)
             }
         }
+        mapsUrl?.let { url ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = color.copy(alpha = 0.15f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+            ) {
+                Text(url, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall, color = color)
+            }
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(12.dp))

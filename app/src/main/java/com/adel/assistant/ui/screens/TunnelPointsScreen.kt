@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +34,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     var km by remember { mutableStateOf("") }
     var x by remember { mutableStateOf("") }
     var y by remember { mutableStateOf("") }
+    var z by remember { mutableStateOf("") }
     var elevDiff by remember { mutableStateOf("") }
     var slope by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -56,13 +58,15 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun clearForm() {
-        pointNo = ""; km = ""; x = ""; y = ""; elevDiff = ""; slope = ""; description = ""
+        pointNo = ""; km = ""; x = ""; y = ""; z = ""; elevDiff = ""; slope = ""; description = ""
         isEditMode = false; editingOriginalNo = null
+        results = emptyList()
+        statusMsg = ""
     }
 
     fun autofillFromPoint(p: TunnelPoint) {
         pointNo = p.pointNo; km = p.km.toString(); x = "%.3f".format(p.x); y = "%.3f".format(p.y)
-        elevDiff = p.elevDiff; slope = p.slope; description = p.type
+        z = "%.3f".format(p.z); elevDiff = p.elevDiff; slope = p.slope; description = p.type
     }
 
     fun search() {
@@ -81,15 +85,16 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         val kmVal = km.toDoubleOrNullFa() ?: return
         val xVal = x.toDoubleOrNullFa() ?: 0.0
         val yVal = y.toDoubleOrNullFa() ?: 0.0
+        val zVal = z.toDoubleOrNullFa() ?: 0.0
         if (isEditMode && editingOriginalNo != null) {
-            val updated = TunnelPoint(pointNo, xVal, yVal, 0.0, kmVal, elevDiff, slope, description)
+            val updated = TunnelPoint(pointNo, xVal, yVal, zVal, kmVal, elevDiff, slope, description)
             TunnelReportStore.replacePoint(context, editingOriginalNo!!, updated)
         } else {
             val finalNo = pointNo.ifBlank {
                 val nearest = TunnelReportStore.findByKm(context, kmVal)
                 if (nearest != null) TunnelReportStore.nextSubPointNo(context, nearest.pointNo.substringBefore(".")) else kmVal.toString()
             }
-            TunnelReportStore.savePoint(context, TunnelPoint(finalNo, xVal, yVal, 0.0, kmVal, elevDiff, slope, description))
+            TunnelReportStore.savePoint(context, TunnelPoint(finalNo, xVal, yVal, zVal, kmVal, elevDiff, slope, description))
         }
         statusMsg = "ثبت شد"
         clearForm()
@@ -103,18 +108,18 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     ) {
         Box {
             ScreenTopBar(title = "نقاط تونل", color = color, onBack = onBack)
-            IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+            Row(modifier = Modifier.align(Alignment.CenterEnd)) {
+                IconButton(onClick = { clearForm() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "رفرش", tint = Color(0xFFAAB697))
+                }
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                }
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
                     importLauncher.launch(arrayOf("text/*", "*/*"))
-                })
-                DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
-                    showMenu = false
-                    val f = CsvStore.getFile(context, "tunnel_points")
-                    statusMsg = "مسیر فایل: ${f.absolutePath}"
                 })
             }
         }
@@ -127,6 +132,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = x, onValueChange = { x = it }, label = { Text("X") }, modifier = Modifier.weight(1f))
             OutlinedTextField(value = y, onValueChange = { y = it }, label = { Text("Y") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = z, onValueChange = { z = it }, label = { Text("Z") }, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = elevDiff, onValueChange = { elevDiff = it }, label = { Text("اختلاف‌تراز") }, modifier = Modifier.weight(1f))

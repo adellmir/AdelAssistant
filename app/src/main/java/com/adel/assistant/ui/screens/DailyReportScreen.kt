@@ -18,22 +18,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.XlsxReportWriter
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
-import java.io.File
 import kotlin.math.abs
-
-private val smallTextStyle = TextStyle(fontSize = 12.sp)
 
 private data class PreviewRow(
     val shaft: String, val side: String, val pointNo: String,
@@ -74,22 +70,6 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 }
             } catch (e: Exception) { statusMsg = "خطا در وارد کردن فایل" }
         }
-    }
-
-    fun exportFile(): File {
-        val dir = File(context.filesDir, "exports")
-        if (!dir.exists()) dir.mkdirs()
-        val f = File(dir, "report_$year$month$day.txt")
-        val sb = StringBuilder()
-        sb.append("گزارش عملیات نقشه‌برداری\n")
-        sb.append("تاریخ: $day/$month/$year   ${weekday ?: ""}\n\n")
-        sb.append("جهت\tک.قبل\tک.امروز\tحفاری\tپیشرفت\tانحراف\tریزش\n")
-        rows.forEach { r ->
-            sb.append("${r.shaft}به${r.side}\t%.2f\t%.2f\t%.2f\t%.2f\t${r.deviation}\t${r.collapse}\n"
-                .format(r.prevKm, r.todayKm, r.dig, r.progress))
-        }
-        f.writeText(sb.toString())
-        return f
     }
 
     fun loadDay() {
@@ -159,7 +139,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 20.dp)
     ) {
         Box {
             ScreenTopBar(title = "گزارش روزانه", color = color, onBack = onBack)
@@ -171,60 +151,55 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                     showMenu = false
                     importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
-                DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
-                    showMenu = false
-                    val f = exportFile()
-                    statusMsg = "ذخیره شد: ${f.absolutePath}"
-                })
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1f))
         }
         if (weekday != null) {
             Text(weekday, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697), modifier = Modifier.padding(top = 2.dp))
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text("افزودن پیشرفت شفت", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(vertical = 3.dp)) {
-            OutlinedTextField(value = shaft, onValueChange = { shaft = it }, label = { Text("شفت") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
-            OutlinedTextField(value = side, onValueChange = { side = it }, label = { Text("سمت") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+            OutlinedTextField(value = shaft, onValueChange = { shaft = it }, label = { Text("شفت") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = side, onValueChange = { side = it }, label = { Text("سمت") }, modifier = Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            OutlinedTextField(value = pointNo, onValueChange = { pointNo = it }, label = { Text("نقطه") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
-            OutlinedTextField(value = length, onValueChange = { length = it }, label = { Text("طول") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
-            IconButton(onClick = { addOrUpdateRow() }, modifier = Modifier.size(36.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(value = pointNo, onValueChange = { pointNo = it }, label = { Text("شماره نقطه") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = length, onValueChange = { length = it }, label = { Text("طول") }, modifier = Modifier.weight(1f))
+            IconButton(onClick = { addOrUpdateRow() }) {
                 Icon(Icons.Filled.Add, contentDescription = "افزودن", tint = color)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            OutlinedTextField(value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
-            OutlinedTextField(value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") }, textStyle = smallTextStyle, modifier = Modifier.weight(1f).height(45.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") }, modifier = Modifier.weight(1f))
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text("پیش‌نمایش گزارش", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
-        Spacer(modifier = Modifier.height(5.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(rows.size) { i ->
                 val r = rows[i]
-                Surface(shape = RoundedCornerShape(8.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("${r.shaft}به${r.side}", style = smallTextStyle, modifier = Modifier.weight(1f))
-                        Text("ق:%.1f".format(r.prevKm), style = smallTextStyle, modifier = Modifier.weight(1f))
-                        Text("ا:%.1f".format(r.todayKm), style = smallTextStyle, modifier = Modifier.weight(1f))
-                        Text("ح:%.1f".format(r.dig), style = smallTextStyle, modifier = Modifier.weight(1f))
-                        Text("پ:%.1f".format(r.progress), style = smallTextStyle, modifier = Modifier.weight(1f))
-                        IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(20.dp)) {
-                            Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(12.dp))
+                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("${r.shaft}به${r.side}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text("ق:%.1f".format(r.prevKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text("ا:%.1f".format(r.todayKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text("ح:%.1f".format(r.dig), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text("پ:%.1f".format(r.progress), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp))
                         }
-                        IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(20.dp)) {
-                            Icon(Icons.Filled.Delete, contentDescription = "پاک کردن", tint = Color(0xFFC2685E), modifier = Modifier.size(12.dp))
+                        IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Filled.Delete, contentDescription = "پاک کردن", tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp))
                         }
                     }
                 }
@@ -235,15 +210,19 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             Text(statusMsg, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697), modifier = Modifier.padding(vertical = 4.dp))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 12.dp)) {
             Button(
                 onClick = { registerAll() },
                 colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.weight(1f).height(42.dp)
-            ) { Text("ثبت", style = smallTextStyle) }
-            OutlinedButton(onClick = { statusMsg = "ذخیره شد: ${exportFile().absolutePath}" }, modifier = Modifier.weight(1f).height(42.dp)) {
-                Text("صدور گزارش", style = smallTextStyle)
-            }
+                modifier = Modifier.weight(1f)
+            ) { Text("ثبت") }
+            OutlinedButton(
+                onClick = {
+                    val uri = XlsxReportWriter.generate(context, year, month, day, weekday)
+                    statusMsg = if (uri != null) "فایل در Documents/AdelAssistant ذخیره شد" else "خطا در ساخت فایل"
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("صدور گزارش") }
         }
     }
 }
