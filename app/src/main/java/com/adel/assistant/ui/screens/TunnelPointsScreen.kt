@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
@@ -17,14 +18,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CsvStore
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.TunnelReportStore.TunnelPoint
+import com.adel.assistant.data.filterNumericInput
+import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
+
+private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 
 @Composable
 fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
@@ -65,8 +72,9 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun autofillFromPoint(p: TunnelPoint) {
-        pointNo = p.pointNo; km = p.km.toString(); x = "%.3f".format(p.x); y = "%.3f".format(p.y)
-        z = "%.3f".format(p.z); elevDiff = p.elevDiff; slope = p.slope; description = p.type
+        pointNo = p.pointNo; km = p.km.toString()
+        x = formatEn("%.3f", p.x); y = formatEn("%.3f", p.y); z = formatEn("%.3f", p.z)
+        elevDiff = p.elevDiff; slope = p.slope; description = p.type
     }
 
     fun search() {
@@ -121,18 +129,39 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                     showMenu = false
                     importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
+                DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
+                    showMenu = false
+                    val text = FileExport.readAsCsvText(context, "tunnel_points")
+                    val uri = FileExport.exportTextToDocuments(context, "tunnel_points.txt", text)
+                    statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
+                })
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = pointNo, onValueChange = { pointNo = it }, label = { Text("شماره نقطه") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = km, onValueChange = { km = it }, label = { Text("کیلومتراژ") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = pointNo, onValueChange = { pointNo = filterNumericInput(it) }, label = { Text("شماره نقطه") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = km, onValueChange = { km = filterNumericInput(it) }, label = { Text("کیلومتراژ") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = x, onValueChange = { x = it }, label = { Text("X") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = y, onValueChange = { y = it }, label = { Text("Y") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = z, onValueChange = { z = it }, label = { Text("Z") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = x, onValueChange = { x = filterNumericInput(it) }, label = { Text("X") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = y, onValueChange = { y = filterNumericInput(it) }, label = { Text("Y") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = z, onValueChange = { z = filterNumericInput(it) }, label = { Text("Z") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = elevDiff, onValueChange = { elevDiff = it }, label = { Text("اختلاف‌تراز") }, modifier = Modifier.weight(1f))

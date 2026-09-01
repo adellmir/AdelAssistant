@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,18 +20,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.XlsxReportWriter
+import com.adel.assistant.data.filterNumericInput
+import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.abs
+
+private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 
 private data class PreviewRow(
     val shaft: String, val side: String, val pointNo: String,
@@ -73,9 +81,9 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun loadDay() {
+        // فقط رکوردهای واقعاً ثبت‌شده‌ی همون روز — جدول برای روز جدید خالی شروع می‌شود
         val existing = TunnelReportStore.entriesForDate(context, year, month, day)
-        val existingKeys = existing.map { it.key }.toSet()
-        val fromExisting = existing.map { e ->
+        rows = existing.map { e ->
             val prevKm = TunnelReportStore.lastKmBefore(context, e.shaft, e.side,
                 "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, (day.toIntOrNullFa() ?: 0) - 1))
                 ?: TunnelReportStore.shaftFixedKm(context, e.shaft) ?: 0.0
@@ -83,19 +91,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             val fixedKm = TunnelReportStore.shaftFixedKm(context, e.shaft) ?: prevKm
             PreviewRow(e.shaft, e.side, e.pointNo, prevKm, todayKm, abs(e.length), abs(todayKm - fixedKm), e.deviation, e.collapse)
         }
-        val allKeys = TunnelReportStore.allShafts(context).filter { it.type == "شفت" }.flatMap { s -> listOf("${s.name}-0", "${s.name}-1") }
-        val untouched = allKeys.filterNot { existingKeys.contains(it) }.mapNotNull { key ->
-            val parts = key.split("-")
-            if (parts.size < 2) return@mapNotNull null
-            val sh = parts[0]; val sd = parts[1]
-            val km = TunnelReportStore.currentKm(context, sh, sd)
-            val fixedKm = TunnelReportStore.shaftFixedKm(context, sh) ?: km
-            PreviewRow(sh, sd, "", km, km, 0.0, abs(km - fixedKm))
-        }
-        rows = fromExisting + untouched
+        statusMsg = if (rows.isEmpty()) "برای این تاریخ رکوردی ثبت نشده" else "${rows.size} ردیف بارگذاری شد"
     }
-
-    LaunchedEffect(day, month, year) { loadDay() }
 
     fun addOrUpdateRow() {
         val len = length.toDoubleOrNullFa() ?: return
@@ -127,11 +124,10 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun registerAll() {
-        val newEntries = rows.filter { it.dig != 0.0 || it.pointNo.isNotBlank() || it.deviation.isNotBlank() || it.collapse.isNotBlank() }.map {
+        val newEntries = rows.map {
             ReportEntry(year, month, day, it.shaft, it.side, it.pointNo, it.todayKm - it.prevKm, it.deviation, it.collapse)
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
-        loadDay()
         statusMsg = "ثبت شد"
     }
 
@@ -151,13 +147,31 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                     showMenu = false
                     importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
+                DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
+                    showMenu = false
+                    val text = FileExport.readAsCsvText(context, "survey_tunnel_report")
+                    val uri = FileExport.exportTextToDocuments(context, "survey_tunnel_report.csv", text)
+                    statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
+                })
             }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = day, onValueChange = { day = filterNumericInput(it) }, label = { Text("روز") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = month, onValueChange = { month = filterNumericInput(it) }, label = { Text("ماه") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = year, onValueChange = { year = filterNumericInput(it) }, label = { Text("سال") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { loadDay() }) {
+                Icon(Icons.Filled.Search, contentDescription = "نمایش گزارش این روز", tint = color)
+            }
         }
         if (weekday != null) {
             Text(weekday, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697), modifier = Modifier.padding(top = 2.dp))
@@ -166,12 +180,24 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Text("افزودن پیشرفت شفت", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-            OutlinedTextField(value = shaft, onValueChange = { shaft = it }, label = { Text("شفت") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = side, onValueChange = { side = it }, label = { Text("سمت") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = shaft, onValueChange = { shaft = filterNumericInput(it) }, label = { Text("شفت") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = side, onValueChange = { side = it }, label = { Text("سمت") },
+                modifier = Modifier.weight(1f)
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = pointNo, onValueChange = { pointNo = it }, label = { Text("شماره نقطه") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = length, onValueChange = { length = it }, label = { Text("طول") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = pointNo, onValueChange = { pointNo = filterNumericInput(it) }, label = { Text("شماره نقطه") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = length, onValueChange = { length = filterNumericInput(it) }, label = { Text("طول") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+            )
             IconButton(onClick = { addOrUpdateRow() }) {
                 Icon(Icons.Filled.Add, contentDescription = "افزودن", tint = color)
             }
@@ -191,10 +217,10 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("${r.shaft}به${r.side}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("ق:%.1f".format(r.prevKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("ا:%.1f".format(r.todayKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("ح:%.1f".format(r.dig), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("پ:%.1f".format(r.progress), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(formatEn("ق:%.1f", r.prevKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(formatEn("ا:%.1f", r.todayKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(formatEn("ح:%.1f", r.dig), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(formatEn("پ:%.1f", r.progress), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                         IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp))
                         }

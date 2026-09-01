@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -82,9 +83,9 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
         val p = TunnelReportStore.findByKm(context, km)
         if (p == null) { errorText = "داده‌ای برای این کیلومتراژ موجود نیست (فایل نقاط آپلود شده؟)"; return }
         val (lat, lon) = utmToLatLon(p.x, p.y)
-        coordText = "X: %.3f   Y: %.3f".format(p.x, p.y)
-        detailText = "Z: %.3f   اختلاف‌تراز: %s\nشیب: %s   نوع نقطه: %s\nLat/Lon: %.6f, %.6f".format(p.z, p.elevDiff, p.slope, p.type, lat, lon)
-        mapsUrl = "https://maps.google.com/?q=%.6f,%.6f".format(lat, lon)
+        coordText = formatEn("X: %.3f   Y: %.3f", p.x, p.y)
+        detailText = formatEn("Z: %.3f   اختلاف‌تراز: %s\nشیب: %s   نوع نقطه: %s\nLat/Lon: %.6f, %.6f", p.z, p.elevDiff, p.slope, p.type, lat, lon)
+        mapsUrl = formatEn("https://maps.google.com/?q=%.6f,%.6f", lat, lon)
     }
 
     fun findMyLocation() {
@@ -114,7 +115,8 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
         ScreenTopBar(title = "کیلومتراژ/چینیج", color = color, onBack = onBack)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
-            value = kmInput, onValueChange = { kmInput = it },
+            value = kmInput, onValueChange = { kmInput = com.adel.assistant.data.filterNumericInput(it) },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
             label = { Text("کیلومتراژ") }, modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))

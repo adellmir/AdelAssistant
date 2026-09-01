@@ -29,11 +29,11 @@ object XlsxReportWriter {
         RowSpec(60, "4", "end", 1200.0, jFixed = 1257.7)
     )
 
-    /** تولید فایل گزارش روزانه با پرکردن قالب اصلی (بدون فرمول، فقط مقدار عددی نهایی) */
     fun generate(context: Context, year: String, month: String, day: String, weekday: String?): android.net.Uri? {
-        val prevDateKey = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, (day.toIntOrNullFa() ?: 0) - 1)
+        val m = month.toIntOrNullFa() ?: 0
+        val d = day.toIntOrNullFa() ?: 0
+        val prevDateKey = "%s%02d%02d".format(year, m, d - 1)
 
-        // محاسبه‌ی G (کیلومتر امروز) برای هر ردیف — لازم برای رفرنس‌دادن ردیف‌های دیگر در ستون J
         val gValues = mutableMapOf<Int, Double>()
         val fValues = mutableMapOf<Int, Double>()
         rowSpecs.forEach { spec ->
@@ -46,10 +46,9 @@ object XlsxReportWriter {
             gValues[spec.row] = g
         }
 
-        val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>() // ref -> (value, isText)
+        val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>()
 
-        // هدر
-        cellUpdates["Q1"] = "%02d/%02d".format(month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0) to true
+        cellUpdates["Q1"] = formatEn("%02d/%02d", m, d) to true
         cellUpdates["R1"] = "$year/" to true
         if (weekday != null) cellUpdates["Q2"] = weekday to true
 
@@ -60,23 +59,23 @@ object XlsxReportWriter {
             val h = abs(f - g)
             val i = abs(g - spec.targetI)
             sumH += h
-            cellUpdates["F${spec.row}"] = "%.4f".format(f) to false
-            cellUpdates["G${spec.row}"] = "%.4f".format(g) to false
-            cellUpdates["H${spec.row}"] = "%.4f".format(h) to false
-            cellUpdates["I${spec.row}"] = "%.4f".format(i) to false
+            cellUpdates["F${spec.row}"] = formatEn("%.4f", f) to false
+            cellUpdates["G${spec.row}"] = formatEn("%.4f", g) to false
+            cellUpdates["H${spec.row}"] = formatEn("%.4f", h) to false
+            cellUpdates["I${spec.row}"] = formatEn("%.4f", i) to false
             val jTarget = spec.jFixed ?: spec.jRefRow?.let { gValues[it] }
             if (jTarget != null) {
                 val j = abs(g - jTarget)
-                cellUpdates["J${spec.row}"] = "%.4f".format(j) to false
+                cellUpdates["J${spec.row}"] = formatEn("%.4f", j) to false
             }
         }
-        cellUpdates["E69"] = "%.4f".format(sumH) to false
-        cellUpdates["H69"] = "%.4f".format(abs(sumH - 1257.7)) to false
+        cellUpdates["E69"] = formatEn("%.4f", sumH) to false
+        cellUpdates["H69"] = formatEn("%.4f", abs(sumH - 1257.7)) to false
 
         val templateBytes = context.assets.open("report_template.xlsx").use { it.readBytes() }
         val outputBytes = rewriteXlsx(templateBytes, cellUpdates)
 
-        val fileName = "b%02d%02d.xlsx".format(month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
+        val fileName = formatEn("b%02d%02d.xlsx", m, d)
         return saveToDocuments(context, fileName, outputBytes)
     }
 
@@ -108,7 +107,6 @@ object XlsxReportWriter {
         var result = xml
         updates.forEach { (ref, pair) ->
             val (value, isText) = pair
-            // پیدا کردن سلول موجود برای گرفتن style اصلی‌اش (s="..")
             val cellRegex = Regex("<c r=\"$ref\"([^>]*)>.*?</c>", RegexOption.DOT_MATCHES_ALL)
             val match = cellRegex.find(result)
             val styleAttr = match?.groupValues?.get(1)?.let { attrs ->
@@ -120,16 +118,11 @@ object XlsxReportWriter {
             } else {
                 "<c r=\"$ref\"$styleAttr><v>$value</v></c>"
             }
-            result = if (match != null) {
-                result.replaceRange(match.range, newCell)
-            } else {
-                result // اگر سلول پیدا نشد (نباید پیش بیاد)، بدون تغییر رد می‌شویم
-            }
+            result = if (match != null) result.replaceRange(match.range, newCell) else result
         }
         return result
     }
 
-    /** ذخیره در پوشه‌ی عمومی Documents گوشی از طریق MediaStore (بدون نیاز به مجوز خاص در اندروید ۱۰ به بعد) */
     private fun saveToDocuments(context: Context, fileName: String, bytes: ByteArray): android.net.Uri? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
@@ -139,9 +132,7 @@ object XlsxReportWriter {
             }
             val resolver = context.contentResolver
             val uri = resolver.insert(MediaStore.Files.getContentUri("external"), values)
-            uri?.let {
-                resolver.openOutputStream(it)?.use { out -> out.write(bytes) }
-            }
+            uri?.let { resolver.openOutputStream(it)?.use { out -> out.write(bytes) } }
             return uri
         } else {
             val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "AdelAssistant")

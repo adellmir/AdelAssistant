@@ -1,6 +1,7 @@
 package com.adel.assistant.data
 
-/** تبدیل ارقام فارسی/عربی به انگلیسی، تا هر عددی که با کیبورد فارسی تایپ بشه هم درست خونده بشه */
+import java.util.Locale
+
 fun String.toEnglishDigits(): String {
     val fa = "۰۱۲۳۴۵۶۷۸۹"
     val ar = "٠١٢٣٤٥٦٧٨٩"
@@ -19,3 +20,11 @@ fun String.toEnglishDigits(): String {
 
 fun String.toIntOrNullFa(): Int? = this.toEnglishDigits().trim().toIntOrNull()
 fun String.toDoubleOrNullFa(): Double? = this.toEnglishDigits().trim().toDoubleOrNull()
+
+/** فقط رقم (فارسی/انگلیسی) و نقطه‌ی اعشاری را نگه می‌دارد؛ حروف حذف می‌شوند */
+fun filterNumericInput(input: String): String {
+    return input.filter { ch -> ch.isDigit() || ch == '.' || "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩".contains(ch) }
+}
+
+/** فرمت عدد همیشه با ارقام انگلیسی، مستقل از زبان گوشی (حیاتی برای فایل اکسل و لینک گوگل‌مپ) */
+fun formatEn(fmt: String, vararg args: Any): String = String.format(Locale.US, fmt, *args)

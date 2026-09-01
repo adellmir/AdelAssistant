@@ -18,9 +18,10 @@ object TunnelReportStore {
     private const val REPORT_CSV = "survey_tunnel_report"
     private const val POINTS_TXT = "tunnel_points"
 
+    // فایل با ترتیب واقعی ستون‌ها ذخیره/خوانده می‌شود: روز,ماه,سال,شفت,سمت,شماره_نقطه,طول,انحراف,ریزش
     fun saveEntry(context: Context, e: ReportEntry) {
         CsvStore.appendRow(context, REPORT_CSV, listOf(
-            e.year, e.month, e.day, e.shaft, e.side, e.pointNo, e.length.toString(), e.deviation, e.collapse
+            e.day, e.month, e.year, e.shaft, e.side, e.pointNo, e.length.toString(), e.deviation, e.collapse
         ))
     }
 
@@ -28,8 +29,12 @@ object TunnelReportStore {
         return CsvStore.readAll(context, REPORT_CSV).mapNotNull { row ->
             if (row.size < 7) return@mapNotNull null
             try {
-                ReportEntry(row[0], row[1], row[2], row[3], row[4], row[5], row[6].toDouble(),
-                    row.getOrElse(7) { "" }, row.getOrElse(8) { "" })
+                // ترتیب فایل: روز,ماه,سال,شفت,سمت,شماره_نقطه,طول,انحراف,ریزش
+                ReportEntry(
+                    year = row[2], month = row[1], day = row[0],
+                    shaft = row[3], side = row[4], pointNo = row[5], length = row[6].toEnglishDigits().toDouble(),
+                    deviation = row.getOrElse(7) { "" }, collapse = row.getOrElse(8) { "" }
+                )
             } catch (e: Exception) { null }
         }
     }
@@ -43,7 +48,7 @@ object TunnelReportStore {
         val dateKey = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
         val kept = allEntries(context).filter { it.dateSortKey != dateKey }
         val all = kept + newEntries
-        val rows = all.map { listOf(it.year, it.month, it.day, it.shaft, it.side, it.pointNo, it.length.toString(), it.deviation, it.collapse) }
+        val rows = all.map { listOf(it.day, it.month, it.year, it.shaft, it.side, it.pointNo, it.length.toString(), it.deviation, it.collapse) }
         CsvStore.overwriteAll(context, REPORT_CSV, rows)
     }
 
@@ -66,9 +71,6 @@ object TunnelReportStore {
         return allShafts(context).firstOrNull { it.name == shaft }?.fixedKm
     }
 
-    /** شفت‌ها و دهانه‌ها اکنون مستقیم از فایل نقاط استخراج می‌شوند:
-     *  نوع نقطه = "sh<عدد>" => شفت با همان عدد به‌عنوان نام
-     *  نوع نقطه = "start" یا "end" => دهانه‌ی شروع/پایان مسیر */
     fun allShafts(context: Context): List<ShaftEntry> {
         return allPoints(context).mapNotNull { p ->
             val t = p.type.trim()
@@ -94,8 +96,8 @@ object TunnelReportStore {
         return CsvStore.readAll(context, POINTS_TXT).mapNotNull { row ->
             if (row.size < 8) return@mapNotNull null
             try {
-                TunnelPoint(row[0], row[1].toDouble(), row[2].toDouble(), row[3].toDouble(),
-                    row[4].toDouble(), row[5], row[6], row[7])
+                TunnelPoint(row[0], row[1].toEnglishDigits().toDouble(), row[2].toEnglishDigits().toDouble(),
+                    row[3].toEnglishDigits().toDouble(), row[4].toEnglishDigits().toDouble(), row[5], row[6], row[7])
             } catch (e: Exception) { null }
         }
     }
