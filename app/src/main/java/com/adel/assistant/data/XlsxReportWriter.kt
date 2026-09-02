@@ -32,18 +32,15 @@ object XlsxReportWriter {
     fun generate(context: Context, year: String, month: String, day: String, weekday: String?): android.net.Uri? {
         val m = month.toIntOrNullFa() ?: 0
         val d = day.toIntOrNullFa() ?: 0
-        val prevDateKey = "%s%02d%02d".format(year, m, d - 1)
+        val todayKey = "%s%02d%02d".format(year, m, d)
+        val prevKey = CalendarStore.previousDateKey(year, month, day)
 
+        // منبع واحد محاسبات: TunnelReportStore (همان موتوری که گزارش روزانه استفاده می‌کند)
         val gValues = mutableMapOf<Int, Double>()
         val fValues = mutableMapOf<Int, Double>()
         rowSpecs.forEach { spec ->
-            val f = TunnelReportStore.lastKmBefore(context, spec.shaft, spec.side, prevDateKey)
-                ?: TunnelReportStore.shaftFixedKm(context, spec.shaft) ?: 0.0
-            val todayEntry = TunnelReportStore.entriesForDate(context, year, month, day)
-                .firstOrNull { it.shaft == spec.shaft && it.side == spec.side }
-            val g = if (todayEntry != null) f + todayEntry.length else f
-            fValues[spec.row] = f
-            gValues[spec.row] = g
+            fValues[spec.row] = TunnelReportStore.kmOnOrBefore(context, spec.shaft, spec.side, prevKey)
+            gValues[spec.row] = TunnelReportStore.kmOnOrBefore(context, spec.shaft, spec.side, todayKey)
         }
 
         val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>()
@@ -52,25 +49,24 @@ object XlsxReportWriter {
         cellUpdates["R1"] = "$year/" to true
         if (weekday != null) cellUpdates["Q2"] = weekday to true
 
-        var sumH = 0.0
+        var sumI = 0.0
         rowSpecs.forEach { spec ->
             val f = fValues[spec.row]!!
             val g = gValues[spec.row]!!
-            val h = abs(f - g)
-            val i = abs(g - spec.targetI)
-            sumH += h
+            val h = abs(g - f)
+            val i = abs(spec.targetI - g)
+            sumI += i
             cellUpdates["F${spec.row}"] = formatEn("%.4f", f) to false
             cellUpdates["G${spec.row}"] = formatEn("%.4f", g) to false
             cellUpdates["H${spec.row}"] = formatEn("%.4f", h) to false
             cellUpdates["I${spec.row}"] = formatEn("%.4f", i) to false
             val jTarget = spec.jFixed ?: spec.jRefRow?.let { gValues[it] }
             if (jTarget != null) {
-                val j = abs(g - jTarget)
-                cellUpdates["J${spec.row}"] = formatEn("%.4f", j) to false
+                cellUpdates["J${spec.row}"] = formatEn("%.4f", abs(g - jTarget)) to false
             }
         }
-        cellUpdates["E69"] = formatEn("%.4f", sumH) to false
-        cellUpdates["H69"] = formatEn("%.4f", abs(sumH - 1257.7)) to false
+        // E69 = مجموع ستون I (مانده‌ها) — طبق فرمول واقعی قالب. H69 در قالب خالی است و دست نمی‌خورد.
+        cellUpdates["E69"] = formatEn("%.4f", sumI) to false
 
         val templateBytes = context.assets.open("report_template.xlsx").use { it.readBytes() }
         val outputBytes = rewriteXlsx(templateBytes, cellUpdates)
@@ -90,8 +86,7 @@ object XlsxReportWriter {
                     zos.putNextEntry(ZipEntry(name))
                     if (name == "xl/worksheets/sheet1.xml") {
                         val xml = bytes.toString(Charsets.UTF_8)
-                        val newXml = applyCellUpdates(xml, updates)
-                        zos.write(newXml.toByteArray(Charsets.UTF_8))
+                        zos.write(applyCellUpdates(xml, updates).toByteArray(Charsets.UTF_8))
                     } else {
                         zos.write(bytes)
                     }

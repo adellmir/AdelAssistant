@@ -35,13 +35,12 @@ import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
-import kotlin.math.abs
 
 private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 
 private data class PreviewRow(
-    val shaft: String, val side: String, val pointNo: String,
-    val prevKm: Double, val todayKm: Double, val dig: Double, val progress: Double,
+    val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
+    val km: Double, val dailyProgress: Double,
     val deviation: String = "", val collapse: String = ""
 )
 
@@ -57,7 +56,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var shaft by remember { mutableStateOf("") }
     var side by remember { mutableStateOf("") }
     var pointNo by remember { mutableStateOf("") }
-    var length by remember { mutableStateOf("") }
+    var length by remember { mutableStateOf("") } // بر حسب سانتی‌متر
     var deviation by remember { mutableStateOf("") }
     var collapse by remember { mutableStateOf("") }
     var editingIndex by remember { mutableStateOf(-1) }
@@ -80,41 +79,40 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
+    fun todayDateKey() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
+
     fun loadDay() {
-        // فقط رکوردهای واقعاً ثبت‌شده‌ی همون روز — جدول برای روز جدید خالی شروع می‌شود
         val existing = TunnelReportStore.entriesForDate(context, year, month, day)
-        rows = existing.map { e ->
-            val prevKm = TunnelReportStore.lastKmBefore(context, e.shaft, e.side,
-                "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, (day.toIntOrNullFa() ?: 0) - 1))
-                ?: TunnelReportStore.shaftFixedKm(context, e.shaft) ?: 0.0
-            val todayKm = prevKm + e.length
-            val fixedKm = TunnelReportStore.shaftFixedKm(context, e.shaft) ?: prevKm
-            PreviewRow(e.shaft, e.side, e.pointNo, prevKm, todayKm, abs(e.length), abs(todayKm - fixedKm), e.deviation, e.collapse)
-        }
+        rows = existing.map { e -> PreviewRow(e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.deviation, e.collapse) }
         statusMsg = if (rows.isEmpty()) "برای این تاریخ رکوردی ثبت نشده" else "${rows.size} ردیف بارگذاری شد"
     }
 
     fun addOrUpdateRow() {
         val len = length.toDoubleOrNullFa() ?: return
-        if (shaft.isBlank() || side.isBlank()) return
-        val prevKm = TunnelReportStore.lastKmBefore(context, shaft, side,
-            "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, (day.toIntOrNullFa() ?: 0) - 1))
-            ?: TunnelReportStore.shaftFixedKm(context, shaft) ?: 0.0
-        val todayKm = prevKm + len
-        val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: prevKm
-        val newRow = PreviewRow(shaft, side, pointNo, prevKm, todayKm, abs(len), abs(todayKm - fixedKm), deviation, collapse)
+        if (len < 0) { statusMsg = "طول باید عدد مثبت باشد (به سانتی‌متر)"; return }
+        if (shaft.isBlank() || side.isBlank() || pointNo.isBlank()) {
+            statusMsg = "شفت، سمت و شماره نقطه الزامی‌اند"; return
+        }
+        val result = TunnelReportStore.computeKmAndProgress(context, shaft, side, pointNo, len, todayDateKey())
+        if (result == null) {
+            statusMsg = "نقطه‌ی $pointNo در فایل نقاط پیدا نشد — اول از «نقاط تونل» ثبتش کن"
+            return
+        }
+        val (km, progress) = result
+        val newRow = PreviewRow(shaft, side, pointNo, len, km, progress, deviation, collapse)
         rows = if (editingIndex >= 0) {
             rows.toMutableList().also { it[editingIndex] = newRow }
         } else {
             rows.filterNot { it.shaft == shaft && it.side == side } + newRow
         }
         shaft = ""; side = ""; pointNo = ""; length = ""; deviation = ""; collapse = ""; editingIndex = -1
+        statusMsg = ""
     }
 
     fun startEdit(i: Int) {
         val r = rows[i]
         shaft = r.shaft; side = r.side; pointNo = r.pointNo
-        length = (r.todayKm - r.prevKm).toString()
+        length = r.lengthCm.toString()
         deviation = r.deviation; collapse = r.collapse
         editingIndex = i
     }
@@ -125,7 +123,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
     fun registerAll() {
         val newEntries = rows.map {
-            ReportEntry(year, month, day, it.shaft, it.side, it.pointNo, it.todayKm - it.prevKm, it.deviation, it.collapse)
+            ReportEntry(year, month, day, it.shaft, it.side, it.pointNo, it.lengthCm, it.deviation, it.collapse, it.km, it.dailyProgress)
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
         statusMsg = "ثبت شد"
@@ -195,7 +193,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = length, onValueChange = { length = filterNumericInput(it) }, label = { Text("طول") },
+                value = length, onValueChange = { length = filterNumericInput(it) }, label = { Text("طول (سانتی‌متر)") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { addOrUpdateRow() }) {
@@ -217,10 +215,9 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("${r.shaft}به${r.side}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text(formatEn("ق:%.1f", r.prevKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text(formatEn("ا:%.1f", r.todayKm), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text(formatEn("ح:%.1f", r.dig), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text(formatEn("پ:%.1f", r.progress), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text("ن:${r.pointNo}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(formatEn("ک:%.3f", r.km), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(formatEn("پ:%.3f", r.dailyProgress), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                         IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp))
                         }
