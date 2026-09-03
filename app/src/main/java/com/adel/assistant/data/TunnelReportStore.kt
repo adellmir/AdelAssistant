@@ -4,15 +4,17 @@ import android.content.Context
 import kotlin.math.abs
 
 /**
- * lengthCm: طول واردشده به سانتی‌متر (همان عددی که کاربر تایپ می‌کند)
- * km: کیلومتراژ نهاییِ محاسبه‌شده = کیلومتراژ نقطه‌ی مرجع (از tunnel_points) + جهت×(lengthCm/100)
- * dailyProgress: قدرمطلق تفاضل این km با آخرین km ثبت‌شده‌ی قبلیِ همان شفت-سمت
+ * تمام مقادیر لازم برای گزارش روزانه، همان لحظه‌ی ثبت محاسبه و در فایل ذخیره می‌شوند —
+ * تا هرجای دیگری (از جمله فایل اکسل) فقط کپی کند، نه دوباره محاسبه.
  */
 data class ReportEntry(
     val year: String, val month: String, val day: String,
     val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
     val deviation: String = "", val collapse: String = "",
-    val km: Double = 0.0, val dailyProgress: Double = 0.0
+    val km: Double = 0.0,           // کیلومتراژ همان روز
+    val dailyProgress: Double = 0.0, // قدرمطلق تفاضل با آخرین ثبت قبلی همان شفت-سمت
+    val shaftProgress: Double = 0.0, // قدرمطلق تفاضل کیلومتراژ با کیلومتر ثابت خود شفت
+    val remaining: Double = 0.0      // قدرمطلق تفاضل با جبهه‌ی مقابل (شفت دیگر یا دهانه)
 ) {
     val key: String get() = "$shaft-$side"
     val dateSortKey: String get() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
@@ -33,11 +35,12 @@ object TunnelReportStore {
 
     fun direction(shaft: String, side: String): Int = DIRECTION["$shaft-$side"] ?: 1
 
-    // ترتیب فایل: روز,ماه,سال,شفت,سمت,شماره_نقطه,طول_سانتیمتر,انحراف,ریزش,کیلومتراژ,پیشرفت
+    // ترتیب فایل: روز,ماه,سال,شفت,سمت,شماره_نقطه,طول_سانتیمتر,انحراف,ریزش,کیلومتراژ,پیشرفت_روزانه,پیشرفت_از_شفت,مانده
     fun saveEntry(context: Context, e: ReportEntry) {
         CsvStore.appendRow(context, REPORT_CSV, listOf(
             e.day, e.month, e.year, e.shaft, e.side, e.pointNo, e.lengthCm.toString(),
-            e.deviation, e.collapse, e.km.toString(), e.dailyProgress.toString()
+            e.deviation, e.collapse, e.km.toString(), e.dailyProgress.toString(),
+            e.shaftProgress.toString(), e.remaining.toString()
         ))
     }
 
@@ -51,7 +54,9 @@ object TunnelReportStore {
                     lengthCm = row[6].toEnglishDigits().toDouble(),
                     deviation = row.getOrElse(7) { "" }, collapse = row.getOrElse(8) { "" },
                     km = row.getOrElse(9) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
-                    dailyProgress = row.getOrElse(10) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
+                    dailyProgress = row.getOrElse(10) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    shaftProgress = row.getOrElse(11) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    remaining = row.getOrElse(12) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
                 )
             } catch (e: Exception) { null }
         }
@@ -67,7 +72,8 @@ object TunnelReportStore {
         val kept = allEntries(context).filter { it.dateSortKey != dateKey }
         val all = kept + newEntries
         val rows = all.map { listOf(it.day, it.month, it.year, it.shaft, it.side, it.pointNo,
-            it.lengthCm.toString(), it.deviation, it.collapse, it.km.toString(), it.dailyProgress.toString()) }
+            it.lengthCm.toString(), it.deviation, it.collapse, it.km.toString(), it.dailyProgress.toString(),
+            it.shaftProgress.toString(), it.remaining.toString()) }
         CsvStore.overwriteAll(context, REPORT_CSV, rows)
     }
 
@@ -84,20 +90,16 @@ object TunnelReportStore {
         }.distinctBy { it.name }
     }
 
-    /** آخرین کیلومتراژ ثبت‌شده (ستون km) برای یک شفت-سمت، در/قبل از یک تاریخ؛ در نبود سابقه، کیلومتر ثابت شفت */
     fun kmOnOrBefore(context: Context, shaft: String, side: String, dateKey: String?): Double {
         val key = "$shaft-$side"
-        val latest = allEntries(context)
-            .filter { it.key == key && (dateKey == null || it.dateSortKey <= dateKey) }
+        val latest = allEntries(context).filter { it.key == key && (dateKey == null || it.dateSortKey <= dateKey) }
             .maxByOrNull { it.dateSortKey }
         return latest?.km ?: shaftFixedKm(context, shaft) ?: 0.0
     }
 
     fun kmBefore(context: Context, shaft: String, side: String, dateKey: String): Double {
         val key = "$shaft-$side"
-        val latest = allEntries(context)
-            .filter { it.key == key && it.dateSortKey < dateKey }
-            .maxByOrNull { it.dateSortKey }
+        val latest = allEntries(context).filter { it.key == key && it.dateSortKey < dateKey }.maxByOrNull { it.dateSortKey }
         return latest?.km ?: shaftFixedKm(context, shaft) ?: 0.0
     }
 
@@ -106,14 +108,29 @@ object TunnelReportStore {
 
     fun currentKm(context: Context, shaft: String, side: String): Double = kmOnOrBefore(context, shaft, side, null)
 
-    /** محاسبه‌ی کیلومتراژ و پیشرفت روزانه بر اساس نقطه‌ی مرجع (tunnel_points) + طول واردشده (سانتی‌متر) */
-    fun computeKmAndProgress(context: Context, shaft: String, side: String, pointNo: String, lengthCm: Double, dateKeyForPrevLookup: String): Pair<Double, Double>? {
+    /** کیلومتر «جبهه‌ی مقابل» این شفت-سمت: اگر سمت شماره‌ی شفت دیگری‌ست، جبهه‌ی متحرک همان شفت (سمت=این‌شفت)؛
+     *  اگر start/end است، کیلومتر ثابت همان دهانه */
+    private fun oppositeKm(context: Context, shaft: String, side: String, asOfDateKey: String?): Double {
+        return if (side == "start" || side == "end") {
+            shaftFixedKm(context, side) ?: 0.0
+        } else {
+            kmOnOrBefore(context, side, shaft, asOfDateKey)
+        }
+    }
+
+    /** محاسبه‌ی همه‌ی مقادیر لازم یک ردیف گزارش، بر اساس نقطه‌ی مرجع + طول واردشده (سانتی‌متر) */
+    fun computeEntryValues(context: Context, shaft: String, side: String, pointNo: String, lengthCm: Double, dateKeyToday: String): ReportEntryValues? {
         val point = findByPointNo(context, pointNo) ?: return null
         val km = point.km + direction(shaft, side) * (lengthCm / 100.0)
-        val prevKm = kmBefore(context, shaft, side, dateKeyForPrevLookup)
-        val progress = abs(km - prevKm)
-        return km to progress
+        val prevKm = kmBefore(context, shaft, side, dateKeyToday)
+        val dailyProgress = abs(km - prevKm)
+        val fixedKm = shaftFixedKm(context, shaft) ?: km
+        val shaftProgress = abs(km - fixedKm)
+        val remaining = abs(km - oppositeKm(context, shaft, side, dateKeyToday))
+        return ReportEntryValues(km, dailyProgress, shaftProgress, remaining)
     }
+
+    data class ReportEntryValues(val km: Double, val dailyProgress: Double, val shaftProgress: Double, val remaining: Double)
 
     // ---- نقاط تونل ----
     data class TunnelPoint(

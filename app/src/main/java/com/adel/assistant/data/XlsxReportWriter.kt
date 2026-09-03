@@ -9,25 +9,20 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
-import kotlin.math.abs
 
-private data class RowSpec(
-    val row: Int, val shaft: String, val side: String,
-    val targetI: Double, val jFixed: Double? = null, val jRefRow: Int? = null
+/** فقط نگاشت «کدام ردیف قالب، متعلق به کدام شفت-سمت است» — بدون هیچ فرمول یا محاسبه‌ی مستقل */
+private val ROW_MAP = mapOf(
+    4 to ("1" to "start"),
+    12 to ("1" to "2"),
+    20 to ("2" to "1"),
+    28 to ("2" to "3"),
+    36 to ("3" to "2"),
+    44 to ("3" to "4"),
+    52 to ("4" to "3"),
+    60 to ("4" to "end")
 )
 
 object XlsxReportWriter {
-
-    private val rowSpecs = listOf(
-        RowSpec(4, "1", "start", 362.1, jFixed = 227.0),
-        RowSpec(12, "1", "2", 362.1, jRefRow = 20),
-        RowSpec(20, "2", "1", 586.65),
-        RowSpec(28, "2", "3", 586.65, jRefRow = 36),
-        RowSpec(36, "3", "2", 909.8),
-        RowSpec(44, "3", "4", 909.8, jRefRow = 52),
-        RowSpec(52, "4", "3", 1200.0),
-        RowSpec(60, "4", "end", 1200.0, jFixed = 1257.7)
-    )
 
     fun generate(context: Context, year: String, month: String, day: String, weekday: String?): android.net.Uri? {
         val m = month.toIntOrNullFa() ?: 0
@@ -35,42 +30,51 @@ object XlsxReportWriter {
         val todayKey = "%s%02d%02d".format(year, m, d)
         val prevKey = CalendarStore.previousDateKey(year, month, day)
 
-        // منبع واحد محاسبات: TunnelReportStore (همان موتوری که گزارش روزانه استفاده می‌کند)
-        val gValues = mutableMapOf<Int, Double>()
-        val fValues = mutableMapOf<Int, Double>()
-        rowSpecs.forEach { spec ->
-            fValues[spec.row] = TunnelReportStore.kmOnOrBefore(context, spec.shaft, spec.side, prevKey)
-            gValues[spec.row] = TunnelReportStore.kmOnOrBefore(context, spec.shaft, spec.side, todayKey)
-        }
-
         val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>()
-
         cellUpdates["Q1"] = formatEn("%02d/%02d", m, d) to true
         cellUpdates["R1"] = "$year/" to true
         if (weekday != null) cellUpdates["Q2"] = weekday to true
 
         var sumI = 0.0
-        rowSpecs.forEach { spec ->
-            val f = fValues[spec.row]!!
-            val g = gValues[spec.row]!!
-            val h = abs(g - f)
-            val i = abs(spec.targetI - g)
+        ROW_MAP.forEach { (row, pair) ->
+            val (shaft, side) = pair
+            // اگر امروز برای این شفت-سمت رکوردی ثبت شده، مستقیم مقادیرش را کپی می‌کنیم
+            val todayEntry = TunnelReportStore.entriesForDate(context, year, month, day)
+                .firstOrNull { it.shaft == shaft && it.side == side }
+
+            val f = TunnelReportStore.kmBefore(context, shaft, side, todayKey)
+            val g: Double
+            val h: Double
+            val i: Double
+            val j: Double
+            if (todayEntry != null) {
+                g = todayEntry.km
+                h = todayEntry.dailyProgress
+                i = todayEntry.shaftProgress
+                j = todayEntry.remaining
+            } else {
+                // بدون تغییر امروز: کیلومتر ثابت می‌ماند
+                g = f
+                h = 0.0
+                val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: f
+                i = kotlin.math.abs(g - fixedKm)
+                j = 0.0 // بدون رکورد امروز، مانده‌ی به‌روز محاسبه نمی‌شود (آخرین مانده‌ی معتبر باید از رکورد قبلی خوانده شود)
+            }
             sumI += i
-            cellUpdates["F${spec.row}"] = formatEn("%.4f", f) to false
-            cellUpdates["G${spec.row}"] = formatEn("%.4f", g) to false
-            cellUpdates["H${spec.row}"] = formatEn("%.4f", h) to false
-            cellUpdates["I${spec.row}"] = formatEn("%.4f", i) to false
-            val jTarget = spec.jFixed ?: spec.jRefRow?.let { gValues[it] }
-            if (jTarget != null) {
-                cellUpdates["J${spec.row}"] = formatEn("%.4f", abs(g - jTarget)) to false
+
+            cellUpdates["F$row"] = formatEn("%.4f", f) to false
+            cellUpdates["G$row"] = formatEn("%.4f", g) to false
+            cellUpdates["H$row"] = formatEn("%.4f", h) to false
+            cellUpdates["I$row"] = formatEn("%.4f", i) to false
+            if (todayEntry != null || row == 4 || row == 60) {
+                // ردیف‌های دارای J: 4،12،28،44،60 طبق قالب اصلی؛ در نبود رکورد امروز نیز اگر مقدار قبلی معتبر باشد کپی می‌شود
+                cellUpdates["J$row"] = formatEn("%.4f", j) to false
             }
         }
-        // E69 = مجموع ستون I (مانده‌ها) — طبق فرمول واقعی قالب. H69 در قالب خالی است و دست نمی‌خورد.
         cellUpdates["E69"] = formatEn("%.4f", sumI) to false
 
         val templateBytes = context.assets.open("report_template.xlsx").use { it.readBytes() }
         val outputBytes = rewriteXlsx(templateBytes, cellUpdates)
-
         val fileName = formatEn("b%02d%02d.xlsx", m, d)
         return saveToDocuments(context, fileName, outputBytes)
     }

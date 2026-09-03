@@ -40,7 +40,7 @@ private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 
 private data class PreviewRow(
     val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
-    val km: Double, val dailyProgress: Double,
+    val km: Double, val dailyProgress: Double, val shaftProgress: Double, val remaining: Double,
     val deviation: String = "", val collapse: String = ""
 )
 
@@ -56,7 +56,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var shaft by remember { mutableStateOf("") }
     var side by remember { mutableStateOf("") }
     var pointNo by remember { mutableStateOf("") }
-    var length by remember { mutableStateOf("") } // بر حسب سانتی‌متر
+    var length by remember { mutableStateOf("") }
     var deviation by remember { mutableStateOf("") }
     var collapse by remember { mutableStateOf("") }
     var editingIndex by remember { mutableStateOf(-1) }
@@ -83,7 +83,9 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
     fun loadDay() {
         val existing = TunnelReportStore.entriesForDate(context, year, month, day)
-        rows = existing.map { e -> PreviewRow(e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.deviation, e.collapse) }
+        rows = existing.map { e ->
+            PreviewRow(e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.shaftProgress, e.remaining, e.deviation, e.collapse)
+        }
         statusMsg = if (rows.isEmpty()) "برای این تاریخ رکوردی ثبت نشده" else "${rows.size} ردیف بارگذاری شد"
     }
 
@@ -93,13 +95,12 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         if (shaft.isBlank() || side.isBlank() || pointNo.isBlank()) {
             statusMsg = "شفت، سمت و شماره نقطه الزامی‌اند"; return
         }
-        val result = TunnelReportStore.computeKmAndProgress(context, shaft, side, pointNo, len, todayDateKey())
-        if (result == null) {
+        val v = TunnelReportStore.computeEntryValues(context, shaft, side, pointNo, len, todayDateKey())
+        if (v == null) {
             statusMsg = "نقطه‌ی $pointNo در فایل نقاط پیدا نشد — اول از «نقاط تونل» ثبتش کن"
             return
         }
-        val (km, progress) = result
-        val newRow = PreviewRow(shaft, side, pointNo, len, km, progress, deviation, collapse)
+        val newRow = PreviewRow(shaft, side, pointNo, len, v.km, v.dailyProgress, v.shaftProgress, v.remaining, deviation, collapse)
         rows = if (editingIndex >= 0) {
             rows.toMutableList().also { it[editingIndex] = newRow }
         } else {
@@ -123,7 +124,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
     fun registerAll() {
         val newEntries = rows.map {
-            ReportEntry(year, month, day, it.shaft, it.side, it.pointNo, it.lengthCm, it.deviation, it.collapse, it.km, it.dailyProgress)
+            ReportEntry(year, month, day, it.shaft, it.side, it.pointNo, it.lengthCm, it.deviation, it.collapse,
+                it.km, it.dailyProgress, it.shaftProgress, it.remaining)
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
         statusMsg = "ثبت شد"
@@ -182,10 +184,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 value = shaft, onValueChange = { shaft = filterNumericInput(it) }, label = { Text("شفت") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
-                value = side, onValueChange = { side = it }, label = { Text("سمت") },
-                modifier = Modifier.weight(1f)
-            )
+            OutlinedTextField(value = side, onValueChange = { side = it }, label = { Text("سمت") }, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(
@@ -213,17 +212,20 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             items(rows.size) { i ->
                 val r = rows[i]
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("${r.shaft}به${r.side}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("ن:${r.pointNo}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text(formatEn("ک:%.3f", r.km), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text(formatEn("پ:%.3f", r.dailyProgress), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp))
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("${r.shaft}به${r.side} (ن${r.pointNo})", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp))
+                            }
+                            IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Filled.Delete, contentDescription = "پاک کردن", tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp))
+                            }
                         }
-                        IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Filled.Delete, contentDescription = "پاک کردن", tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp))
-                        }
+                        Text(
+                            formatEn("ک:%.3f  پ.روز:%.3f  پ.شفت:%.3f  مانده:%.3f", r.km, r.dailyProgress, r.shaftProgress, r.remaining),
+                            style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B)
+                        )
                     }
                 }
             }
