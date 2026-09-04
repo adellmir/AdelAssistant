@@ -14,11 +14,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.formatEn
+import com.adel.assistant.data.normalizeSide
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.abs
+
+/** کیلومتر «جبهه‌ی مقابل» یک شفت-سمت: اگر سمت شماره‌ی شفت دیگری‌ست، جبهه‌ی متحرک همان شفت؛ اگر start/end است، کیلومتر ثابت دهانه */
+private fun oppositeKm(context: android.content.Context, shaft: String, side: String): Double {
+    val s = normalizeSide(side)
+    return if (s == "start" || s == "end") {
+        TunnelReportStore.shaftFixedKm(context, s) ?: 0.0
+    } else {
+        TunnelReportStore.currentKm(context, s, shaft)
+    }
+}
 
 @Composable
 fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
@@ -45,45 +57,31 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
                 }
             }
         }
-        if (tab == 0) OverallStatus(context, color) else RangeStatus(context, color)
+        if (tab == 0) OverallStatus(context) else RangeStatus(context, color)
     }
 }
 
 @Composable
-private fun OverallStatus(context: android.content.Context, color: Color) {
-    // مرتب‌سازی شفت‌ها/دهانه‌ها بر اساس کیلومتراژ ثابت برای تعیین «جبهه‌ی مقابل»
-    val shafts = TunnelReportStore.allShafts(context).sortedBy { it.fixedKm }
+private fun OverallStatus(context: android.content.Context) {
+    val byShaft = TunnelReportStore.TUNNEL_LAYOUT.groupBy { it.first }.toSortedMap()
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
-        items(shafts.filter { it.type == "شفت" }) { s ->
-            val idx = shafts.indexOf(s)
-            val nextEntry = shafts.getOrNull(idx + 1)
-            val prevEntry = shafts.getOrNull(idx - 1)
-
-            val kmSide1 = TunnelReportStore.currentKm(context, s.name, "1") // سمت بیشتر
-            val kmSide0 = TunnelReportStore.currentKm(context, s.name, "0") // سمت کمتر
-
-            val targetSide1 = nextEntry?.let {
-                if (it.type == "شفت") TunnelReportStore.currentKm(context, it.name, "0") else it.fixedKm
-            } ?: s.fixedKm
-            val targetSide0 = prevEntry?.let {
-                if (it.type == "شفت") TunnelReportStore.currentKm(context, it.name, "1") else it.fixedKm
-            } ?: s.fixedKm
-
-            val aA = abs(kmSide1 - s.fixedKm) // پیشرفت سمت بیشتر
-            val bA = abs(targetSide1 - kmSide1) // مانده سمت بیشتر
-            val aC = abs(s.fixedKm - kmSide0) // پیشرفت سمت کمتر
-            val bC = abs(kmSide0 - targetSide0) // مانده سمت کمتر
-
+        items(byShaft.entries.toList()) { (shaftName, sides) ->
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("%.1f".format(bC), style = MaterialTheme.typography.bodySmall)
-                        Text(s.name, style = MaterialTheme.typography.titleSmall)
-                        Text("%.1f".format(bA), style = MaterialTheme.typography.bodySmall)
+                    Text("شفت $shaftName", style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    sides.forEach { (shaft, side) ->
+                        val km = TunnelReportStore.currentKm(context, shaft, side)
+                        val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: km
+                        val a = abs(km - fixedKm)
+                        val opp = oppositeKm(context, shaft, side)
+                        val b = abs(km - opp)
+                        Text(
+                            formatEn("سمت %s — پیشرفت: %.2f — مانده: %.2f (کیلومتر فعلی %.2f)", side, a, b, km),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF9BA888)
+                        )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("سمت کمتر: پیشرفت %.1f — سمت بیشتر: پیشرفت %.1f".format(aC, aA),
-                        style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
                 }
             }
         }
@@ -118,14 +116,10 @@ private fun RangeStatus(context: android.content.Context, color: Color) {
             onClick = {
                 val fromKey = "%s%02d%02d".format(fromYear, fromMonth.toIntOrNullFa() ?: 0, fromDay.toIntOrNullFa() ?: 0)
                 val toKey = "%s%02d%02d".format(toYear, toMonth.toIntOrNullFa() ?: 0, toDay.toIntOrNullFa() ?: 0)
-                results = TunnelReportStore.allShafts(context).filter { it.type == "شفت" }.map { s ->
-                    val fromKm1 = TunnelReportStore.lastKmBefore(context, s.name, "1", fromKey) ?: s.fixedKm
-                    val toKm1 = TunnelReportStore.lastKmBefore(context, s.name, "1", toKey) ?: s.fixedKm
-                    val fromKm0 = TunnelReportStore.lastKmBefore(context, s.name, "0", fromKey) ?: s.fixedKm
-                    val toKm0 = TunnelReportStore.lastKmBefore(context, s.name, "0", toKey) ?: s.fixedKm
-                    val a = abs(toKm1 - fromKm1)
-                    val c = abs(toKm0 - fromKm0)
-                    "%.1f ← ${s.name} → %.1f".format(c, a)
+                results = TunnelReportStore.TUNNEL_LAYOUT.map { (shaft, side) ->
+                    val fromKm = TunnelReportStore.kmOnOrBefore(context, shaft, side, fromKey)
+                    val toKm = TunnelReportStore.kmOnOrBefore(context, shaft, side, toKey)
+                    formatEn("شفت %s سمت %s: %.2f", shaft, side, kotlin.math.abs(toKm - fromKm))
                 }
             },
             colors = ButtonDefaults.buttonColors(containerColor = color),

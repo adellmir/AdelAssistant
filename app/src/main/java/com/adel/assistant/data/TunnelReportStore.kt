@@ -3,39 +3,45 @@ package com.adel.assistant.data
 import android.content.Context
 import kotlin.math.abs
 
-/**
- * تمام مقادیر لازم برای گزارش روزانه، همان لحظه‌ی ثبت محاسبه و در فایل ذخیره می‌شوند —
- * تا هرجای دیگری (از جمله فایل اکسل) فقط کپی کند، نه دوباره محاسبه.
- */
 data class ReportEntry(
     val year: String, val month: String, val day: String,
     val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
     val deviation: String = "", val collapse: String = "",
-    val km: Double = 0.0,           // کیلومتراژ همان روز
-    val dailyProgress: Double = 0.0, // قدرمطلق تفاضل با آخرین ثبت قبلی همان شفت-سمت
-    val shaftProgress: Double = 0.0, // قدرمطلق تفاضل کیلومتراژ با کیلومتر ثابت خود شفت
-    val remaining: Double = 0.0      // قدرمطلق تفاضل با جبهه‌ی مقابل (شفت دیگر یا دهانه)
+    val km: Double = 0.0, val dailyProgress: Double = 0.0,
+    val shaftProgress: Double = 0.0, val remaining: Double = 0.0
 ) {
-    val key: String get() = "$shaft-$side"
+    val key: String get() = "$shaft-${normalizeSide(side)}"
     val dateSortKey: String get() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
 }
 
 data class ShaftEntry(val name: String, val fixedKm: Double, val type: String)
 
+/** سمت «۰» و «start» برای شفت۱ معادل هم هستند؛ این تابع همیشه یک برچسب یکسان برمی‌گرداند */
+fun normalizeSide(side: String): String = if (side == "0") "start" else side
+
 object TunnelReportStore {
     private const val REPORT_CSV = "survey_tunnel_report"
     private const val POINTS_TXT = "tunnel_points"
 
+    // جهت‌ها: -1 یعنی کیلومتر با پیشروی کم می‌شود، +1 یعنی زیاد می‌شود
+    // نکته: جهت «۲-۱» بر اساس آزمایش میدانی کاربر برعکسِ فرمول اصلی فایل اکسل تنظیم شده — نیاز به بازبینی مجدد دارد
     private val DIRECTION = mapOf(
         "1-start" to -1, "1-2" to 1,
-        "2-1" to -1, "2-3" to 1,
+        "2-1" to 1, "2-3" to 1,
         "3-2" to -1, "3-4" to 1,
         "4-3" to 1, "4-end" to 1
     )
 
-    fun direction(shaft: String, side: String): Int = DIRECTION["$shaft-$side"] ?: 1
+    fun direction(shaft: String, side: String): Int = DIRECTION["$shaft-${normalizeSide(side)}"] ?: 1
 
-    // ترتیب فایل: روز,ماه,سال,شفت,سمت,شماره_نقطه,طول_سانتیمتر,انحراف,ریزش,کیلومتراژ,پیشرفت_روزانه,پیشرفت_از_شفت,مانده
+    /** نگاشت ثابت مسیر: هر شفت به دو سمت — مرجع مشترک برای گزارش روزانه، اکسل، و وضعیت تونل */
+    val TUNNEL_LAYOUT = listOf(
+        "1" to "start", "1" to "2",
+        "2" to "1", "2" to "3",
+        "3" to "2", "3" to "4",
+        "4" to "3", "4" to "end"
+    )
+
     fun saveEntry(context: Context, e: ReportEntry) {
         CsvStore.appendRow(context, REPORT_CSV, listOf(
             e.day, e.month, e.year, e.shaft, e.side, e.pointNo, e.lengthCm.toString(),
@@ -67,6 +73,11 @@ object TunnelReportStore {
         return allEntries(context).filter { it.dateSortKey == key }
     }
 
+    /** پیدا کردن رکورد یک روز برای یک شفت-سمت مشخص، با در نظر گرفتن هم‌ارزی ۰/start */
+    fun entryForDateAndKey(context: Context, year: String, month: String, day: String, shaft: String, side: String): ReportEntry? {
+        return entriesForDate(context, year, month, day).firstOrNull { it.key == "$shaft-${normalizeSide(side)}" }
+    }
+
     fun replaceEntriesForDate(context: Context, year: String, month: String, day: String, newEntries: List<ReportEntry>) {
         val dateKey = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
         val kept = allEntries(context).filter { it.dateSortKey != dateKey }
@@ -91,14 +102,14 @@ object TunnelReportStore {
     }
 
     fun kmOnOrBefore(context: Context, shaft: String, side: String, dateKey: String?): Double {
-        val key = "$shaft-$side"
+        val key = "$shaft-${normalizeSide(side)}"
         val latest = allEntries(context).filter { it.key == key && (dateKey == null || it.dateSortKey <= dateKey) }
             .maxByOrNull { it.dateSortKey }
         return latest?.km ?: shaftFixedKm(context, shaft) ?: 0.0
     }
 
     fun kmBefore(context: Context, shaft: String, side: String, dateKey: String): Double {
-        val key = "$shaft-$side"
+        val key = "$shaft-${normalizeSide(side)}"
         val latest = allEntries(context).filter { it.key == key && it.dateSortKey < dateKey }.maxByOrNull { it.dateSortKey }
         return latest?.km ?: shaftFixedKm(context, shaft) ?: 0.0
     }
@@ -108,17 +119,15 @@ object TunnelReportStore {
 
     fun currentKm(context: Context, shaft: String, side: String): Double = kmOnOrBefore(context, shaft, side, null)
 
-    /** کیلومتر «جبهه‌ی مقابل» این شفت-سمت: اگر سمت شماره‌ی شفت دیگری‌ست، جبهه‌ی متحرک همان شفت (سمت=این‌شفت)؛
-     *  اگر start/end است، کیلومتر ثابت همان دهانه */
     private fun oppositeKm(context: Context, shaft: String, side: String, asOfDateKey: String?): Double {
-        return if (side == "start" || side == "end") {
-            shaftFixedKm(context, side) ?: 0.0
+        val s = normalizeSide(side)
+        return if (s == "start" || s == "end") {
+            shaftFixedKm(context, s) ?: 0.0
         } else {
-            kmOnOrBefore(context, side, shaft, asOfDateKey)
+            kmOnOrBefore(context, s, shaft, asOfDateKey)
         }
     }
 
-    /** محاسبه‌ی همه‌ی مقادیر لازم یک ردیف گزارش، بر اساس نقطه‌ی مرجع + طول واردشده (سانتی‌متر) */
     fun computeEntryValues(context: Context, shaft: String, side: String, pointNo: String, lengthCm: Double, dateKeyToday: String): ReportEntryValues? {
         val point = findByPointNo(context, pointNo) ?: return null
         val km = point.km + direction(shaft, side) * (lengthCm / 100.0)

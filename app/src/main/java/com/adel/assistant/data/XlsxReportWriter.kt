@@ -10,7 +10,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-/** فقط نگاشت «کدام ردیف قالب، متعلق به کدام شفت-سمت است» — بدون هیچ فرمول یا محاسبه‌ی مستقل */
 private val ROW_MAP = mapOf(
     4 to ("1" to "start"),
     12 to ("1" to "2"),
@@ -28,7 +27,6 @@ object XlsxReportWriter {
         val m = month.toIntOrNullFa() ?: 0
         val d = day.toIntOrNullFa() ?: 0
         val todayKey = "%s%02d%02d".format(year, m, d)
-        val prevKey = CalendarStore.previousDateKey(year, month, day)
 
         val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>()
         cellUpdates["Q1"] = formatEn("%02d/%02d", m, d) to true
@@ -38,9 +36,7 @@ object XlsxReportWriter {
         var sumI = 0.0
         ROW_MAP.forEach { (row, pair) ->
             val (shaft, side) = pair
-            // اگر امروز برای این شفت-سمت رکوردی ثبت شده، مستقیم مقادیرش را کپی می‌کنیم
-            val todayEntry = TunnelReportStore.entriesForDate(context, year, month, day)
-                .firstOrNull { it.shaft == shaft && it.side == side }
+            val todayEntry = TunnelReportStore.entryForDateAndKey(context, year, month, day, shaft, side)
 
             val f = TunnelReportStore.kmBefore(context, shaft, side, todayKey)
             val g: Double
@@ -53,12 +49,11 @@ object XlsxReportWriter {
                 i = todayEntry.shaftProgress
                 j = todayEntry.remaining
             } else {
-                // بدون تغییر امروز: کیلومتر ثابت می‌ماند
                 g = f
                 h = 0.0
                 val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: f
                 i = kotlin.math.abs(g - fixedKm)
-                j = 0.0 // بدون رکورد امروز، مانده‌ی به‌روز محاسبه نمی‌شود (آخرین مانده‌ی معتبر باید از رکورد قبلی خوانده شود)
+                j = 0.0
             }
             sumI += i
 
@@ -67,7 +62,6 @@ object XlsxReportWriter {
             cellUpdates["H$row"] = formatEn("%.4f", h) to false
             cellUpdates["I$row"] = formatEn("%.4f", i) to false
             if (todayEntry != null || row == 4 || row == 60) {
-                // ردیف‌های دارای J: 4،12،28،44،60 طبق قالب اصلی؛ در نبود رکورد امروز نیز اگر مقدار قبلی معتبر باشد کپی می‌شود
                 cellUpdates["J$row"] = formatEn("%.4f", j) to false
             }
         }
