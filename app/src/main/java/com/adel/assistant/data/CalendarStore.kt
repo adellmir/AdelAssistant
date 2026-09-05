@@ -26,7 +26,7 @@ object CalendarStore {
         return breaks.contains(y)
     }
 
-    private fun jalaliMonthLength(year: Int, month: Int): Int = when {
+    fun jalaliMonthLength(year: Int, month: Int): Int = when {
         month in 1..6 -> 31
         month in 7..11 -> 30
         else -> if (isLeapJalali(year)) 30 else 29

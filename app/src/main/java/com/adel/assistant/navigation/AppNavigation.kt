@@ -12,7 +12,10 @@ import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
 import com.adel.assistant.ui.screens.LocationScreen
+import com.adel.assistant.ui.screens.ProjectEventsScreen
+import com.adel.assistant.ui.screens.ProjectRegisterScreen
 import com.adel.assistant.ui.screens.SimpleRecordScreen
+import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
@@ -47,18 +50,13 @@ fun AppNavigation() {
 
         // ---- نقشه‌برداری: پروژه‌ها ----
         composable(Routes.SURVEY_PROJECT_REGISTER) {
-            SimpleRecordScreen(
-                title = "ثبت پروژه", color = WorkPrimary, csvName = "survey_project_register",
-                fields = listOf("نام پروژه", "نام کارفرما", "تاریخ", "آدرس/توضیح"),
-                onBack = { navController.popBackStack() }
-            )
+            ProjectRegisterScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
-            SimpleRecordScreen(
-                title = "ثبت وقایع پروژه", color = WorkPrimary, csvName = "survey_project_events",
-                fields = listOf("نام پروژه", "تاریخ", "شرح واقعه"),
-                onBack = { navController.popBackStack() }
-            )
+            ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.SURVEY_PROJECT_CALENDAR) {
+            WorkCalendarScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
 
         // ---- مالی: تونل ----
