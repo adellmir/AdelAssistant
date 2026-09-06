@@ -2,6 +2,7 @@ package com.adel.assistant.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -52,6 +53,14 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
     var statusMsg by remember { mutableStateOf("") }
     var confirmCallFor by remember { mutableStateOf<ProjectEntry?>(null) }
 
+    fun clearForm() {
+        day = today.third.toString(); month = today.second.toString(); year = today.first.toString()
+        name = ""; employer = ""; amount = ""; description = ""; phone = ""; editingRow = null
+    }
+
+    // اگر در حال ویرایش هستیم، دکمه‌ی برگشت (چه سیستمی چه آیکون بالای صفحه) فقط از حالت ویرایش خارج می‌شود
+    BackHandler(enabled = editingRow != null) { clearForm() }
+
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
@@ -61,11 +70,6 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
                 }
             } catch (e: Exception) { statusMsg = "خطا در وارد کردن فایل" }
         }
-    }
-
-    fun clearForm() {
-        day = today.third.toString(); month = today.second.toString(); year = today.first.toString()
-        name = ""; employer = ""; amount = ""; description = ""; phone = ""; editingRow = null
     }
 
     fun register() {
@@ -89,7 +93,7 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
             .padding(horizontal = 20.dp)
     ) {
         Box {
-            ScreenTopBar(title = "ثبت پروژه", color = color, onBack = onBack)
+            ScreenTopBar(title = "ثبت پروژه", color = color, onBack = { if (editingRow != null) clearForm() else onBack() })
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
                 Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
