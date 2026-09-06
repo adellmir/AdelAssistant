@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -52,13 +53,13 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
     var confirmCallFor by remember { mutableStateOf<ProjectEntry?>(null) }
+    var confirmDeleteFor by remember { mutableStateOf<ProjectEntry?>(null) }
 
     fun clearForm() {
         day = today.third.toString(); month = today.second.toString(); year = today.first.toString()
         name = ""; employer = ""; amount = ""; description = ""; phone = ""; editingRow = null
     }
 
-    // اگر در حال ویرایش هستیم، دکمه‌ی برگشت (چه سیستمی چه آیکون بالای صفحه) فقط از حالت ویرایش خارج می‌شود
     BackHandler(enabled = editingRow != null) { clearForm() }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -143,7 +144,7 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
                         Text("${p.name} — ${p.employer}", style = MaterialTheme.typography.bodySmall)
                         Text(formatEn("%s/%s — مبلغ: %.0f — %s", p.day, p.month, p.amount, p.description),
                             style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
                             IconButton(onClick = { confirmCallFor = p }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
                             }
@@ -159,6 +160,9 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
                                 amount = p.amount.toString(); description = p.description; phone = p.phone; editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
+                            }
+                            IconButton(onClick = { confirmDeleteFor = p }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFC2685E))
                             }
                         }
                     }
@@ -179,6 +183,23 @@ fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
                 }) { Text("تماس") }
             },
             dismissButton = { TextButton(onClick = { confirmCallFor = null }) { Text("انصراف") } }
+        )
+    }
+
+    confirmDeleteFor?.let { p ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteFor = null },
+            title = { Text("حذف رکورد") },
+            text = { Text("رکورد «${p.name}» حذف شود؟ این کار قابل بازگشت نیست.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    ProjectStore.delete(context, p.row)
+                    confirmDeleteFor = null
+                    search()
+                    statusMsg = "حذف شد"
+                }) { Text("حذف") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDeleteFor = null }) { Text("انصراف") } }
         )
     }
 }

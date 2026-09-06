@@ -2,7 +2,6 @@ package com.adel.assistant.data
 
 import android.content.Context
 
-/** ترتیب فایل: ردیف,روز,ماه,پروژه,مبلغ,تسویه,مانده,کارفرما,شماره_تماس,توضیحات,سال (سال در انتها برای سازگاری با فایل قدیمی) */
 data class ProjectEntry(
     val row: String, val day: String, val month: String,
     val name: String, val amount: Double, val settled: Double, val remaining: Double,
@@ -41,11 +40,14 @@ object ProjectStore {
         return (maxRow + 1).toString()
     }
 
-    /** ثبت رکورد جدید یا جایگزینی رکورد موجود (ویرایش)، بر اساس شماره ردیف */
     fun save(context: Context, entry: ProjectEntry) {
         val existing = all(context)
         val without = existing.filterNot { it.row == entry.row }
         writeAll(context, without + entry)
+    }
+
+    fun delete(context: Context, row: String) {
+        writeAll(context, all(context).filterNot { it.row == row })
     }
 
     fun markSettled(context: Context, row: String) {
@@ -65,7 +67,6 @@ object ProjectStore {
         return all(context).filter { it.dateSortKey == key }
     }
 
-    /** روزهای دارای پروژه در یک ماه/سال مشخص (برای رنگ‌بندی تقویم کاری) */
     fun daysWithProjectsIn(context: Context, month: String, year: String): Set<Int> {
         return all(context).filter { it.month.toIntOrNullFa() == month.toIntOrNullFa() && it.year == year }
             .mapNotNull { it.day.toIntOrNullFa() }.toSet()
