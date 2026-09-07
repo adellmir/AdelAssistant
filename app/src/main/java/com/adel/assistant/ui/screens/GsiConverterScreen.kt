@@ -1,69 +1,75 @@
 package com.adel.assistant.ui.screens
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import java.io.File
 
 @Composable
 fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
-    var input by remember { mutableStateOf("") }
-    var output by remember { mutableStateOf("") }
-    var targetIsTab by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    var sourceName by remember { mutableStateOf("") }
+    var sourceExt by remember { mutableStateOf("") }
+    var sourceText by remember { mutableStateOf("") }
+    var points by remember { mutableStateOf<List<SurveyPoint>>(emptyList()) }
+    var target by remember { mutableStateOf("CSV") }
+    var message by remember { mutableStateOf("یک فایل انتخاب کن. فرمت‌های پشتیبانی‌شده: GSI, IDX, CSV, TXT, DAT, DXF") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .padding(horizontal = 20.dp)
-    ) {
-        ScreenTopBar(title = "مبدل GSI", color = color, onBack = onBack)
-        Text(
-            "نسخه‌ی فعلی، فایل نقاط با ستون‌های شماره،Y،X،Z،کد (جدا با کاما، تب یا فاصله) را بین فرمت‌های متنی تبدیل می‌کند. رمزگشایی فرمت خام GSI لایکا در فاز بعدی تکمیل می‌شود.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF6B6B6B)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = input,
-            onValueChange = { input = it },
-            label = { Text("متن نقاط را اینجا پیست کن") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = targetIsTab, onClick = { targetIsTab = true }, label = { Text("خروجی TXT (تب)") })
-            FilterChip(selected = !targetIsTab, onClick = { targetIsTab = false }, label = { Text("خروجی CSV (کاما)") })
+    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                sourceName = fileName(context, uri)
+                sourceExt = sourceName.substringAfterLast('.', "").lowercase()
+                sourceText = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                points = PointConverter.read(sourceText, sourceExt)
+                message = if (points.isEmpty()) "نقطه قابل تبدیل پیدا نشد." else "${points.size} نقطه خوانده شد. رکوردهای OCUPAR و RE در GSI نادیده گرفته می‌شوند."
+            } catch (e: Exception) { message = "خطا در خواندن فایل: ${e.message}" }
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = {
-                val separator = if (targetIsTab) "\t" else ","
-                output = input.lines()
-                    .filter { it.isNotBlank() }
-                    .joinToString("\n") { line ->
-                        line.split(",", "\t", " ").filter { it.isNotBlank() }.joinToString(separator)
-                    }
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = color),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("تبدیل") }
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = output,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("خروجی") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-        )
     }
+    val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) try {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(PointConverter.write(points, target.lowercase())) }
+            message = "فایل خروجی ذخیره شد."
+        } catch (e: Exception) { message = "خطا در ذخیره فایل: ${e.message}" }
+    }
+
+    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
+        ScreenTopBar(title = "مبدل نقاط", color = color, onBack = onBack)
+        Text("GSI، IDX، CSV، TXT، DAT و DXF", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = { openFile.launch(arrayOf("text/*", "application/octet-stream", "application/dxf")) }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) { Text("انتخاب فایل") }
+        if (sourceName.isNotBlank()) Text("فایل: $sourceName", style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(12.dp))
+        Text("فرمت خروجی")
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf("CSV", "TXT", "DAT", "DXF", "GSI", "IDX").forEach { ext ->
+                FilterChip(selected = target == ext, onClick = { target = ext }, label = { Text(ext) })
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(message, style = MaterialTheme.typography.bodySmall)
+        if (points.isNotEmpty()) Text("نمونه: ${points.take(3).joinToString { "${it.id} (${it.x}, ${it.y}, ${it.z})" }}", style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(16.dp))
+        Button(enabled = points.isNotEmpty(), onClick = { saveFile.launch("${sourceName.substringBeforeLast('.', "points")}.${target.lowercase()}") }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) { Text("تبدیل و ذخیره فایل") }
+    }
+}
+
+private fun fileName(context: Context, uri: Uri): String {
+    return context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+        val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+        if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+    } ?: File(uri.path ?: "points.txt").name
 }
