@@ -26,21 +26,20 @@ object PointConverter {
         if (s.isBlank() || s.startsWith("#") || s.lowercase().contains("id,x,y,z")) return@mapNotNull null
         val a = s.split(Regex("[,;\\t ]+")).filter { it.isNotBlank() }
         if (a.size < 4) return@mapNotNull null
-        val n = a.map { it.replace(',', '.').toDoubleOrNull() }
-        // ID X Y Z [CODE]
-        val x = n.getOrNull(1) ?: return@mapNotNull null
-        val y = n.getOrNull(2) ?: return@mapNotNull null
-        val z = n.getOrNull(3) ?: return@mapNotNull null
+        val x = a.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
+        val y = a.getOrNull(2)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
+        val z = a.getOrNull(3)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
         SurveyPoint(a[0].trim('"'), x, y, z, a.drop(4).joinToString(" "))
     }.toList()
 
     private fun parseIdx(text: String): List<SurveyPoint> {
         val r = Regex("^\\s*\\d+\\s*,\\s*\\\"([^\\\"]+)\\\"\\s*,\\s*\\\"([^\\\"]*)\\\"\\s*,\\s*([-+0-9.]+)\\s*,\\s*([-+0-9.]+)\\s*,\\s*([-+0-9.]+)")
-        return text.lineSequence().mapNotNull { m -> r.find(m)?.let { SurveyPoint(it.groupValues[1], it.groupValues[3].toDouble(), it.groupValues[4].toDouble(), it.groupValues[5].toDouble(), it.groupValues[2]) } }.toList()
+        return text.lineSequence().mapNotNull { m -> r.find(m)?.let {
+            SurveyPoint(it.groupValues[1], it.groupValues[3].toDouble(), it.groupValues[4].toDouble(), it.groupValues[5].toDouble(), it.groupValues[2])
+        } }.toList()
     }
 
     private fun parseGsi(text: String): List<SurveyPoint> = text.lineSequence().mapNotNull { line ->
-        // Ignore station/setup and backsight records such as OCUPAR and RE.
         if (line.contains("OCUPAR", true) || Regex("\\bRE\\b").containsMatchIn(line)) return@mapNotNull null
         val point = Regex("\\*11(\\d{4,})").find(line)?.groupValues?.get(1)?.trimStart('0') ?: return@mapNotNull null
         fun coord(key: String): Double? {
@@ -55,9 +54,7 @@ object PointConverter {
     }.toList()
 
     private fun parseDxf(text: String): List<SurveyPoint> {
-        val lines = text.lines()
-        val out = mutableListOf<SurveyPoint>()
-        var i = 0; var no = 1
+        val lines = text.lines(); val out = mutableListOf<SurveyPoint>(); var i = 0; var no = 1
         while (i < lines.size - 1) {
             if (lines[i].trim() == "0" && lines[i + 1].trim().equals("POINT", true)) {
                 var x: Double? = null; var y: Double? = null; var z: Double? = 0.0; var layer = ""
@@ -74,12 +71,28 @@ object PointConverter {
 
     private fun dxf(points: List<SurveyPoint>) = buildString {
         append("0\nSECTION\n2\nENTITIES\n")
-        points.forEach { p -> append("0\nPOINT\n8\n${p.code.ifBlank { "POINTS" }}\n10\n${f(p.x)}\n20\n${f(p.y)}\n30\n${f(p.z)}\n") }
+        points.forEach { p ->
+            val layer = p.code.ifBlank { "POINTS" }
+            val s = 0.10 // 10 cm when drawing units are meters
+            val gap = 0.15
+            // Cross marker built from two LINE entities so its appearance is independent of AutoCAD POINT style.
+            append("0\nLINE\n8\n$layer\n10\n${f(p.x - s / 2)}\n20\n${f(p.y - s / 2)}\n30\n${f(p.z)}\n11\n${f(p.x + s / 2)}\n21\n${f(p.y + s / 2)}\n31\n${f(p.z)}\n")
+            append("0\nLINE\n8\n$layer\n10\n${f(p.x - s / 2)}\n20\n${f(p.y + s / 2)}\n30\n${f(p.z)}\n11\n${f(p.x + s / 2)}\n21\n${f(p.y - s / 2)}\n31\n${f(p.z)}\n")
+            textEntity(layer, p.x + gap, p.y + 0.10, p.z, p.id, 0.10)
+            textEntity(layer, p.x + gap, p.y, p.z, "Z=${f(p.z)}", 0.10)
+            if (p.code.isNotBlank()) textEntity(layer, p.x + gap, p.y - 0.10, p.z, p.code, 0.10)
+        }
         append("0\nENDSEC\n0\nEOF\n")
     }
+
+    private fun StringBuilder.textEntity(layer: String, x: Double, y: Double, z: Double, value: String, height: Double) {
+        append("0\nTEXT\n8\n$layer\n10\n${f(x)}\n20\n${f(y)}\n30\n${f(z)}\n40\n${f(height)}\n1\n${value.replace("\n", " ")}\n")
+    }
+
     private fun gsi(points: List<SurveyPoint>) = points.joinToString("\n") { p ->
         "*11${p.id.padStart(4,'0')} 42....+000000000000${p.code} 81..00+${scaled(p.x)} 82..00+${scaled(p.y)} 83..00+${scaled(p.z)}"
     }
+
     private fun idx(points: List<SurveyPoint>) = buildString {
         append("HEADER\n  VERSION      1.31\n  SYSTEM       \"STS\"\n  SEPARATOR    ','\n  TERMINATOR   ';'\nEND HEADER\n\nDATABASE\n  POINTS (PointNo,PointID,Code,East,North,Elevation,CLASS)\n")
         points.forEachIndexed { i,p -> append("    ${i+1},  \"${p.id}\",  \"${p.code}\",    ${f(p.x)},  ${f(p.y)},  ${f(p.z)},  FIX;\n") }

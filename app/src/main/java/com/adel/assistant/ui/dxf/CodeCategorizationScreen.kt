@@ -23,7 +23,7 @@ import com.adel.assistant.data.CodeCategory
 import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DxfColors
 import com.adel.assistant.data.SurveyPoint
-import com.adel.assistant.ui.theme.WorkPrimary
+import com.adel.assistant.ui.theme.ToolPrimary
 
 @Composable
 fun CodeCategorizationContent(
@@ -171,7 +171,7 @@ fun CodeCategorizationContent(
                     .padding(16.dp)
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = WorkPrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary)
             ) {
                 Text("تولید DXF", style = MaterialTheme.typography.titleMedium)
             }
@@ -302,7 +302,7 @@ private fun CodeCard(
                                 .background(color)
                                 .border(
                                     width = if (setting.colorIndex == idx) 3.dp else 1.dp,
-                                    color = if (setting.colorIndex == idx) WorkPrimary else Color.Black.copy(0.2f),
+                                    color = if (setting.colorIndex == idx) ToolPrimary else Color.Black.copy(0.2f),
                                     shape = CircleShape
                                 )
                                 .clickable { onColorChange(idx) }
@@ -321,7 +321,7 @@ private fun CodeCard(
                         Checkbox(
                             checked = setting.closeOnE,
                             onCheckedChange = onCloseOnEChange,
-                            colors = CheckboxDefaults.colors(checkedColor = WorkPrimary)
+                            colors = CheckboxDefaults.colors(checkedColor = ToolPrimary)
                         )
                         Text("بستن ترسیم بعد از .E")
                     }
@@ -354,7 +354,7 @@ private fun CodeCard(
                         },
                         valueRange = 1f..6f,
                         steps = 9,
-                        colors = SliderDefaults.colors(thumbColor = WorkPrimary, activeTrackColor = WorkPrimary)
+                        colors = SliderDefaults.colors(thumbColor = ToolPrimary, activeTrackColor = ToolPrimary)
                     )
                 }
             }
@@ -409,7 +409,7 @@ private fun LabelCheck(label: String, checked: Boolean, onChecked: (Boolean) -> 
         Checkbox(
             checked = checked,
             onCheckedChange = onChecked,
-            colors = CheckboxDefaults.colors(checkedColor = WorkPrimary)
+            colors = CheckboxDefaults.colors(checkedColor = ToolPrimary)
         )
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }

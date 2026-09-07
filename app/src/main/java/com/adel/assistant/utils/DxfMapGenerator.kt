@@ -4,20 +4,21 @@ import com.adel.assistant.data.CodeCategory
 import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DxfColors
 import com.adel.assistant.data.SurveyPoint
+import com.adel.assistant.data.isEndOfLine
 import java.util.Locale
 
 /**
- * تولید فایل DXF از نقاط و تنظیمات کدها
+ * تولید DXF پیشرفته: خط + نقطه + لایه + برچسب + قانون .E
  */
-object DxfGenerator {
+object DxfMapGenerator {
 
     fun generate(
         points: List<SurveyPoint>,
-        settings: Map<String, CodeSetting> // key = code (exact as in file)
+        settings: Map<String, CodeSetting>
     ): String {
         val sb = StringBuilder()
 
-        // ---- HEADER ----
+        // HEADER
         sb.appendLine("0")
         sb.appendLine("SECTION")
         sb.appendLine("2")
@@ -25,32 +26,27 @@ object DxfGenerator {
         sb.appendLine("9")
         sb.appendLine("\$ACADVER")
         sb.appendLine("1")
-        sb.appendLine("AC1015") // AutoCAD 2000
+        sb.appendLine("AC1015")
         sb.appendLine("9")
         sb.appendLine("\$INSUNITS")
         sb.appendLine("70")
-        sb.appendLine("6") // meters
+        sb.appendLine("6")
         sb.appendLine("0")
         sb.appendLine("ENDSEC")
 
-        // ---- TABLES (LAYERS) ----
+        // TABLES / LAYERS
         sb.appendLine("0")
         sb.appendLine("SECTION")
         sb.appendLine("2")
         sb.appendLine("TABLES")
-
-        // Layer table
         sb.appendLine("0")
         sb.appendLine("TABLE")
         sb.appendLine("2")
         sb.appendLine("LAYER")
         sb.appendLine("70")
         sb.appendLine("0")
-
-        // لایه ۰ پیش‌فرض
         writeLayer(sb, "0", 7)
 
-        // لایه‌های مورد استفاده
         val usedLayers = settings.values
             .filter { it.category != CodeCategory.IGNORE }
             .map { it.layerName.ifBlank { "L-${it.code}" } }
@@ -67,13 +63,12 @@ object DxfGenerator {
         sb.appendLine("0")
         sb.appendLine("ENDSEC")
 
-        // ---- ENTITIES ----
+        // ENTITIES
         sb.appendLine("0")
         sb.appendLine("SECTION")
         sb.appendLine("2")
         sb.appendLine("ENTITIES")
 
-        // گروه‌بندی نقاط بر اساس کد دقیق
         val byCode = points.groupBy { it.code }
 
         byCode.forEach { (code, codePoints) ->
@@ -86,9 +81,7 @@ object DxfGenerator {
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
 
             when (setting.category) {
-                CodeCategory.LINE -> {
-                    writePolylines(sb, codePoints, layer, color, setting.closeOnE)
-                }
+                CodeCategory.LINE -> writePolylines(sb, codePoints, layer, color, setting.closeOnE)
                 CodeCategory.POINT -> {
                     codePoints.forEach { p ->
                         writePointSymbol(sb, p, layer, color)
@@ -103,7 +96,6 @@ object DxfGenerator {
         sb.appendLine("ENDSEC")
         sb.appendLine("0")
         sb.appendLine("EOF")
-
         return sb.toString()
     }
 
@@ -120,9 +112,6 @@ object DxfGenerator {
         sb.appendLine("CONTINUOUS")
     }
 
-    /**
-     * ترسیم پلی‌لاین‌ها با رعایت قانون .E
-     */
     private fun writePolylines(
         sb: StringBuilder,
         points: List<SurveyPoint>,
@@ -131,34 +120,22 @@ object DxfGenerator {
         closeOnE: Boolean
     ) {
         if (points.isEmpty()) return
+        var current = mutableListOf<SurveyPoint>()
 
-        var currentSegment = mutableListOf<SurveyPoint>()
-
-        fun flushSegment() {
-            if (currentSegment.size >= 2) {
-                writeLwPolyline(sb, currentSegment, layer, color)
-            } else if (currentSegment.size == 1) {
-                // نقطه تنها → به صورت نقطه بکش
-                writePointSymbol(sb, currentSegment[0], layer, color)
-            }
-            currentSegment = mutableListOf()
+        fun flush() {
+            if (current.size >= 2) writeLwPolyline(sb, current, layer, color)
+            else if (current.size == 1) writePointSymbol(sb, current[0], layer, color)
+            current = mutableListOf()
         }
 
         points.forEach { p ->
-            currentSegment.add(p)
-            if (closeOnE && p.isEndOfLine) {
-                flushSegment()
-            }
+            current.add(p)
+            if (closeOnE && p.isEndOfLine()) flush()
         }
-        flushSegment() // آخرین سگمنت
+        flush()
     }
 
-    private fun writeLwPolyline(
-        sb: StringBuilder,
-        pts: List<SurveyPoint>,
-        layer: String,
-        color: Int
-    ) {
+    private fun writeLwPolyline(sb: StringBuilder, pts: List<SurveyPoint>, layer: String, color: Int) {
         sb.appendLine("0")
         sb.appendLine("LWPOLYLINE")
         sb.appendLine("8")
@@ -168,28 +145,17 @@ object DxfGenerator {
         sb.appendLine("90")
         sb.appendLine(pts.size.toString())
         sb.appendLine("70")
-        sb.appendLine("0") // open
-
+        sb.appendLine("0")
         pts.forEach { p ->
             sb.appendLine("10")
-            sb.appendLine(format(p.x))
+            sb.appendLine(fmt(p.x))
             sb.appendLine("20")
-            sb.appendLine(format(p.y))
-            // Z برای LWPOLYLINE در elevation جداست، ولی برای سادگی اینجا نمی‌ذاریم
+            sb.appendLine(fmt(p.y))
         }
     }
 
-    /**
-     * نماد نقطه: دایره کوچک + ضربدر
-     */
-    private fun writePointSymbol(
-        sb: StringBuilder,
-        p: SurveyPoint,
-        layer: String,
-        color: Int
-    ) {
-        val size = 0.15 // شعاع دایره
-
+    private fun writePointSymbol(sb: StringBuilder, p: SurveyPoint, layer: String, color: Int) {
+        val size = 0.15
         // دایره
         sb.appendLine("0")
         sb.appendLine("CIRCLE")
@@ -198,17 +164,16 @@ object DxfGenerator {
         sb.appendLine("62")
         sb.appendLine(color.toString())
         sb.appendLine("10")
-        sb.appendLine(format(p.x))
+        sb.appendLine(fmt(p.x))
         sb.appendLine("20")
-        sb.appendLine(format(p.y))
+        sb.appendLine(fmt(p.y))
         sb.appendLine("30")
-        sb.appendLine(format(p.z))
+        sb.appendLine(fmt(p.z))
         sb.appendLine("40")
-        sb.appendLine(format(size))
+        sb.appendLine(fmt(size))
 
-        // ضربدر (دو خط)
         val d = size * 1.4
-        // خط /
+        // ضربدر
         sb.appendLine("0")
         sb.appendLine("LINE")
         sb.appendLine("8")
@@ -216,15 +181,14 @@ object DxfGenerator {
         sb.appendLine("62")
         sb.appendLine(color.toString())
         sb.appendLine("10")
-        sb.appendLine(format(p.x - d))
+        sb.appendLine(fmt(p.x - d))
         sb.appendLine("20")
-        sb.appendLine(format(p.y - d))
+        sb.appendLine(fmt(p.y - d))
         sb.appendLine("11")
-        sb.appendLine(format(p.x + d))
+        sb.appendLine(fmt(p.x + d))
         sb.appendLine("21")
-        sb.appendLine(format(p.y + d))
+        sb.appendLine(fmt(p.y + d))
 
-        // خط \
         sb.appendLine("0")
         sb.appendLine("LINE")
         sb.appendLine("8")
@@ -232,13 +196,13 @@ object DxfGenerator {
         sb.appendLine("62")
         sb.appendLine(color.toString())
         sb.appendLine("10")
-        sb.appendLine(format(p.x - d))
+        sb.appendLine(fmt(p.x - d))
         sb.appendLine("20")
-        sb.appendLine(format(p.y + d))
+        sb.appendLine(fmt(p.y + d))
         sb.appendLine("11")
-        sb.appendLine(format(p.x + d))
+        sb.appendLine(fmt(p.x + d))
         sb.appendLine("21")
-        sb.appendLine(format(p.y - d))
+        sb.appendLine(fmt(p.y - d))
     }
 
     private fun writePointLabel(
@@ -249,11 +213,10 @@ object DxfGenerator {
         setting: CodeSetting
     ) {
         val parts = mutableListOf<String>()
-        if (setting.showNumber) parts.add(p.n)
+        if (setting.showNumber) parts.add(p.id)
         if (setting.showXY) parts.add(String.format(Locale.US, "%.3f,%.3f", p.x, p.y))
         if (setting.showZ) parts.add(String.format(Locale.US, "Z:%.2f", p.z))
         if (setting.showCode) parts.add(p.code)
-
         if (parts.isEmpty()) return
 
         val text = parts.joinToString(" | ")
@@ -266,18 +229,18 @@ object DxfGenerator {
         sb.appendLine("62")
         sb.appendLine(color.toString())
         sb.appendLine("10")
-        sb.appendLine(format(p.x + offset))
+        sb.appendLine(fmt(p.x + offset))
         sb.appendLine("20")
-        sb.appendLine(format(p.y + offset))
+        sb.appendLine(fmt(p.y + offset))
         sb.appendLine("30")
-        sb.appendLine(format(p.z))
+        sb.appendLine(fmt(p.z))
         sb.appendLine("40")
-        sb.appendLine(format(setting.textSize.toDouble()))
+        sb.appendLine(fmt(setting.textSize.toDouble()))
         sb.appendLine("1")
         sb.appendLine(text)
         sb.appendLine("50")
         sb.appendLine("0")
     }
 
-    private fun format(v: Double): String = String.format(Locale.US, "%.4f", v)
+    private fun fmt(v: Double): String = String.format(Locale.US, "%.4f", v)
 }
