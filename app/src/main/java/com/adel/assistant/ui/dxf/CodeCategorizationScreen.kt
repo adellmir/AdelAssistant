@@ -272,7 +272,7 @@ private fun CodeCard(
             // جزئیات بازشونده
             if (isExpanded && !showMinimal) {
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider()
+                Divider()
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // نام لایه
