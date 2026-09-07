@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
@@ -36,11 +35,7 @@ private val PERSIAN_MONTHS = listOf(
 )
 
 @Composable
-fun WorkCalendarScreen(
-    color: Color,
-    onBack: () -> Unit,
-    onAddProject: (day: String, month: String, year: String) -> Unit
-) {
+fun WorkCalendarScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     val today = remember { CalendarStore.todayJalali() }
     var year by remember { mutableStateOf(today.first) }
@@ -122,26 +117,6 @@ fun WorkCalendarScreen(
         }
 
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (selectedDay != null) {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = color.copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onAddProject(selectedDay.toString(), month.toString(), year.toString()) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Filled.Add, contentDescription = "افزودن پروژه", tint = color)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("افزودن پروژه برای این روز", style = MaterialTheme.typography.bodySmall, color = color)
-                        }
-                    }
-                }
-            }
             items(dayProjects) { p ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(10.dp)) {
