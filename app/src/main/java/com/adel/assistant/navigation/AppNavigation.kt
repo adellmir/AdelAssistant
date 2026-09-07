@@ -2,9 +2,11 @@ package com.adel.assistant.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.ChainageScreen
@@ -15,11 +17,11 @@ import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
 import com.adel.assistant.ui.screens.ProjectRegisterScreen
 import com.adel.assistant.ui.screens.SimpleRecordScreen
-import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
 import com.adel.assistant.ui.screens.VolumeScreen
+import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.ui.theme.WorkPrimary
@@ -49,14 +51,34 @@ fun AppNavigation() {
         }
 
         // ---- نقشه‌برداری: پروژه‌ها ----
-        composable(Routes.SURVEY_PROJECT_REGISTER) {
-            ProjectRegisterScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+        // «ثبت پروژه» می‌تواند با تاریخ پیش‌فرض دلخواه هم صدا زده شود (مثلاً از تقویم کاری)
+        composable(
+            route = "${Routes.SURVEY_PROJECT_REGISTER}?day={day}&month={month}&year={year}",
+            arguments = listOf(
+                navArgument("day") { type = NavType.StringType; defaultValue = "" },
+                navArgument("month") { type = NavType.StringType; defaultValue = "" },
+                navArgument("year") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            ProjectRegisterScreen(
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() },
+                initialDay = backStackEntry.arguments?.getString("day"),
+                initialMonth = backStackEntry.arguments?.getString("month"),
+                initialYear = backStackEntry.arguments?.getString("year")
+            )
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
             ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_PROJECT_CALENDAR) {
-            WorkCalendarScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+            WorkCalendarScreen(
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() },
+                onAddProject = { d, m, y ->
+                    navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}?day=$d&month=$m&year=$y")
+                }
+            )
         }
 
         // ---- مالی: تونل ----
