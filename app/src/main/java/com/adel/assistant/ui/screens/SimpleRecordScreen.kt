@@ -13,6 +13,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CsvStore
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Background
 import java.text.SimpleDateFormat
 import java.util.Date

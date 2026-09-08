@@ -1,5 +1,9 @@
 package com.adel.assistant.ui.dxf
 
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -26,9 +30,6 @@ import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
-import com.adel.assistant.ui.theme.TextPrimary
-import com.adel.assistant.ui.theme.TextSecondary
-import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.utils.DxfMapGenerator
 import com.adel.assistant.utils.DxfPointParser

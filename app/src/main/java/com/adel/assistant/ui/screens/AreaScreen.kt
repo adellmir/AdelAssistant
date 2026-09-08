@@ -25,6 +25,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Background
 import kotlin.math.abs
 import kotlin.math.max
