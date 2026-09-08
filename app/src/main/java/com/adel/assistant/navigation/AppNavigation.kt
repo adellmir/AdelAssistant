@@ -132,7 +132,7 @@ fun AppNavigation() {
 
         // ---- ابزار ----
         composable(Routes.TOOL_DXF) {
-            ViaClaudeScreen(title = "تبدیل به DXF", color = ToolPrimary, description = "آپلود فایل نقاط و گرفتن خروجی DXF فعلاً از طریق چت با کلود انجام می‌شود.", onBack = { navController.popBackStack() })
+    com.adel.assistant.ui.dxf.DxfConverterScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_LINES) {
             ViaClaudeScreen(title = "ترسیم خطوط", color = ToolPrimary, description = "بازسازی خطوط پیوسته از روی ابر نقاط فعلاً از طریق چت با کلود انجام می‌شود.", onBack = { navController.popBackStack() })
