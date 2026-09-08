@@ -17,14 +17,14 @@ import com.adel.assistant.ui.screens.ProjectEventsScreen
 import com.adel.assistant.ui.screens.ProjectRegisterScreen
 import com.adel.assistant.ui.screens.ReceivablesScreen
 import com.adel.assistant.ui.screens.SimpleRecordScreen
+import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
+import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
+import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
-import com.adel.assistant.ui.screens.TunnelWorklogScreen
-import com.adel.assistant.ui.screens.TunnelReceiptsScreen
-import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.ui.theme.WorkPrimary
@@ -68,17 +68,11 @@ fun AppNavigation() {
         composable(Routes.FIN_TUNNEL_WORKLOG) {
             TunnelWorklogScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
-            )
-        }
         composable(Routes.FIN_TUNNEL_RECEIPTS) {
             TunnelReceiptsScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
-            )
-        }
         composable(Routes.FIN_TUNNEL_SUMMARY) {
             TunnelFinanceSummaryScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
-        }
-            )
         }
 
         // ---- مالی: پروژه‌ها ----
