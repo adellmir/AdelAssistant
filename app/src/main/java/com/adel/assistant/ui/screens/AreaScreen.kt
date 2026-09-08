@@ -14,7 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Paste
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -105,7 +105,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 val imported = parsePoints(bulkInput)
                 if (imported.isEmpty()) message = "نقطه‌ای برای اضافه کردن پیدا نشد"
                 else { points = points + imported; bulkInput = ""; result = null; message = "${imported.size} نقطه اضافه شد" }
-            }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Paste, null); Spacer(Modifier.width(4.dp)); Text("افزودن لیست") }
+            }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.ContentPaste, null); Spacer(Modifier.width(4.dp)); Text("افزودن لیست") }
             OutlinedButton(onClick = { points = emptyList(); result = null; message = null }, modifier = Modifier.weight(1f)) { Text("پاک کردن همه") }
         }
 
