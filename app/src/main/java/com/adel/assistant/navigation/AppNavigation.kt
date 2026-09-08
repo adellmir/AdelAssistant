@@ -2,12 +2,11 @@ package com.adel.assistant.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.adel.assistant.ui.HomeScreen
+import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.ChainageScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
@@ -23,6 +22,9 @@ import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
+import com.adel.assistant.ui.screens.TunnelWorklogScreen
+import com.adel.assistant.ui.screens.TunnelReceiptsScreen
+import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.ui.theme.WorkPrimary
@@ -53,52 +55,46 @@ fun AppNavigation() {
 
         // ---- نقشه‌برداری: پروژه‌ها ----
         composable(Routes.SURVEY_PROJECT_REGISTER) {
-            ProjectRegisterScreen(
-                color = WorkPrimary,
-                onBack = { navController.popBackStack() }
-            )
+            ProjectRegisterScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
             ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_PROJECT_CALENDAR) {
-            WorkCalendarScreen(
-                color = WorkPrimary,
-                onBack = { navController.popBackStack() }
-            )
+            WorkCalendarScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
 
         // ---- مالی: تونل ----
         composable(Routes.FIN_TUNNEL_WORKLOG) {
-            SimpleRecordScreen(
-                title = "کارکرد ماهانه (تونل)", color = FinancePrimary, csvName = "tunnel_monthly_work",
-                fields = listOf("ماه", "سال", "کارکرد", "مبلغ واحد", "کسورات"),
-                onBack = { navController.popBackStack() }
+            TunnelWorklogScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
+        }
             )
         }
         composable(Routes.FIN_TUNNEL_RECEIPTS) {
-            SimpleRecordScreen(
-                title = "دریافتی‌های تونل", color = FinancePrimary, csvName = "tunnel_receipts",
-                fields = listOf("تاریخ", "مبلغ", "توضیحات"),
-                onBack = { navController.popBackStack() }
+            TunnelReceiptsScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
+        }
             )
         }
         composable(Routes.FIN_TUNNEL_SUMMARY) {
-            SimpleRecordScreen(
-                title = "خلاصه مطالبات تونل", color = FinancePrimary, csvName = "tunnel_receipts",
-                fields = listOf("توضیح"),
-                readOnlyNote = "این اطلاعات اکنون در «دریافتی‌های تونل» نمایش داده می‌شود.",
-                onBack = { navController.popBackStack() }
+            TunnelFinanceSummaryScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
+        }
             )
         }
 
         // ---- مالی: پروژه‌ها ----
         composable(Routes.FIN_PROJECT_INVOICE) {
-            ViaClaudeScreen(title = "صدور فاکتور", color = FinancePrimary, description = "این صفحه در حال تکمیل است.", onBack = { navController.popBackStack() })
+            ViaClaudeScreen(
+                title = "صدور فاکتور",
+                color = FinancePrimary,
+                description = "این صفحه در حال تکمیل است.",
+                onBack = { navController.popBackStack() }
+            )
         }
         composable(Routes.FIN_PROJECT_RECEIPT) {
             SimpleRecordScreen(
-                title = "ثبت دریافتی", color = FinancePrimary, csvName = "project_partial_payments",
+                title = "ثبت دریافتی",
+                color = FinancePrimary,
+                csvName = "project_partial_payments",
                 fields = listOf("نام پروژه", "مبلغ", "تاریخ"),
                 onBack = { navController.popBackStack() }
             )
@@ -107,15 +103,25 @@ fun AppNavigation() {
             ReceivablesScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.FIN_PROJECT_STATUS) {
-            ViaClaudeScreen(title = "وضعیت مالی", color = FinancePrimary, description = "این صفحه در حال تکمیل است.", onBack = { navController.popBackStack() })
+            ViaClaudeScreen(
+                title = "وضعیت مالی",
+                color = FinancePrimary,
+                description = "این صفحه در حال تکمیل است.",
+                onBack = { navController.popBackStack() }
+            )
         }
 
         // ---- ابزار ----
         composable(Routes.TOOL_DXF) {
-            ViaClaudeScreen(title = "تبدیل به DXF", color = ToolPrimary, description = "آپلود فایل نقاط و گرفتن خروجی DXF فعلاً از طریق چت با کلود انجام می‌شود.", onBack = { navController.popBackStack() })
+            DxfConverterScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_LINES) {
-            ViaClaudeScreen(title = "ترسیم خطوط", color = ToolPrimary, description = "بازسازی خطوط پیوسته از روی ابر نقاط فعلاً از طریق چت با کلود انجام می‌شود.", onBack = { navController.popBackStack() })
+            ViaClaudeScreen(
+                title = "ترسیم خطوط",
+                color = ToolPrimary,
+                description = "بازسازی خطوط پیوسته از روی ابر نقاط فعلاً از طریق چت با کلود انجام می‌شود.",
+                onBack = { navController.popBackStack() }
+            )
         }
         composable(Routes.TOOL_GSI) {
             GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
