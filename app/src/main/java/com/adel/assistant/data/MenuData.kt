@@ -38,12 +38,14 @@ object AppMenu {
                 MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
                 MenuItem("کیلومتراژ/چینیج", Icons.Filled.Straighten, Routes.SURVEY_TUNNEL_CHAINAGE),
                 MenuItem("ثبت وقایع تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
-                MenuItem("وضعیت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS)
+                MenuItem("وضعیت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
+                MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
             )),
             MenuTab("پروژه‌ها", listOf(
                 MenuItem("ثبت پروژه", Icons.Filled.AddLocationAlt, Routes.SURVEY_PROJECT_REGISTER),
                 MenuItem("ثبت وقایع پروژه", Icons.Filled.EventNote, Routes.SURVEY_PROJECT_EVENTS),
-                MenuItem("تقویم کاری", Icons.Filled.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR)
+                MenuItem("تقویم کاری", Icons.Filled.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR),
+                MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_PROJECT_TASKS)
             ))
         )
     )
