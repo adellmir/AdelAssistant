@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -112,12 +113,12 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(40.dp))
                     Icon(Icons.Default.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         ".dat → ترتیب n y x z d\nسایر پسوندها → N x y z d",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF333333)
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
@@ -157,7 +158,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Icon(Icons.Default.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "فایل: $fileName\nنقاط: ${points.size}\nحجم: ${(generatedDxf?.length ?: 0) / 1024} KB",

@@ -50,12 +50,13 @@ fun CodeCategorizationContent(
                 Text(
                     "فایل: $fileName",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1C1C1C)
                 )
                 Text(
                     "${points.size} نقطه • ${settings.size} کد یکتا",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFF333333)
                 )
             }
         }
@@ -173,7 +174,7 @@ fun CodeCategorizationContent(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary)
             ) {
-                Text("تولید DXF", style = MaterialTheme.typography.titleMedium)
+                Text("تولید DXF", style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
     }
@@ -195,7 +196,8 @@ private fun CategoryHeader(title: String, count: Int, color: Color) {
         Text(
             "$title ($count)",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1C1C1C)
         )
     }
 }
@@ -247,12 +249,13 @@ private fun CodeCard(
                     Text(
                         setting.code,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        color = Color(0xFF1C1C1C)
                     )
                     Text(
                         "لایه: ${setting.layerName}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFF333333)
                     )
                 }
 
@@ -288,7 +291,7 @@ private fun CodeCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // انتخاب رنگ
-                Text("رنگ:", style = MaterialTheme.typography.bodySmall)
+                Text("رنگ:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1C1C1C))
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -323,13 +326,13 @@ private fun CodeCard(
                             onCheckedChange = onCloseOnEChange,
                             colors = CheckboxDefaults.colors(checkedColor = ToolPrimary)
                         )
-                        Text("بستن ترسیم بعد از .E")
+                        Text("بستن ترسیم بعد از .E", color = Color(0xFF1C1C1C))
                     }
                 }
 
                 if (showPointOptions) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("اطلاعات کنار نقطه:", style = MaterialTheme.typography.bodySmall)
+                    Text("اطلاعات کنار نقطه:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1C1C1C))
                     Spacer(modifier = Modifier.height(4.dp))
 
                     LabelCheck("شماره نقطه", setting.showNumber) {
@@ -346,7 +349,7 @@ private fun CodeCard(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("سایز نوشته: ${"%.1f".format(setting.textSize)}", style = MaterialTheme.typography.bodySmall)
+                    Text("سایز نوشته: ${"%.1f".format(setting.textSize)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1C1C1C))
                     Slider(
                         value = setting.textSize,
                         onValueChange = {
@@ -411,6 +414,6 @@ private fun LabelCheck(label: String, checked: Boolean, onChecked: (Boolean) -> 
             onCheckedChange = onChecked,
             colors = CheckboxDefaults.colors(checkedColor = ToolPrimary)
         )
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1C1C1C))
     }
 }
