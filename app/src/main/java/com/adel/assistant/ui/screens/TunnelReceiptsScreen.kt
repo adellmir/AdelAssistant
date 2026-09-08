@@ -25,6 +25,9 @@ import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
@@ -132,7 +135,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(8.dp))
-        Text(formatEn("جمع دریافتی‌ها: %.0f", totalRecv), fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
+        Text(formatEn("جمع دریافتی‌ها: %.0f", totalRecv), fontWeight = FontWeight.Bold, color = TextPrimary)
         Spacer(Modifier.height(6.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
@@ -146,14 +149,14 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 formatEn("%.0f — تاریخ دریافت: %s", item.receiveAmount ?: 0.0, item.receiveDate.ifBlank { "—" }),
-                                fontWeight = FontWeight.SemiBold, color = Color(0xFF1C1C1C)
+                                fontWeight = FontWeight.SemiBold, color = TextPrimary
                             )
                             Text(
                                 formatEn("روی سطر کارکرد %d (%d/%02d)", item.dateCode, item.year, item.month),
-                                style = MaterialTheme.typography.bodySmall, color = Color(0xFF5D6B4A)
+                                style = MaterialTheme.typography.bodySmall, color = TextSecondary
                             )
                             if (item.note.isNotBlank()) {
-                                Text(item.note, style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                                Text(item.note, style = MaterialTheme.typography.bodySmall, color = TextMuted)
                             }
                         }
                         IconButton(onClick = {

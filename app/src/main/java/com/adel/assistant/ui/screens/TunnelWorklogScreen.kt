@@ -29,6 +29,9 @@ import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
@@ -175,17 +178,17 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(10.dp))
-        Text("سوابق ماهانه", fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
+        Text("سوابق ماهانه", fontWeight = FontWeight.Bold, color = TextPrimary)
         Spacer(Modifier.height(6.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(list) { item ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text(formatEn("%04d/%02d — %.1f روز × %.0f", item.year % 100, item.month, item.days, item.unitPrice),
-                            fontWeight = FontWeight.SemiBold, color = Color(0xFF1C1C1C))
+                            fontWeight = FontWeight.SemiBold, color = TextPrimary)
                         Text(formatEn("صورت‌وضعیت: %.0f | درآمد: %.0f | دریافت: %s",
                             item.payable, item.income, item.receiveAmount?.let { formatEn("%.0f", it) } ?: "—"),
-                            style = MaterialTheme.typography.bodySmall, color = Color(0xFF5D6B4A))
+                            style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconButton(onClick = {
                                 year = item.year.toString(); month = item.month.toString()
@@ -197,7 +200,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
                                 cameraTimeDed = item.cameraTimeDeduction.toLong().toString()
                                 surveyor = item.surveyorPay.toLong().toString()
                                 note = item.note; editingCode = item.dateCode
-                            }, modifier = Modifier.size(28.dp)) { Icon(Icons.Filled.Edit, null, tint = Color(0xFF7C8A6B)) }
+                            }, modifier = Modifier.size(28.dp)) { Icon(Icons.Filled.Edit, null, tint = TextMuted) }
                             IconButton(onClick = { confirmDelete = item }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Delete, null, tint = Color(0xFFC2685E))
                             }

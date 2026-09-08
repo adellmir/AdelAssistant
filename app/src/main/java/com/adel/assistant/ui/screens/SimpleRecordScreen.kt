@@ -45,7 +45,7 @@ fun SimpleRecordScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         if (readOnlyNote != null) {
-            Text(readOnlyNote, color = Color(0xFF6B6B6B), style = MaterialTheme.typography.bodySmall)
+            Text(readOnlyNote, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(12.dp))
         } else {
             fields.forEachIndexed { index, label ->

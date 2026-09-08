@@ -23,6 +23,9 @@ import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
@@ -83,13 +86,13 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(4.dp))
-            Text("تعداد ماه‌های ثبت‌شده: ${rows.size}", fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
-            Text("آخرین ماه‌ها", fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
+            Text("تعداد ماه‌های ثبت‌شده: ${rows.size}", fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("آخرین ماه‌ها", fontWeight = FontWeight.Bold, color = TextPrimary)
             rows.takeLast(8).reversed().forEach { r ->
                 Text(
                     formatEn("%d/%02d  صورت: %.0f  دریافت: %s", r.year, r.month, r.payable,
                         r.receiveAmount?.let { formatEn("%.0f", it) } ?: "—"),
-                    style = MaterialTheme.typography.bodySmall, color = Color(0xFF5D6B4A)
+                    style = MaterialTheme.typography.bodySmall, color = TextSecondary
                 )
             }
             Spacer(Modifier.height(24.dp))
@@ -101,7 +104,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 private fun SummaryCard(title: String, value: String, accent: Color) {
     Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF666666))
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
             Text(value, fontWeight = FontWeight.Bold, color = accent, fontSize = 22.sp)
         }
     }

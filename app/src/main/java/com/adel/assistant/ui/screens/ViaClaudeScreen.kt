@@ -21,12 +21,12 @@ fun ViaClaudeScreen(title: String, color: Color, description: String, onBack: ()
     ) {
         ScreenTopBar(title = title, color = color, onBack = onBack)
         Spacer(modifier = Modifier.height(24.dp))
-        Text(description, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B6B6B))
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             "برای این کار، فایل موردنظر را در چت با کلود آپلود کن و درخواستت را بگو.",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF6B6B6B)
+            color = TextSecondary
         )
     }
 }

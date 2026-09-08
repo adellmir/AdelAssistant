@@ -1,5 +1,9 @@
 package com.adel.assistant.ui.dxf
 
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,12 +55,12 @@ fun CodeCategorizationContent(
                     "فایل: $fileName",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF1C1C1C)
+                    color = TextPrimary
                 )
                 Text(
                     "${points.size} نقطه • ${settings.size} کد یکتا",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF333333)
+                    color = TextSecondary
                 )
             }
         }
@@ -197,7 +201,7 @@ private fun CategoryHeader(title: String, count: Int, color: Color) {
             "$title ($count)",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF1C1C1C)
+            color = TextPrimary
         )
     }
 }
@@ -250,12 +254,12 @@ private fun CodeCard(
                         setting.code,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = Color(0xFF1C1C1C)
+                        color = TextPrimary
                     )
                     Text(
                         "لایه: ${setting.layerName}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF333333)
+                        color = TextSecondary
                     )
                 }
 
@@ -291,7 +295,7 @@ private fun CodeCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // انتخاب رنگ
-                Text("رنگ:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1C1C1C))
+                Text("رنگ:", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -326,13 +330,13 @@ private fun CodeCard(
                             onCheckedChange = onCloseOnEChange,
                             colors = CheckboxDefaults.colors(checkedColor = ToolPrimary)
                         )
-                        Text("بستن ترسیم بعد از .E", color = Color(0xFF1C1C1C))
+                        Text("بستن ترسیم بعد از .E", color = TextPrimary)
                     }
                 }
 
                 if (showPointOptions) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("اطلاعات کنار نقطه:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1C1C1C))
+                    Text("اطلاعات کنار نقطه:", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
                     Spacer(modifier = Modifier.height(4.dp))
 
                     LabelCheck("شماره نقطه", setting.showNumber) {
@@ -349,7 +353,7 @@ private fun CodeCard(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("سایز نوشته: ${"%.1f".format(setting.textSize)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1C1C1C))
+                    Text("سایز نوشته: ${"%.1f".format(setting.textSize)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
                     Slider(
                         value = setting.textSize,
                         onValueChange = {
@@ -414,6 +418,6 @@ private fun LabelCheck(label: String, checked: Boolean, onChecked: (Boolean) -> 
             onCheckedChange = onChecked,
             colors = CheckboxDefaults.colors(checkedColor = ToolPrimary)
         )
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1C1C1C))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
     }
 }

@@ -26,6 +26,9 @@ import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.theme.TextPrimary
+import com.adel.assistant.ui.theme.TextSecondary
+import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.utils.DxfMapGenerator
 import com.adel.assistant.utils.DxfPointParser
@@ -113,12 +116,12 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(40.dp))
                     Icon(Icons.Default.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
+                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         ".dat → ترتیب n y x z d\nسایر پسوندها → N x y z d",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF333333)
+                        color = TextSecondary
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
@@ -158,7 +161,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Icon(Icons.Default.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
+                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "فایل: $fileName\nنقاط: ${points.size}\nحجم: ${(generatedDxf?.length ?: 0) / 1024} KB",

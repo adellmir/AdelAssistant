@@ -101,7 +101,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         Text(
             "دقت GPS گوشی معمولاً ۳ تا ۱۰ متر است — برای کاربردهای تقریبی مناسب است، نه برداشت دقیق مهندسی.",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF6B6B6B)
+            color = TextSecondary
         )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
@@ -118,7 +118,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         ) { Text("ثبت نقطه از موقعیت فعلی") }
         if (status.isNotBlank()) {
             Spacer(modifier = Modifier.height(6.dp))
-            Text(status, style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B6B6B))
+            Text(status, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
         }
         Spacer(modifier = Modifier.height(12.dp))
 

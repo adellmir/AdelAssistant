@@ -33,7 +33,7 @@ fun VolumeScreen(color: Color, onBack: () -> Unit) {
         Text(
             "روش سطح مقاطع متوالی: مساحت هر مقطع را وارد کن، بعد فاصله تا مقطع بعدی را بده.",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF6B6B6B)
+            color = TextSecondary
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
