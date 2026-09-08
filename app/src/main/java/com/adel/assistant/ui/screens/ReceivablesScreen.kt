@@ -1,4 +1,4 @@
-﻿package com.adel.assistant.ui.screens
+package com.adel.assistant.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -27,8 +27,8 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 // ⚠️ شماره کارت و شماره شبای واقعی خودت رو اینجا جایگزین کن
-private const val CARD_NUMBER = "5859831142797561"
-private const val SHEBA_NUMBER = "IR430180000000242375213376"
+private const val CARD_NUMBER = "XXXX-XXXX-XXXX-XXXX"
+private const val SHEBA_NUMBER = "IRXXXXXXXXXXXXXXXXXXXXXXXX"
 
 private fun smsText(p: ProjectEntry): String {
     return "با سلام جهت یادآوری پرداخت هزینه نقشه‌برداری برای پروژه \"${p.name}\" به‌مبلغ \"${formatEn("%.0f", p.remaining)}\" تومان. " +
