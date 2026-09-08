@@ -20,7 +20,6 @@ import com.adel.assistant.ui.screens.ReceivablesScreen
 import com.adel.assistant.ui.screens.SimpleRecordScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
-import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
@@ -51,26 +50,12 @@ fun AppNavigation() {
         composable(Routes.SURVEY_TUNNEL_STATUS) {
             TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
-        composable(Routes.SURVEY_TUNNEL_TASKS) {
-            TaskScreen(title = "تسک‌های تونل", storeName = "tunnel_tasks", color = WorkPrimary, onBack = { navController.popBackStack() })
-        }
 
         // ---- نقشه‌برداری: پروژه‌ها ----
-        // «ثبت پروژه» می‌تواند با تاریخ پیش‌فرض دلخواه هم صدا زده شود (مثلاً از تقویم کاری)
-        composable(
-            route = "${Routes.SURVEY_PROJECT_REGISTER}?day={day}&month={month}&year={year}",
-            arguments = listOf(
-                navArgument("day") { type = NavType.StringType; defaultValue = "" },
-                navArgument("month") { type = NavType.StringType; defaultValue = "" },
-                navArgument("year") { type = NavType.StringType; defaultValue = "" }
-            )
-        ) { backStackEntry ->
+        composable(Routes.SURVEY_PROJECT_REGISTER) {
             ProjectRegisterScreen(
                 color = WorkPrimary,
-                onBack = { navController.popBackStack() },
-                initialDay = backStackEntry.arguments?.getString("day"),
-                initialMonth = backStackEntry.arguments?.getString("month"),
-                initialYear = backStackEntry.arguments?.getString("year")
+                onBack = { navController.popBackStack() }
             )
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
@@ -79,14 +64,8 @@ fun AppNavigation() {
         composable(Routes.SURVEY_PROJECT_CALENDAR) {
             WorkCalendarScreen(
                 color = WorkPrimary,
-                onBack = { navController.popBackStack() },
-                onAddProject = { d, m, y ->
-                    navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}?day=$d&month=$m&year=$y")
-                }
+                onBack = { navController.popBackStack() }
             )
-        }
-        composable(Routes.SURVEY_PROJECT_TASKS) {
-            TaskScreen(title = "تسک‌های پروژه‌ها", storeName = "project_tasks", color = WorkPrimary, onBack = { navController.popBackStack() })
         }
 
         // ---- مالی: تونل ----
