@@ -102,7 +102,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     val projects = remember(todayKey) {
         try {
             ProjectStore.all(context)
-                .filter { it.dateSortKey >= todayKey }
+                .filter { projectIsTodayOrFuture(it, todayKey) }
                 .sortedBy { it.dateSortKey }
         } catch (_: Exception) {
             emptyList()
@@ -192,27 +192,29 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         style = MaterialTheme.typography.bodySmall
                     )
                 } else {
-                    projects.take(12).forEach { p ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                p.name.ifBlank { "بدون نام" },
-                                color = TextPrimary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                formatProjectDate(p),
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                    ScrollBox3 {
+                        projects.forEach { p ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    p.name.ifBlank { "بدون نام" },
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    formatProjectDate(p),
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                         }
                     }
                 }
@@ -230,13 +232,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 if (projectTasks.isEmpty()) {
                     Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
                 } else {
-                    projectTasks.take(8).forEach { t ->
-                        Text(
-                            "• ${t.title}",
-                            color = TextPrimary,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
+                    ScrollBox3 {
+                        projectTasks.forEach { t ->
+                            Text(
+                                "• ${t.title}",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
@@ -250,13 +254,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 if (tunnelTasks.isEmpty()) {
                     Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
                 } else {
-                    tunnelTasks.take(8).forEach { t ->
-                        Text(
-                            "• ${t.title}",
-                            color = TextPrimary,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
+                    ScrollBox3 {
+                        tunnelTasks.forEach { t ->
+                            Text(
+                                "• ${t.title}",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -413,6 +419,35 @@ private fun DashboardCard(
             Spacer(modifier = Modifier.height(10.dp))
             content()
         }
+    }
+}
+
+
+/** فقط امروز و آینده — مقایسه عددی سال/ماه/روز */
+private fun projectIsTodayOrFuture(p: ProjectEntry, todayKey: String): Boolean {
+    val key = normalizeDateKey(p.year, p.month, p.day)
+    return key != null && key >= todayKey
+}
+
+private fun normalizeDateKey(year: String, month: String, day: String): String? {
+    val y = year.toIntOrNullFa() ?: return null
+    val m = month.toIntOrNullFa() ?: return null
+    val d = day.toIntOrNullFa() ?: return null
+    if (y < 1300 || y > 1500) return null
+    if (m !in 1..12 || d !in 1..31) return null
+    return String.format(Locale.US, "%d%02d%02d", y, m, d)
+}
+
+@Composable
+private fun ScrollBox3(content: @Composable ColumnScope.() -> Unit) {
+    // حدود ارتفاع ۳ ردیف؛ بقیه با اسکرول داخل کادر
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 90.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        content()
     }
 }
 
