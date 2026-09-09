@@ -1,9 +1,5 @@
 package com.adel.assistant.ui.dxf
 
-import com.adel.assistant.ui.theme.TextPrimary
-import com.adel.assistant.ui.theme.TextSecondary
-import com.adel.assistant.ui.theme.TextMuted
-
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -20,8 +16,8 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,6 +27,7 @@ import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.utils.DxfMapGenerator
 import com.adel.assistant.utils.DxfPointParser
 import java.io.File
@@ -117,12 +114,12 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(40.dp))
                     Icon(Icons.Default.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         ".dat → ترتیب n y x z d\nسایر پسوندها → N x y z d",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
@@ -162,11 +159,12 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Icon(Icons.Default.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "فایل: $fileName\nنقاط: ${points.size}\nحجم: ${(generatedDxf?.length ?: 0) / 1024} KB",
-                        style = MaterialTheme.typography.bodyMedium
+                        "فایل: $fileName\nنقاط: ${points.size}\nحجم: ${(generatedDxf?.length ?: 0) / 1024} KB\nمسیر: Documents/AdelAssistant",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF1C1C1C)
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
@@ -202,16 +200,29 @@ private fun getFileName(context: Context, uri: Uri): String? {
 
 private fun saveAndShare(context: Context, content: String, originalName: String) {
     try {
-        val base = originalName.substringBeforeLast(".")
-        val out = File(context.cacheDir, "${base}_map.dxf")
-        FileOutputStream(out).use { it.write(content.toByteArray(Charsets.UTF_8)) }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", out)
+        val base = originalName.substringBeforeLast(".").ifBlank { "map" }
+        val fileName = "${base}_map.dxf"
+        // 1) ذخیره در Documents/AdelAssistant
+        val docUri = FileExport.exportTextToDocuments(
+            context,
+            fileName,
+            content,
+            mimeType = "application/dxf"
+        )
+        // 2) اشتراک از cache با FileProvider
+        val cacheFile = File(context.cacheDir, fileName)
+        FileOutputStream(cacheFile).use { it.write(content.toByteArray(Charsets.UTF_8)) }
+        val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/dxf"
-            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_STREAM, shareUri)
+            putExtra(Intent.EXTRA_SUBJECT, fileName)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "اشتراک DXF"))
+        context.startActivity(Intent.createChooser(intent, "اشتراک DXF — ذخیره در Documents/AdelAssistant"))
+        if (docUri == null) {
+            // حتی اگر MediaStore شکست خورد، اشتراک از cache کار می‌کند
+        }
     } catch (e: Exception) {
         e.printStackTrace()
     }

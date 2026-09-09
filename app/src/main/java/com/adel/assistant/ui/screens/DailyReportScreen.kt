@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import android.content.Intent
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -135,7 +137,23 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 it.km, it.dailyProgress, it.shaftProgress, it.remaining)
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
-        statusMsg = "ثبت شد"
+        // ذخیره + اشتراک فایل اکسل گزارش
+        val uri = XlsxReportWriter.generate(context, year, month, day, weekday)
+        if (uri != null) {
+            statusMsg = "ثبت شد — فایل در Documents/AdelAssistant"
+            try {
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(share, "اشتراک گزارش روزانه"))
+            } catch (e: Exception) {
+                statusMsg = "ثبت شد (اشتراک ممکن نشد)"
+            }
+        } else {
+            statusMsg = "ثبت شد"
+        }
     }
 
     Column(

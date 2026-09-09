@@ -8,192 +8,156 @@ import com.adel.assistant.data.isEndOfLine
 import java.util.Locale
 
 /**
- * تولید DXF پیشرفته: خط + نقطه + لایه + برچسب + قانون .E
+ * تولید DXF سازگار با AutoCAD:
+ * - جداول LTYPE / LAYER / STYLE / APPID
+ * - بخش BLOCKS
+ * - خط پایان CRLF
+ * - به‌جای LWPOLYLINE از LINE (سازگاری بیشتر)
+ * - نام لایه فقط حروف امن
  */
 object DxfMapGenerator {
+
+    private const val CRLF = "\r\n"
 
     fun generate(
         points: List<SurveyPoint>,
         settings: Map<String, CodeSetting>
     ): String {
         val sb = StringBuilder()
-
-        // HEADER + TABLES کامل برای سازگاری با AutoCAD
-        sb.appendLine("0")
-        sb.appendLine("SECTION")
-        sb.appendLine("2")
-        sb.appendLine("HEADER")
-        sb.appendLine("9")
-        sb.appendLine("\$ACADVER")
-        sb.appendLine("1")
-        sb.appendLine("AC1014")
-        sb.appendLine("9")
-        sb.appendLine("\$INSUNITS")
-        sb.appendLine("70")
-        sb.appendLine("6")
-        sb.appendLine("0")
-        sb.appendLine("ENDSEC")
-
-        sb.appendLine("0")
-        sb.appendLine("SECTION")
-        sb.appendLine("2")
-        sb.appendLine("TABLES")
-
-        // LTYPE
-        sb.appendLine("0")
-        sb.appendLine("TABLE")
-        sb.appendLine("2")
-        sb.appendLine("LTYPE")
-        sb.appendLine("70")
-        sb.appendLine("1")
-        sb.appendLine("0")
-        sb.appendLine("LTYPE")
-        sb.appendLine("2")
-        sb.appendLine("CONTINUOUS")
-        sb.appendLine("70")
-        sb.appendLine("0")
-        sb.appendLine("3")
-        sb.appendLine("Solid line")
-        sb.appendLine("72")
-        sb.appendLine("65")
-        sb.appendLine("73")
-        sb.appendLine("0")
-        sb.appendLine("40")
-        sb.appendLine("0.0")
-        sb.appendLine("0")
-        sb.appendLine("ENDTAB")
-
-        // LAYER
-        sb.appendLine("0")
-        sb.appendLine("TABLE")
-        sb.appendLine("2")
-        sb.appendLine("LAYER")
-        sb.appendLine("70")
-        sb.appendLine("256")
-        writeLayer(sb, "0", 7)
-
-        val usedLayers = settings.values
-            .filter { it.category != CodeCategory.IGNORE }
-            .map { it.layerName.ifBlank { "L-${it.code}" } }
-            .distinct()
-
-        usedLayers.forEach { layerName ->
-            val setting = settings.values.find { it.layerName == layerName }
-            val color = setting?.let { DxfColors.aci.getOrElse(it.colorIndex) { 7 } } ?: 7
-            writeLayer(sb, layerName, color)
+        fun a(code: Any, value: Any) {
+            sb.append(code).append(CRLF)
+            sb.append(value).append(CRLF)
         }
 
-        sb.appendLine("0")
-        sb.appendLine("ENDTAB")
+        // HEADER
+        a(0, "SECTION")
+        a(2, "HEADER")
+        a(9, "\$ACADVER")
+        a(1, "AC1014")
+        a(9, "\$INSUNITS")
+        a(70, 6)
+        a(0, "ENDSEC")
+
+        // TABLES
+        a(0, "SECTION")
+        a(2, "TABLES")
+
+        // LTYPE
+        a(0, "TABLE")
+        a(2, "LTYPE")
+        a(70, 1)
+        a(0, "LTYPE")
+        a(2, "CONTINUOUS")
+        a(70, 0)
+        a(3, "Solid line")
+        a(72, 65)
+        a(73, 0)
+        a(40, 0.0)
+        a(0, "ENDTAB")
+
+        // LAYER
+        a(0, "TABLE")
+        a(2, "LAYER")
+        a(70, 256)
+        writeLayer(a, "0", 7)
+
+        val usedLayers = linkedMapOf<String, Int>()
+        settings.values
+            .filter { it.category != CodeCategory.IGNORE }
+            .forEach { s ->
+                val layer = sanitizeLayer(
+                    s.layerName.ifBlank {
+                        if (s.category == CodeCategory.LINE) "L-${s.code}" else "P-${s.code}"
+                    }
+                )
+                val color = DxfColors.aci.getOrElse(s.colorIndex) { 7 }
+                usedLayers.putIfAbsent(layer, color)
+            }
+        usedLayers.forEach { (name, color) -> writeLayer(a, name, color) }
+        a(0, "ENDTAB")
 
         // STYLE
-        sb.appendLine("0")
-        sb.appendLine("TABLE")
-        sb.appendLine("2")
-        sb.appendLine("STYLE")
-        sb.appendLine("70")
-        sb.appendLine("1")
-        sb.appendLine("0")
-        sb.appendLine("STYLE")
-        sb.appendLine("2")
-        sb.appendLine("STANDARD")
-        sb.appendLine("70")
-        sb.appendLine("0")
-        sb.appendLine("40")
-        sb.appendLine("0.0")
-        sb.appendLine("41")
-        sb.appendLine("1.0")
-        sb.appendLine("50")
-        sb.appendLine("0.0")
-        sb.appendLine("71")
-        sb.appendLine("0")
-        sb.appendLine("42")
-        sb.appendLine("1.0")
-        sb.appendLine("3")
-        sb.appendLine("txt")
-        sb.appendLine("4")
-        sb.appendLine("")
-        sb.appendLine("0")
-        sb.appendLine("ENDTAB")
+        a(0, "TABLE")
+        a(2, "STYLE")
+        a(70, 1)
+        a(0, "STYLE")
+        a(2, "STANDARD")
+        a(70, 0)
+        a(40, 0.0)
+        a(41, 1.0)
+        a(50, 0.0)
+        a(71, 0)
+        a(42, 1.0)
+        a(3, "txt")
+        a(4, "")
+        a(0, "ENDTAB")
 
-        // APPID — ضروری برای AutoCAD
-        sb.appendLine("0")
-        sb.appendLine("TABLE")
-        sb.appendLine("2")
-        sb.appendLine("APPID")
-        sb.appendLine("70")
-        sb.appendLine("1")
-        sb.appendLine("0")
-        sb.appendLine("APPID")
-        sb.appendLine("2")
-        sb.appendLine("ACAD")
-        sb.appendLine("70")
-        sb.appendLine("0")
-        sb.appendLine("0")
-        sb.appendLine("ENDTAB")
+        // APPID
+        a(0, "TABLE")
+        a(2, "APPID")
+        a(70, 1)
+        a(0, "APPID")
+        a(2, "ACAD")
+        a(70, 0)
+        a(0, "ENDTAB")
 
-        sb.appendLine("0")
-        sb.appendLine("ENDSEC")
+        a(0, "ENDSEC")
 
         // BLOCKS
-        sb.appendLine("0")
-        sb.appendLine("SECTION")
-        sb.appendLine("2")
-        sb.appendLine("BLOCKS")
-        sb.appendLine("0")
-        sb.appendLine("ENDSEC")
+        a(0, "SECTION")
+        a(2, "BLOCKS")
+        a(0, "ENDSEC")
 
         // ENTITIES
-        sb.appendLine("0")
-        sb.appendLine("SECTION")
-        sb.appendLine("2")
-        sb.appendLine("ENTITIES")
+        a(0, "SECTION")
+        a(2, "ENTITIES")
 
         val byCode = points.groupBy { it.code }
-
         byCode.forEach { (code, codePoints) ->
             val setting = settings[code] ?: return@forEach
             if (setting.category == CodeCategory.IGNORE) return@forEach
 
-            val layer = setting.layerName.ifBlank {
-                if (setting.category == CodeCategory.LINE) "L-$code" else "P-$code"
-            }
+            val layer = sanitizeLayer(
+                setting.layerName.ifBlank {
+                    if (setting.category == CodeCategory.LINE) "L-$code" else "P-$code"
+                }
+            )
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
 
             when (setting.category) {
-                CodeCategory.LINE -> writePolylines(sb, codePoints, layer, color, setting.closeOnE)
+                CodeCategory.LINE -> writePolylinesAsLines(a, codePoints, layer, color, setting.closeOnE)
                 CodeCategory.POINT -> {
                     codePoints.forEach { p ->
-                        writePointSymbol(sb, p, layer, color)
-                        writePointLabel(sb, p, layer, color, setting)
+                        writePointSymbol(a, p, layer, color)
+                        writePointLabel(a, p, layer, color, setting)
                     }
                 }
                 else -> {}
             }
         }
 
-        sb.appendLine("0")
-        sb.appendLine("ENDSEC")
-        sb.appendLine("0")
-        sb.appendLine("EOF")
+        a(0, "ENDSEC")
+        a(0, "EOF")
         return sb.toString()
     }
 
-    private fun writeLayer(sb: StringBuilder, name: String, color: Int) {
-        sb.appendLine("0")
-        sb.appendLine("LAYER")
-        sb.appendLine("2")
-        sb.appendLine(name)
-        sb.appendLine("70")
-        sb.appendLine("0")
-        sb.appendLine("62")
-        sb.appendLine(color.toString())
-        sb.appendLine("6")
-        sb.appendLine("CONTINUOUS")
+    private fun sanitizeLayer(name: String): String {
+        val cleaned = name.trim()
+            .replace(Regex("[^A-Za-z0-9_-]"), "_")
+            .take(31)
+        return if (cleaned.isBlank()) "LAYER0" else cleaned
     }
 
-    private fun writePolylines(
-        sb: StringBuilder,
+    private fun writeLayer(a: (Any, Any) -> Unit, name: String, color: Int) {
+        a(0, "LAYER")
+        a(2, name)
+        a(70, 0)
+        a(62, color)
+        a(6, "CONTINUOUS")
+    }
+
+    private fun writePolylinesAsLines(
+        a: (Any, Any) -> Unit,
         points: List<SurveyPoint>,
         layer: String,
         color: Int,
@@ -203,8 +167,13 @@ object DxfMapGenerator {
         var current = mutableListOf<SurveyPoint>()
 
         fun flush() {
-            if (current.size >= 2) writeLwPolyline(sb, current, layer, color)
-            else if (current.size == 1) writePointSymbol(sb, current[0], layer, color)
+            if (current.size >= 2) {
+                for (i in 0 until current.size - 1) {
+                    writeLine(a, current[i], current[i + 1], layer, color)
+                }
+            } else if (current.size == 1) {
+                writePointSymbol(a, current[0], layer, color)
+            }
             current = mutableListOf()
         }
 
@@ -215,78 +184,58 @@ object DxfMapGenerator {
         flush()
     }
 
-    private fun writeLwPolyline(sb: StringBuilder, pts: List<SurveyPoint>, layer: String, color: Int) {
-        sb.appendLine("0")
-        sb.appendLine("LWPOLYLINE")
-        sb.appendLine("8")
-        sb.appendLine(layer)
-        sb.appendLine("62")
-        sb.appendLine(color.toString())
-        sb.appendLine("90")
-        sb.appendLine(pts.size.toString())
-        sb.appendLine("70")
-        sb.appendLine("0")
-        pts.forEach { p ->
-            sb.appendLine("10")
-            sb.appendLine(fmt(p.x))
-            sb.appendLine("20")
-            sb.appendLine(fmt(p.y))
-        }
+    private fun writeLine(
+        a: (Any, Any) -> Unit,
+        p1: SurveyPoint,
+        p2: SurveyPoint,
+        layer: String,
+        color: Int
+    ) {
+        a(0, "LINE")
+        a(8, layer)
+        a(62, color)
+        a(10, fmt(p1.x))
+        a(20, fmt(p1.y))
+        a(30, fmt(p1.z))
+        a(11, fmt(p2.x))
+        a(21, fmt(p2.y))
+        a(31, fmt(p2.z))
     }
 
-    private fun writePointSymbol(sb: StringBuilder, p: SurveyPoint, layer: String, color: Int) {
+    private fun writePointSymbol(a: (Any, Any) -> Unit, p: SurveyPoint, layer: String, color: Int) {
         val size = 0.15
-        // دایره
-        sb.appendLine("0")
-        sb.appendLine("CIRCLE")
-        sb.appendLine("8")
-        sb.appendLine(layer)
-        sb.appendLine("62")
-        sb.appendLine(color.toString())
-        sb.appendLine("10")
-        sb.appendLine(fmt(p.x))
-        sb.appendLine("20")
-        sb.appendLine(fmt(p.y))
-        sb.appendLine("30")
-        sb.appendLine(fmt(p.z))
-        sb.appendLine("40")
-        sb.appendLine(fmt(size))
+        a(0, "CIRCLE")
+        a(8, layer)
+        a(62, color)
+        a(10, fmt(p.x))
+        a(20, fmt(p.y))
+        a(30, fmt(p.z))
+        a(40, fmt(size))
 
         val d = size * 1.4
-        // ضربدر
-        sb.appendLine("0")
-        sb.appendLine("LINE")
-        sb.appendLine("8")
-        sb.appendLine(layer)
-        sb.appendLine("62")
-        sb.appendLine(color.toString())
-        sb.appendLine("10")
-        sb.appendLine(fmt(p.x - d))
-        sb.appendLine("20")
-        sb.appendLine(fmt(p.y - d))
-        sb.appendLine("11")
-        sb.appendLine(fmt(p.x + d))
-        sb.appendLine("21")
-        sb.appendLine(fmt(p.y + d))
+        a(0, "LINE")
+        a(8, layer)
+        a(62, color)
+        a(10, fmt(p.x - d))
+        a(20, fmt(p.y - d))
+        a(30, fmt(p.z))
+        a(11, fmt(p.x + d))
+        a(21, fmt(p.y + d))
+        a(31, fmt(p.z))
 
-        sb.appendLine("0")
-        sb.appendLine("LINE")
-        sb.appendLine("8")
-        sb.appendLine(layer)
-        sb.appendLine("62")
-        sb.appendLine(color.toString())
-        sb.appendLine("10")
-        sb.appendLine(fmt(p.x - d))
-        sb.appendLine("20")
-        sb.appendLine(fmt(p.y + d))
-        sb.appendLine("11")
-        sb.appendLine(fmt(p.x + d))
-        sb.appendLine("21")
-        sb.appendLine(fmt(p.y - d))
+        a(0, "LINE")
+        a(8, layer)
+        a(62, color)
+        a(10, fmt(p.x - d))
+        a(20, fmt(p.y + d))
+        a(30, fmt(p.z))
+        a(11, fmt(p.x + d))
+        a(21, fmt(p.y - d))
+        a(31, fmt(p.z))
     }
 
     private fun writePointLabel(
-        sb: StringBuilder,
+        a: (Any, Any) -> Unit,
         p: SurveyPoint,
         layer: String,
         color: Int,
@@ -299,27 +248,20 @@ object DxfMapGenerator {
         if (setting.showCode) parts.add(p.code)
         if (parts.isEmpty()) return
 
-        val text = parts.joinToString(" | ")
-        val offset = 0.3
+        // در DXF کاراکتر | گاهی مشکل‌ساز است
+        val text = parts.joinToString(" - ")
+            .replace("\r", " ")
+            .replace("\n", " ")
 
-        sb.appendLine("0")
-        sb.appendLine("TEXT")
-        sb.appendLine("8")
-        sb.appendLine(layer)
-        sb.appendLine("62")
-        sb.appendLine(color.toString())
-        sb.appendLine("10")
-        sb.appendLine(fmt(p.x + offset))
-        sb.appendLine("20")
-        sb.appendLine(fmt(p.y + offset))
-        sb.appendLine("30")
-        sb.appendLine(fmt(p.z))
-        sb.appendLine("40")
-        sb.appendLine(fmt(setting.textSize.toDouble()))
-        sb.appendLine("1")
-        sb.appendLine(text)
-        sb.appendLine("50")
-        sb.appendLine("0")
+        a(0, "TEXT")
+        a(8, layer)
+        a(62, color)
+        a(10, fmt(p.x + 0.3))
+        a(20, fmt(p.y + 0.3))
+        a(30, fmt(p.z))
+        a(40, fmt(setting.textSize.toDouble().coerceAtLeast(0.1)))
+        a(1, text)
+        a(50, 0)
     }
 
     private fun fmt(v: Double): String = String.format(Locale.US, "%.4f", v)
