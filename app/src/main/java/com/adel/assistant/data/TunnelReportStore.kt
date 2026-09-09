@@ -131,9 +131,9 @@ object TunnelReportStore {
 
     fun lastPointNoFor(context: Context, shaft: String, side: String): Int? {
         val key = "$shaft-${normalizeSide(side)}"
-        val latest = all(context)
+        val latest = allEntries(context)
             .filter { it.key == key }
-            .maxByOrNull { "%s%02d%02d".format(it.year, it.month.toIntOrNull() ?: 0, it.day.toIntOrNull() ?: 0) }
+            .maxByOrNull { it.dateSortKey }
         return latest?.pointNo?.toIntOrNull()
     }
 
