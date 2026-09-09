@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatEn
+import com.adel.assistant.data.formatMoney
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -75,11 +76,11 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SummaryCard("جمع کل صورت‌وضعیت", formatEn("%.0f", summary.sumPayable), Color(0xFF1565C0))
-            SummaryCard("جمع کل حسن‌انجام", formatEn("%.0f", summary.sumRetention), Color(0xFF6A1B9A))
-            SummaryCard("جمع دریافتی‌ها", formatEn("%.0f", summary.sumReceived), Color(0xFF2E7D32))
-            SummaryCard("حسن‌انجام ۱۲ ماه آخر", formatEn("%.0f", summary.retentionLast12), Color(0xFFC62828))
-            SummaryCard("مانده مطالبات", formatEn("%.0f", summary.remaining), Color(0xFFE65100))
+            SummaryCard("جمع کل صورت‌وضعیت", formatMoney(summary.sumPayable), Color(0xFF1565C0))
+            SummaryCard("جمع کل حسن‌انجام", formatMoney(summary.sumRetention), Color(0xFF6A1B9A))
+            SummaryCard("جمع دریافتی‌ها", formatMoney(summary.sumReceived), Color(0xFF2E7D32))
+            SummaryCard("حسن‌انجام ۱۲ ماه آخر", formatMoney(summary.retentionLast12), Color(0xFFC62828))
+            SummaryCard("مانده مطالبات", formatMoney(summary.remaining), Color(0xFFE65100))
 
             if (statusMsg.isNotBlank()) {
                 Text(statusMsg, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))

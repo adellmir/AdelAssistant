@@ -22,6 +22,7 @@ import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatEn
+import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.TextPrimary
@@ -135,7 +136,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(8.dp))
-        Text(formatEn("جمع دریافتی‌ها: %.0f", totalRecv), fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("جمع دریافتی‌ها: ${formatMoney(totalRecv)}", fontWeight = FontWeight.Bold, color = TextPrimary)
         Spacer(Modifier.height(6.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {

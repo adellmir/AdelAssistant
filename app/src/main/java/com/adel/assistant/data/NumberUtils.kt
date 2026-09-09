@@ -28,3 +28,20 @@ fun filterNumericInput(input: String): String {
 
 /** فرمت عدد همیشه با ارقام انگلیسی، مستقل از زبان گوشی (حیاتی برای فایل اکسل و لینک گوگل‌مپ) */
 fun formatEn(fmt: String, vararg args: Any): String = String.format(Locale.US, fmt, *args)
+
+/**
+ * جداکننده سه‌رقمی با ارقام انگلیسی، مثلاً 5000000 -> "5,000,000"
+ */
+fun formatMoney(value: Double, decimals: Int = 0): String {
+    val fmt = if (decimals > 0) "%,.${decimals}f" else "%,.0f"
+    return String.format(Locale.US, fmt, value)
+}
+
+fun formatMoney(value: Long): String = String.format(Locale.US, "%,d", value)
+
+/** ورودی مبلغ پروژه به میلیون تومان است؛ 5 -> 5_000_000 */
+const val PROJECT_AMOUNT_UNIT = 1_000_000.0
+
+fun projectInputToToman(inputMillion: Double): Double = inputMillion * PROJECT_AMOUNT_UNIT
+
+fun tomanToProjectInput(toman: Double): Double = toman / PROJECT_AMOUNT_UNIT

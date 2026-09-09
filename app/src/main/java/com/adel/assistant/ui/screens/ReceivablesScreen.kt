@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatEn
+import com.adel.assistant.data.formatMoney
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -73,11 +74,17 @@ private fun UnpaidTab(context: android.content.Context, color: Color) {
     fun refresh() { list = ProjectStore.all(context).filter { it.remaining > 0 }.sortedByDescending { it.dateSortKey } }
     fun search() { list = ProjectStore.search(context, name, employer).filter { it.remaining > 0 } }
 
-    val total = list.sumOf { it.remaining }
+    val totalRemaining = list.sumOf { it.remaining }
+    val totalWork = list.sumOf { it.amount }
+    val totalReceived = list.sumOf { it.settled }
 
-    Column {
+    Column(modifier = Modifier.fillMaxSize()) {
         Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-            Text(formatEn("جمع مطالبات پرداخت‌نشده: %.0f", total), modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.titleSmall)
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("کارکرد: ${formatMoney(totalWork)} تومان", style = MaterialTheme.typography.bodyMedium)
+                Text("دریافتی: ${formatMoney(totalReceived)} تومان", style = MaterialTheme.typography.bodyMedium)
+                Text("مانده: ${formatMoney(totalRemaining)} تومان", style = MaterialTheme.typography.titleSmall, color = color)
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -89,12 +96,12 @@ private fun UnpaidTab(context: android.content.Context, color: Color) {
             OutlinedButton(onClick = { refresh() }, modifier = Modifier.weight(1f)) { Text("رفرش") }
         }
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(list.take(6), key = { it.row }) { p ->
+            items(list, key = { it.row }) { p ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("${p.name} — ${p.employer}", style = MaterialTheme.typography.bodySmall)
-                            Text(formatEn("مانده: %.0f", p.remaining), style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                            Text("مانده: ${formatMoney(p.remaining)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
                         }
                         IconButton(onClick = {
                             context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phone}")))
@@ -126,7 +133,19 @@ private fun PaidTab(context: android.content.Context, color: Color) {
     fun refresh() { list = ProjectStore.all(context).filter { it.remaining <= 0 && it.amount > 0 }.sortedByDescending { it.dateSortKey } }
     fun search() { list = ProjectStore.search(context, name, employer).filter { it.remaining <= 0 && it.amount > 0 } }
 
-    Column {
+    val totalWork = list.sumOf { it.amount }
+    val totalReceived = list.sumOf { it.settled }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("کارکرد: ${formatMoney(totalWork)} تومان", style = MaterialTheme.typography.bodyMedium)
+                Text("دریافتی: ${formatMoney(totalReceived)} تومان", style = MaterialTheme.typography.bodyMedium)
+                Text("مانده: 0", style = MaterialTheme.typography.titleSmall, color = color)
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f))
             OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f))
@@ -136,12 +155,12 @@ private fun PaidTab(context: android.content.Context, color: Color) {
             OutlinedButton(onClick = { refresh() }, modifier = Modifier.weight(1f)) { Text("رفرش") }
         }
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(list.take(6), key = { it.row }) { p ->
+            items(list, key = { it.row }) { p ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("${p.name} — ${p.employer}", style = MaterialTheme.typography.bodySmall)
-                            Text(formatEn("مبلغ: %.0f", p.amount), style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                            Text("مبلغ: ${formatMoney(p.amount)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
                         }
                         IconButton(onClick = {
                             context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phone}")))

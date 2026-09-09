@@ -128,6 +128,23 @@ object TunnelReportStore {
         }
     }
 
+
+    fun lastPointNoFor(context: Context, shaft: String, side: String): Int? {
+        val key = "$shaft-${normalizeSide(side)}"
+        val latest = all(context)
+            .filter { it.key == key }
+            .maxByOrNull { "%s%02d%02d".format(it.year, it.month.toIntOrNull() ?: 0, it.day.toIntOrNull() ?: 0) }
+        return latest?.pointNo?.toIntOrNull()
+    }
+
+    fun suggestedNextPointNo(context: Context, shaft: String, side: String): Int? {
+        val last = lastPointNoFor(context, shaft, side) ?: return null
+        val s = side.trim()
+        val towardLess = s.contains("کمتر") || s.equals("0", true) || s.equals("start", true) ||
+            s.contains("less", true) || s.contains("left", true) || s == "L" || s == "l"
+        return if (towardLess) last - 1 else last + 1
+    }
+
     fun computeEntryValues(context: Context, shaft: String, side: String, pointNo: String, lengthCm: Double, dateKeyToday: String): ReportEntryValues? {
         val point = findByPointNo(context, pointNo) ?: return null
         val km = point.km + direction(shaft, side) * (lengthCm / 100.0)

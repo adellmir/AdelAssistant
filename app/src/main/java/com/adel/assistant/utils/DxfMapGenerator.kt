@@ -18,7 +18,7 @@ object DxfMapGenerator {
     ): String {
         val sb = StringBuilder()
 
-        // HEADER
+        // HEADER + TABLES کامل برای سازگاری با AutoCAD
         sb.appendLine("0")
         sb.appendLine("SECTION")
         sb.appendLine("2")
@@ -26,7 +26,7 @@ object DxfMapGenerator {
         sb.appendLine("9")
         sb.appendLine("\$ACADVER")
         sb.appendLine("1")
-        sb.appendLine("AC1015")
+        sb.appendLine("AC1014")
         sb.appendLine("9")
         sb.appendLine("\$INSUNITS")
         sb.appendLine("70")
@@ -34,17 +34,42 @@ object DxfMapGenerator {
         sb.appendLine("0")
         sb.appendLine("ENDSEC")
 
-        // TABLES / LAYERS
         sb.appendLine("0")
         sb.appendLine("SECTION")
         sb.appendLine("2")
         sb.appendLine("TABLES")
+
+        // LTYPE
+        sb.appendLine("0")
+        sb.appendLine("TABLE")
+        sb.appendLine("2")
+        sb.appendLine("LTYPE")
+        sb.appendLine("70")
+        sb.appendLine("1")
+        sb.appendLine("0")
+        sb.appendLine("LTYPE")
+        sb.appendLine("2")
+        sb.appendLine("CONTINUOUS")
+        sb.appendLine("70")
+        sb.appendLine("0")
+        sb.appendLine("3")
+        sb.appendLine("Solid line")
+        sb.appendLine("72")
+        sb.appendLine("65")
+        sb.appendLine("73")
+        sb.appendLine("0")
+        sb.appendLine("40")
+        sb.appendLine("0.0")
+        sb.appendLine("0")
+        sb.appendLine("ENDTAB")
+
+        // LAYER
         sb.appendLine("0")
         sb.appendLine("TABLE")
         sb.appendLine("2")
         sb.appendLine("LAYER")
         sb.appendLine("70")
-        sb.appendLine("0")
+        sb.appendLine("256")
         writeLayer(sb, "0", 7)
 
         val usedLayers = settings.values
@@ -60,6 +85,61 @@ object DxfMapGenerator {
 
         sb.appendLine("0")
         sb.appendLine("ENDTAB")
+
+        // STYLE
+        sb.appendLine("0")
+        sb.appendLine("TABLE")
+        sb.appendLine("2")
+        sb.appendLine("STYLE")
+        sb.appendLine("70")
+        sb.appendLine("1")
+        sb.appendLine("0")
+        sb.appendLine("STYLE")
+        sb.appendLine("2")
+        sb.appendLine("STANDARD")
+        sb.appendLine("70")
+        sb.appendLine("0")
+        sb.appendLine("40")
+        sb.appendLine("0.0")
+        sb.appendLine("41")
+        sb.appendLine("1.0")
+        sb.appendLine("50")
+        sb.appendLine("0.0")
+        sb.appendLine("71")
+        sb.appendLine("0")
+        sb.appendLine("42")
+        sb.appendLine("1.0")
+        sb.appendLine("3")
+        sb.appendLine("txt")
+        sb.appendLine("4")
+        sb.appendLine("")
+        sb.appendLine("0")
+        sb.appendLine("ENDTAB")
+
+        // APPID — ضروری برای AutoCAD
+        sb.appendLine("0")
+        sb.appendLine("TABLE")
+        sb.appendLine("2")
+        sb.appendLine("APPID")
+        sb.appendLine("70")
+        sb.appendLine("1")
+        sb.appendLine("0")
+        sb.appendLine("APPID")
+        sb.appendLine("2")
+        sb.appendLine("ACAD")
+        sb.appendLine("70")
+        sb.appendLine("0")
+        sb.appendLine("0")
+        sb.appendLine("ENDTAB")
+
+        sb.appendLine("0")
+        sb.appendLine("ENDSEC")
+
+        // BLOCKS
+        sb.appendLine("0")
+        sb.appendLine("SECTION")
+        sb.appendLine("2")
+        sb.appendLine("BLOCKS")
         sb.appendLine("0")
         sb.appendLine("ENDSEC")
 

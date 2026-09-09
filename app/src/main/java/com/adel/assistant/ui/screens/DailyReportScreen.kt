@@ -65,6 +65,13 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
 
+    LaunchedEffect(shaft, side) {
+        if (shaft.isNotBlank() && side.isNotBlank() && editingIndex < 0) {
+            val suggested = TunnelReportStore.suggestedNextPointNo(context, shaft, side)
+            if (suggested != null) pointNo = suggested.toString()
+        }
+    }
+
     val weekday = remember(day, month) { CalendarStore.weekdayFor(context, day, month) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->

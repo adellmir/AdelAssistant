@@ -33,6 +33,9 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatEn
+import com.adel.assistant.data.formatMoney
+import com.adel.assistant.data.projectInputToToman
+import com.adel.assistant.data.tomanToProjectInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
@@ -99,7 +102,8 @@ fun ProjectRegisterScreen(
     }
 
     fun doRegister() {
-        val amt = amount.toDoubleOrNullFa() ?: 0.0
+        val amtInput = amount.toDoubleOrNullFa() ?: 0.0
+        val amt = projectInputToToman(amtInput)
         val rowId = editingRow ?: ProjectStore.nextRowId(context)
         val existingSettled = editingRow?.let { id ->
             ProjectStore.all(context).firstOrNull { it.row == id }?.settled
@@ -236,7 +240,7 @@ fun ProjectRegisterScreen(
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون تومان)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("= ${formatMoney(projectInputToToman(v))} تومان") })
             OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f))
         }
         OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
@@ -288,7 +292,7 @@ fun ProjectRegisterScreen(
                         Text("${p.name} — ${p.employer}", style = MaterialTheme.typography.bodySmall)
                         Text(
                             formatEn(
-                                "%s/%s %02d:%02d — مبلغ: %.0f — %s",
+                                "%s/%s %02d:%02d — مبلغ: %s — %s",
                                 p.day, p.month,
                                 p.hour.toIntOrNullFa() ?: 9,
                                 p.minute.toIntOrNullFa() ?: 0,
@@ -319,7 +323,7 @@ fun ProjectRegisterScreen(
                                 minute = p.minute
                                 name = p.name
                                 employer = p.employer
-                                amount = p.amount.toString()
+                                amount = tomanToProjectInput(p.amount).let { v -> if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString() }
                                 description = p.description
                                 phone = p.phone
                                 editingRow = p.row

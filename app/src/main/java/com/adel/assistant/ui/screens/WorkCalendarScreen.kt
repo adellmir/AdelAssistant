@@ -82,7 +82,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
             columns = GridCells.Fixed(7),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.height(220.dp)
+            modifier = Modifier.height((48.dp * ((monthLength + 6) / 7)).coerceIn(288.dp, 432.dp))
         ) {
             items((1..monthLength).toList()) { d ->
                 val hasProject = markedDays.contains(d)
