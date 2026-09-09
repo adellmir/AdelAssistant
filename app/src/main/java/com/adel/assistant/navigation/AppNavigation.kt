@@ -22,6 +22,7 @@ import com.adel.assistant.ui.screens.SimpleRecordScreen
 import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
 import com.adel.assistant.ui.screens.TunnelReceiptsScreen
+import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
@@ -54,6 +55,14 @@ fun AppNavigation() {
         composable(Routes.SURVEY_TUNNEL_STATUS) {
             TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
+        composable(Routes.SURVEY_TUNNEL_TASKS) {
+            TaskScreen(
+                title = "تسک‌های تونل",
+                storeName = "tunnel_tasks",
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() }
+            )
+        }
 
         // ---- نقشه‌برداری: پروژه‌ها ----
         composable(Routes.SURVEY_PROJECT_REGISTER) {
@@ -85,6 +94,15 @@ fun AppNavigation() {
                 onAddProject = { d, m, y ->
                     navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}/$d/$m/$y")
                 }
+            )
+        }
+
+        composable(Routes.SURVEY_PROJECT_TASKS) {
+            TaskScreen(
+                title = "تسک‌های پروژه",
+                storeName = "project_tasks",
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() }
             )
         }
 

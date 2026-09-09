@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.theme.TextPrimary
 import java.io.OutputStreamWriter
 
 @Composable
@@ -69,7 +71,7 @@ fun TaskScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF7F7F5)).padding(horizontal = 20.dp)
+        modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.weight(1f)) {
