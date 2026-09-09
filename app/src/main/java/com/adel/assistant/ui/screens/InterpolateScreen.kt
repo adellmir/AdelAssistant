@@ -120,7 +120,7 @@ fun InterpolateScreen(color: Color, onBack: () -> Unit) {
         result?.let {
             Spacer(Modifier.height(14.dp))
             Surface(color = Color.White, tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
-                Text(it, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                Text(it, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1C1C1C))
             }
         }
         Spacer(Modifier.height(24.dp))

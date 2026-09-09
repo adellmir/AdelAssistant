@@ -40,13 +40,19 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
-fun ProjectRegisterScreen(color: Color, onBack: () -> Unit) {
+fun ProjectRegisterScreen(
+    color: Color,
+    onBack: () -> Unit,
+    initialDay: String? = null,
+    initialMonth: String? = null,
+    initialYear: String? = null
+) {
     val context = LocalContext.current
     val today = remember { CalendarStore.todayJalali() }
 
-    var day by remember { mutableStateOf(today.third.toString()) }
-    var month by remember { mutableStateOf(today.second.toString()) }
-    var year by remember { mutableStateOf(today.first.toString()) }
+    var day by remember { mutableStateOf(initialDay?.takeIf { it.isNotBlank() } ?: today.third.toString()) }
+    var month by remember { mutableStateOf(initialMonth?.takeIf { it.isNotBlank() } ?: today.second.toString()) }
+    var year by remember { mutableStateOf(initialYear?.takeIf { it.isNotBlank() } ?: today.first.toString()) }
     var hour by remember { mutableStateOf("9") }
     var minute by remember { mutableStateOf("0") }
     var name by remember { mutableStateOf("") }

@@ -35,7 +35,7 @@ private val PERSIAN_MONTHS = listOf(
 )
 
 @Composable
-fun WorkCalendarScreen(color: Color, onBack: () -> Unit) {
+fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: Int, month: Int, year: Int) -> Unit)? = null) {
     val context = LocalContext.current
     val today = remember { CalendarStore.todayJalali() }
     var year by remember { mutableStateOf(today.first) }
@@ -110,6 +110,16 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit) {
         if (selectedDay != null) {
             Text("پروژه‌های روز $selectedDay", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
             Spacer(modifier = Modifier.height(6.dp))
+            if (onAddProject != null) {
+                Button(
+                    onClick = { onAddProject(selectedDay!!, month, year) },
+                    colors = ButtonDefaults.buttonColors(containerColor = color),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("افزودن پروژه برای این روز")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
 
         if (statusMsg.isNotBlank()) {

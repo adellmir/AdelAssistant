@@ -5,6 +5,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.AreaScreen
@@ -57,11 +59,33 @@ fun AppNavigation() {
         composable(Routes.SURVEY_PROJECT_REGISTER) {
             ProjectRegisterScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
+        composable(
+            route = "${Routes.SURVEY_PROJECT_REGISTER}/{day}/{month}/{year}",
+            arguments = listOf(
+                navArgument("day") { type = NavType.StringType },
+                navArgument("month") { type = NavType.StringType },
+                navArgument("year") { type = NavType.StringType }
+            )
+        ) { entry ->
+            ProjectRegisterScreen(
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() },
+                initialDay = entry.arguments?.getString("day"),
+                initialMonth = entry.arguments?.getString("month"),
+                initialYear = entry.arguments?.getString("year")
+            )
+        }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
             ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_PROJECT_CALENDAR) {
-            WorkCalendarScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+            WorkCalendarScreen(
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() },
+                onAddProject = { d, m, y ->
+                    navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}/$d/$m/$y")
+                }
+            )
         }
 
         // ---- مالی: تونل ----
