@@ -49,11 +49,11 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
     val totalReceived = list.sumOf { it.settled }
     val totalRemain = list.sumOf { it.remaining }
 
-    Column(Modifier.Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
         ScreenTopBar(title = "مطالبات کلی", color = color, onBack = onBack)
 
         Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("کارکرد: ${formatMoney(totalWork)}", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                 Text("دریافتی: ${formatMoney(totalReceived)}", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                 Text("مانده: ${formatMoney(totalRemain)}", style = MaterialTheme.typography.titleSmall, color = color)
