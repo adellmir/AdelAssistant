@@ -26,6 +26,8 @@ import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
+import com.adel.assistant.ui.screens.FinanceStatusScreen
+import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.theme.FinancePrimary
@@ -139,12 +141,7 @@ fun AppNavigation() {
             ReceivablesScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.FIN_PROJECT_STATUS) {
-            ViaClaudeScreen(
-                title = "وضعیت مالی",
-                color = FinancePrimary,
-                description = "این صفحه در حال تکمیل است.",
-                onBack = { navController.popBackStack() }
-            )
+            FinanceStatusScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
 
         // ---- ابزار ----
@@ -173,6 +170,9 @@ fun AppNavigation() {
         }
         composable(Routes.TOOL_VOLUME) {
             VolumeScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_BACKUP) {
+            DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
     }
 }

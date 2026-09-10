@@ -254,7 +254,7 @@ object DxfMapGenerator {
 
         pair(sb, 0, "TEXT")
         pair(sb, 8, layer)
-        pair(sb, 62, color.toString())
+        pair(sb, 62, "250")
         pair(sb, 10, fmt(p.x + 0.3))
         pair(sb, 20, fmt(p.y + 0.3))
         pair(sb, 30, fmt(p.z))

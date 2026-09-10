@@ -1,77 +1,50 @@
 package com.adel.assistant.utils
 
+import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
-import java.io.BufferedReader
 import java.io.InputStream
-import java.io.InputStreamReader
 
-/**
- * پارس فایل نقاط مخصوص قابلیت DXF پیشرفته
- * - .dat  → n y x z d
- * - بقیه → N x y z d  (یا فرمت‌های رایج)
- */
+/** پارس فایل نقاط برای DXF — GSI با همان موتور مبدل */
 object DxfPointParser {
+    data class ParseResult(val points: List<SurveyPoint>, val errors: List<String>)
 
     fun parse(inputStream: InputStream, fileName: String): ParseResult {
-        val isDat = fileName.lowercase().endsWith(".dat")
+        val text = inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val lower = fileName.lowercase()
+        if (lower.endsWith(".gsi")) {
+            val pts = PointConverter.read(text, "gsi")
+            return ParseResult(pts, if (pts.isEmpty()) listOf("نقطه GSI پیدا نشد") else emptyList())
+        }
+        return parseDelimited(text, lower.endsWith(".dat"))
+    }
+
+    private fun parseDelimited(text: String, isDat: Boolean): ParseResult {
         val points = mutableListOf<SurveyPoint>()
         val errors = mutableListOf<String>()
         var lineNumber = 0
-
-        BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                lineNumber++
-                val raw = line!!.trim()
-                if (raw.isEmpty() || raw.startsWith("#") || raw.startsWith("//")) continue
-                if (raw.lowercase().contains("id") && raw.lowercase().contains("x")) continue
-
-                val parts = raw.split(Regex("[\\s,;\\t]+")).filter { it.isNotBlank() }
-                if (parts.size < 4) {
-                    errors.add("خط $lineNumber: ستون ناکافی")
-                    continue
+        for (raw0 in text.lineSequence()) {
+            lineNumber++
+            val raw = raw0.trim()
+            if (raw.isEmpty() || raw.startsWith("#") || raw.startsWith("//")) continue
+            if (raw.lowercase().contains("id") && raw.lowercase().contains("x")) continue
+            val parts = raw.split(Regex("[\\s,;\\t]+")).filter { it.isNotBlank() }
+            if (parts.size < 4) {
+                errors.add("خط $lineNumber: ستون ناکافی")
+                continue
+            }
+            try {
+                val point = if (isDat && parts.size >= 5) {
+                    SurveyPoint(parts[0], parts[2].replace(',', '.').toDouble(), parts[1].replace(',', '.').toDouble(), parts[3].replace(',', '.').toDouble(), parts[4])
+                } else if (parts.size >= 5) {
+                    SurveyPoint(parts[0], parts[1].replace(',', '.').toDouble(), parts[2].replace(',', '.').toDouble(), parts[3].replace(',', '.').toDouble(), parts[4])
+                } else {
+                    SurveyPoint(parts[0], parts[1].replace(',', '.').toDouble(), parts[2].replace(',', '.').toDouble(), parts[3].replace(',', '.').toDouble(), "")
                 }
-
-                try {
-                    val point = if (isDat && parts.size >= 5) {
-                        // n y x z d
-                        SurveyPoint(
-                            id = parts[0],
-                            y = parts[1].replace(',', '.').toDouble(),
-                            x = parts[2].replace(',', '.').toDouble(),
-                            z = parts[3].replace(',', '.').toDouble(),
-                            code = parts[4]
-                        )
-                    } else if (parts.size >= 5) {
-                        // N x y z d
-                        SurveyPoint(
-                            id = parts[0],
-                            x = parts[1].replace(',', '.').toDouble(),
-                            y = parts[2].replace(',', '.').toDouble(),
-                            z = parts[3].replace(',', '.').toDouble(),
-                            code = parts[4]
-                        )
-                    } else {
-                        // حداقل ۴ ستون: id x y z
-                        SurveyPoint(
-                            id = parts[0],
-                            x = parts[1].replace(',', '.').toDouble(),
-                            y = parts[2].replace(',', '.').toDouble(),
-                            z = parts[3].replace(',', '.').toDouble(),
-                            code = parts.getOrElse(4) { "" }
-                        )
-                    }
-                    points.add(point)
-                } catch (e: NumberFormatException) {
-                    errors.add("خط $lineNumber: عدد نامعتبر")
-                }
+                points += point
+            } catch (e: Exception) {
+                errors.add("خط $lineNumber: ${e.message}")
             }
         }
         return ParseResult(points, errors)
     }
-
-    data class ParseResult(
-        val points: List<SurveyPoint>,
-        val errors: List<String>
-    )
 }

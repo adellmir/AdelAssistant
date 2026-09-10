@@ -32,14 +32,20 @@ fun formatEn(fmt: String, vararg args: Any): String = String.format(Locale.US, f
 /**
  * جداکننده سه‌رقمی با ارقام انگلیسی، مثلاً 5000000 -> "5,000,000"
  */
-fun formatMoney(value: Double, decimals: Int = 0): String {
-    val fmt = if (decimals > 0) "%,.${decimals}f" else "%,.0f"
-    return String.format(Locale.US, fmt, value)
+fun formatMoney(value: Double, decimals: Int = 2): String {
+    val v = value
+    if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9) {
+        return String.format(Locale.US, "%,.0f", v)
+    }
+    val d = decimals.coerceIn(0, 6)
+    return String.format(Locale.US, "%,.${d}f", v).trimEnd('0').trimEnd('.')
 }
 
 fun formatMoney(value: Long): String = String.format(Locale.US, "%,d", value)
 
-/** واحد نمایش میلیون است؛ مقدار ذخیره‌شده همان عدد ورودی است (۵ → ۵) */
-fun projectInputToToman(inputMillion: Double): Double = inputMillion
+/** ورودی مبلغ پروژه به میلیون تومان است؛ 5 -> 5_000_000 */
+const val PROJECT_AMOUNT_UNIT = 1_000_000.0
 
-fun tomanToProjectInput(toman: Double): Double = toman
+fun projectInputToToman(inputMillion: Double): Double = inputMillion * PROJECT_AMOUNT_UNIT
+
+fun tomanToProjectInput(toman: Double): Double = toman / PROJECT_AMOUNT_UNIT

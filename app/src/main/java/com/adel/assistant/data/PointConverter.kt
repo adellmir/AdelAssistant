@@ -39,19 +39,72 @@ object PointConverter {
         } }.toList()
     }
 
-    private fun parseGsi(text: String): List<SurveyPoint> = text.lineSequence().mapNotNull { line ->
-        if (line.contains("OCUPAR", true) || Regex("\\bRE\\b").containsMatchIn(line)) return@mapNotNull null
-        val point = Regex("\\*11(\\d{4,})").find(line)?.groupValues?.get(1)?.trimStart('0') ?: return@mapNotNull null
-        fun coord(key: String): Double? {
-            val raw = Regex("$key\\.\\.00\\+([0-9]+)").find(line)?.groupValues?.get(1) ?: return null
-            return raw.toDouble() / 10000.0
+    /**
+     * خواندن GSI:
+     * - نام نقطه از فیلد دادهٔ word 11 (مثلاً S1) نه شمارندهٔ 110003
+     * - کد از word 41 روی نقاط بعدی اعمال می‌شود
+     * - OCUPAR و RE حذف؛ دو برداشت بعد از OCUPAR هم حذف
+     * - نقاط با مختصات صفر حذف
+     */
+    private fun parseGsi(text: String): List<SurveyPoint> {
+        val out = mutableListOf<SurveyPoint>()
+        var currentCode = ""
+        var skipPoints = 0
+
+        fun decodeText(raw: String): String {
+            val t = raw.trim()
+            if (t.isEmpty()) return "0"
+            return if (t.any { it.isLetter() }) t.trimStart('0').ifBlank { "0" }
+            else t.trimStart('0').ifBlank { "0" }
         }
-        val x = coord("81") ?: return@mapNotNull null
-        val y = coord("82") ?: return@mapNotNull null
-        val z = coord("83") ?: return@mapNotNull null
-        val code = Regex("42(?:\\.\\.\\.\\.|\\d{4})\\+0+([^\\s]+)").find(line)?.groupValues?.getOrNull(1)?.trimEnd('0') ?: ""
-        SurveyPoint(if (point.isBlank()) "0" else point, x, y, z, code)
-    }.toList()
+
+        fun coord(line: String, key: String): Double? {
+            val m = Regex(key + """\.\.00\+([0-9]+)""").find(line) ?: return null
+            return m.groupValues[1].toDouble() / 10000.0
+        }
+
+        fun wordData(line: String, wi: String): String? {
+            val m = Regex("""\*?""" + wi + """[0-9.]*\+([^\s]+)""").find(line) ?: return null
+            return decodeText(m.groupValues[1])
+        }
+
+        for (rawLine in text.lineSequence()) {
+            val line = rawLine.trim()
+            if (line.isEmpty()) continue
+            val upper = line.uppercase()
+
+            val is41 = line.contains("*41") && !line.contains("*11")
+            if (is41) {
+                val codeVal = wordData(line, "41") ?: ""
+                if (codeVal.equals("OCUPAR", true) || upper.contains("OCUPAR")) {
+                    currentCode = ""
+                    skipPoints = 0 // فقط OCUPAR/RE و مختصات صفر حذف می‌شوند
+                    continue
+                }
+                if (codeVal.equals("RE", true) || Regex("""(^|[^A-Z0-9])RE([^A-Z0-9]|$)""").containsMatchIn(upper)) {
+                    continue
+                }
+                if (codeVal.isNotBlank() && codeVal != "0") currentCode = codeVal
+                continue
+            }
+
+            if (!line.contains("*11")) continue
+            if (skipPoints > 0) { skipPoints--; continue }
+
+            val idRaw = wordData(line, "11") ?: continue
+            if (idRaw.equals("OCUPAR", true) || idRaw.equals("RE", true)) continue
+
+            val x = coord(line, "81") ?: continue
+            val y = coord(line, "82") ?: continue
+            val z = coord(line, "83") ?: 0.0
+            if (kotlin.math.abs(x) < 1e-9 && kotlin.math.abs(y) < 1e-9) continue
+
+            val code42 = wordData(line, "42")?.takeIf { it.isNotBlank() && it != "0" }
+            val code = code42 ?: currentCode
+            out += SurveyPoint(idRaw, x, y, z, code)
+        }
+        return out
+    }
 
     private fun parseDxf(text: String): List<SurveyPoint> {
         val lines = text.lines(); val out = mutableListOf<SurveyPoint>(); var i = 0; var no = 1
