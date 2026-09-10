@@ -56,8 +56,8 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<TunnelMonthRow?>(null) }
 
-    var list by remember { mutableStateOf(TunnelFinanceStore.all(context).reversed()) }
-    fun refresh() { list = TunnelFinanceStore.all(context).reversed() }
+    var list by remember { mutableStateOf(TunnelFinanceStore.all(context).filter { it.days > 0.0 || it.totalAmount > 0.0 }.reversed()) }
+    fun refresh() { list = TunnelFinanceStore.all(context).filter { it.days > 0.0 || it.totalAmount > 0.0 }.reversed() }
 
     fun clearForm() {
         year = today.first.toString(); month = today.second.toString()
@@ -102,7 +102,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
             note = note.ifBlank { existing?.note ?: "" }
         )
         TunnelFinanceStore.saveMonth(context, row)
-        statusMsg = formatEn("ثبت شد — صورت‌وضعیت: %.0f | درآمد: %.0f", row.payable, row.income)
+        statusMsg = "ثبت شد — صورت‌وضعیت: ${formatMoney(row.payable)} | درآمد: ${formatMoney(row.income)}"
         clearForm(); refresh()
     }
 
@@ -163,8 +163,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
 
         preview?.let { p ->
             Text(
-                formatEn("مبلغ کل: %.0f | حسن‌انجام: %.0f | کسورات: %.0f | صورت‌وضعیت: %.0f | درآمد: %.0f",
-                    p.totalAmount, p.retention, p.totalDeductions, p.payable, p.income),
+                "مبلغ کل: ${formatMoney(preview.totalAmount)} | حسن‌انجام: ${formatMoney(preview.retention)} | کسورات: ${formatMoney(preview.totalDeductions)} | صورت‌وضعیت: ${formatMoney(preview.payable)} | درآمد: ${formatMoney(preview.income)}",
                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32),
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -185,10 +184,10 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
             items(list) { item ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
-                        Text(formatEn("%04d/%02d — %.1f روز × %.0f", item.year % 100, item.month, item.days, item.unitPrice),
+                        Text(formatEn("%04d/%02d — %.1f روز × %s", item.year % 100, item.month, item.days, formatMoney(item.unitPrice)),
                             fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                        Text(formatEn("صورت‌وضعیت: %.0f | درآمد: %.0f | دریافت: %s",
-                            item.payable, item.income, item.receiveAmount?.let { formatEn("%.0f", it) } ?: "—"),
+                        Text(formatEn("صورت‌وضعیت: %s | درآمد: %s | دریافت: %s",
+                            formatMoney(item.payable), formatMoney(item.income), item.receiveAmount?.let { formatMoney(it) } ?: "—"),
                             style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconButton(onClick = {

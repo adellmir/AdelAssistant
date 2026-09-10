@@ -39,9 +39,7 @@ fun formatMoney(value: Double, decimals: Int = 0): String {
 
 fun formatMoney(value: Long): String = String.format(Locale.US, "%,d", value)
 
-/** ورودی مبلغ پروژه به میلیون تومان است؛ 5 -> 5_000_000 */
-const val PROJECT_AMOUNT_UNIT = 1_000_000.0
+/** واحد نمایش میلیون است؛ مقدار ذخیره‌شده همان عدد ورودی است (۵ → ۵) */
+fun projectInputToToman(inputMillion: Double): Double = inputMillion
 
-fun projectInputToToman(inputMillion: Double): Double = inputMillion * PROJECT_AMOUNT_UNIT
-
-fun tomanToProjectInput(toman: Double): Double = toman / PROJECT_AMOUNT_UNIT
+fun tomanToProjectInput(toman: Double): Double = toman

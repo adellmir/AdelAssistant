@@ -73,6 +73,23 @@ private fun jalaliDateString(): String {
     return String.format(Locale.US, "%04d/%02d/%02d", y, m, d)
 }
 
+private fun todayWeekdayName(): String {
+    return when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
+        Calendar.SATURDAY -> "شنبه"
+        Calendar.SUNDAY -> "یکشنبه"
+        Calendar.MONDAY -> "دوشنبه"
+        Calendar.TUESDAY -> "سه‌شنبه"
+        Calendar.WEDNESDAY -> "چهارشنبه"
+        Calendar.THURSDAY -> "پنج‌شنبه"
+        Calendar.FRIDAY -> "جمعه"
+        else -> ""
+    }
+}
+
+private fun jalaliDateWithWeekday(): String {
+    return "${todayWeekdayName()} ${jalaliDateString()}"
+}
+
 private fun todaySortKey(): String {
     val (y, m, d) = CalendarStore.todayJalali()
     return String.format(Locale.US, "%d%02d%02d", y, m, d)
@@ -87,13 +104,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
     var clock by remember { mutableStateOf(currentTimeString()) }
     var greeting by remember { mutableStateOf(timeBasedGreeting()) }
-    var jalali by remember { mutableStateOf(jalaliDateString()) }
+    var jalali by remember { mutableStateOf(jalaliDateWithWeekday()) }
 
     LaunchedEffect(Unit) {
         while (true) {
             clock = currentTimeString()
             greeting = timeBasedGreeting()
-            jalali = jalaliDateString()
+            jalali = jalaliDateWithWeekday()
             delay(30_000)
         }
     }
@@ -108,13 +125,32 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             emptyList()
         }
     }
-    val tunnelTasks = remember {
-        try { TaskStore.load(context, "tunnel_tasks").filter { !it.completed } }
-        catch (_: Exception) { emptyList() }
+    var tunnelTasks by remember {
+        mutableStateOf(
+            try {
+                TaskStore.load(context, "tunnel_tasks")
+                    .filter { !it.completed }
+                    .sortedByDescending { it.createdAt }
+            } catch (_: Exception) { emptyList() }
+        )
     }
-    val projectTasks = remember {
-        try { TaskStore.load(context, "project_tasks").filter { !it.completed } }
-        catch (_: Exception) { emptyList() }
+    var projectTasks by remember {
+        mutableStateOf(
+            try {
+                TaskStore.load(context, "project_tasks")
+                    .filter { !it.completed }
+                    .sortedByDescending { it.createdAt }
+            } catch (_: Exception) { emptyList() }
+        )
+    }
+
+    fun completeTask(storeName: String, title: String, createdAt: Long) {
+        val all = TaskStore.load(context, storeName).map {
+            if (it.title == title && it.createdAt == createdAt) it.copy(completed = true) else it
+        }
+        TaskStore.save(context, storeName, all)
+        val open = all.filter { !it.completed }.sortedByDescending { it.createdAt }
+        if (storeName == "tunnel_tasks") tunnelTasks = open else projectTasks = open
     }
 
     val section = sections.getOrElse(sectionIndex) { sections.first() }
@@ -234,12 +270,30 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 } else {
                     ScrollBox3 {
                         projectTasks.forEach { t ->
-                            Text(
-                                "• ${t.title}",
-                                color = TextPrimary,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "• ${t.title}",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "انجام",
+                                    color = WorkPrimary,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clickable { completeTask("project_tasks", t.title, t.createdAt) }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -256,12 +310,30 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 } else {
                     ScrollBox3 {
                         tunnelTasks.forEach { t ->
-                            Text(
-                                "• ${t.title}",
-                                color = TextPrimary,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "• ${t.title}",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "انجام",
+                                    color = WorkPrimary,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clickable { completeTask("tunnel_tasks", t.title, t.createdAt) }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }

@@ -137,23 +137,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 it.km, it.dailyProgress, it.shaftProgress, it.remaining)
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
-        // ذخیره + اشتراک فایل اکسل گزارش
-        val uri = XlsxReportWriter.generate(context, year, month, day, weekday)
-        if (uri != null) {
-            statusMsg = "ثبت شد — فایل در Documents/AdelAssistant"
-            try {
-                val share = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(share, "اشتراک گزارش روزانه"))
-            } catch (e: Exception) {
-                statusMsg = "ثبت شد (اشتراک ممکن نشد)"
-            }
-        } else {
-            statusMsg = "ثبت شد"
-        }
+        statusMsg = "ثبت شد"
     }
 
     Column(
@@ -269,7 +253,21 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             OutlinedButton(
                 onClick = {
                     val uri = XlsxReportWriter.generate(context, year, month, day, weekday)
-                    statusMsg = if (uri != null) "فایل در Documents/AdelAssistant ذخیره شد" else "خطا در ساخت فایل"
+                    if (uri != null) {
+                        statusMsg = "فایل در Documents/AdelAssistant ذخیره شد"
+                        try {
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(share, "اشتراک گزارش روزانه"))
+                        } catch (_: Exception) {
+                            statusMsg = "ذخیره شد (اشتراک ممکن نشد)"
+                        }
+                    } else {
+                        statusMsg = "خطا در ساخت فایل"
+                    }
                 },
                 modifier = Modifier.weight(1f)
             ) { Text("صدور گزارش") }

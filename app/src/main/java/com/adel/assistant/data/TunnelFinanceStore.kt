@@ -68,11 +68,10 @@ data class TunnelMonthRow(
 }
 
 data class TunnelFinanceSummary(
-    val sumPayable: Double,          // جمع صورت وضعیت M
-    val sumRetention: Double,        // جمع حسن انجام E
-    val sumReceived: Double,         // جمع همه دریافتی‌ها S
-    val retentionLast12: Double,     // حسن‌انجام ۱۲ سطر آخر
-    val remaining: Double            // مانده مطالبات
+    val sumPayable: Double,           // جمع صورت وضعیت‌ها M
+    val sumReceived: Double,          // جمع همه دریافتی‌ها S
+    val blockedRetention: Double,     // حسن‌انجام بلوکه‌شده از آخرین اردیبهشت
+    val remaining: Double             // مانده = صورت‌وضعیت − بلوکه − دریافتی
 )
 
 object TunnelFinanceStore {
@@ -186,14 +185,23 @@ object TunnelFinanceStore {
         writeAll(context, list)
     }
 
+    /**
+     * حسن‌انجام بلوکه = جمع E از آخرین ماه اردیبهشت (ماه ۲) تا الان.
+     * اگر اردیبهشت در سوابق نباشد، صفر.
+     * مانده دریافتی = جمع صورت‌وضعیت − حسن‌انجام بلوکه − جمع دریافتی‌ها
+     */
     fun summary(context: Context): TunnelFinanceSummary {
         val rows = all(context)
         val sumM = rows.sumOf { it.payable }
-        val sumE = rows.sumOf { it.retention }
         val sumS = rows.mapNotNull { it.receiveAmount }.sum()
-        val last12E = rows.takeLast(12).sumOf { it.retention }
-        val remaining = sumM + sumE - sumS - last12E
-        return TunnelFinanceSummary(sumM, sumE, sumS, last12E, remaining)
+        val lastOrdibehesht = rows.lastOrNull { it.month == 2 }
+        val blocked = if (lastOrdibehesht != null) {
+            rows.filter { it.dateCode >= lastOrdibehesht.dateCode }.sumOf { it.retention }
+        } else {
+            0.0
+        }
+        val remaining = sumM - blocked - sumS
+        return TunnelFinanceSummary(sumM, sumS, blocked, remaining)
     }
 
     fun exportCsvText(context: Context): String {

@@ -149,7 +149,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                formatEn("%.0f — تاریخ دریافت: %s", item.receiveAmount ?: 0.0, item.receiveDate.ifBlank { "—" }),
+                                "${formatMoney(item.receiveAmount ?: 0.0)} — تاریخ دریافت: ${item.receiveDate.ifBlank { "—" }}",
                                 fontWeight = FontWeight.SemiBold, color = TextPrimary
                             )
                             Text(
