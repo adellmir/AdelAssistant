@@ -14,6 +14,24 @@ object CalendarStore {
         }?.get(2)
     }
 
+    /** نام روز هفته برای تاریخ شمسی — مستقل از CSV */
+    fun weekdayNameJalali(jy: Int, jm: Int, jd: Int): String {
+        if (jy <= 0 || jm !in 1..12 || jd <= 0) return ""
+        val (gy, gm, gd) = jalaliToGregorian(jy, jm, jd)
+        val cal = Calendar.getInstance()
+        cal.set(gy, gm - 1, gd)
+        return when (cal.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.SATURDAY -> "شنبه"
+            Calendar.SUNDAY -> "یکشنبه"
+            Calendar.MONDAY -> "دوشنبه"
+            Calendar.TUESDAY -> "سه‌شنبه"
+            Calendar.WEDNESDAY -> "چهارشنبه"
+            Calendar.THURSDAY -> "پنجشنبه"
+            Calendar.FRIDAY -> "جمعه"
+            else -> ""
+        }
+    }
+
     fun todayJalali(): Triple<Int, Int, Int> {
         val now = Calendar.getInstance()
         return gregorianToJalali(now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH))

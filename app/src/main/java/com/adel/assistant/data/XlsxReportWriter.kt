@@ -31,7 +31,10 @@ object XlsxReportWriter {
         val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>()
         cellUpdates["Q1"] = formatEn("%02d/%02d", m, d) to true
         cellUpdates["R1"] = "$year/" to true
-        if (weekday != null) cellUpdates["Q2"] = weekday to true
+        // روز هفته مستقیم در Q2 (بدون فرمول)
+        val wd = weekday?.takeIf { it.isNotBlank() }
+            ?: CalendarStore.weekdayNameJalali(year.toIntOrNullFa() ?: 0, m, d)
+        cellUpdates["Q2"] = wd to true
 
         var sumI = 0.0
         ROW_MAP.forEach { (row, pair) ->

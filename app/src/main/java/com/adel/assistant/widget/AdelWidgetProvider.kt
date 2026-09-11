@@ -40,7 +40,7 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 refreshAll(context)
             }
             ACTION_CYCLE_OPACITY -> {
-                cycleOpacity(context)
+                // شفافیت ثابت ۶۰٪ — تغییر نمی‌کند
                 refreshAll(context)
             }
             ACTION_REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE -> refreshAll(context)
@@ -54,23 +54,8 @@ class AdelWidgetProvider : AppWidgetProvider() {
         const val EXTRA_STORE = "store"
         const val EXTRA_TITLE = "title"
         const val EXTRA_CREATED = "created"
-        private const val PREFS = "adel_widget_prefs"
-        private const val KEY_ALPHA = "bg_alpha"
-        // alpha levels 255, 204, 153, 102, 51 (~100%..20%)
-        private val ALPHA_STEPS = intArrayOf(255, 204, 153, 102, 51)
-
-        fun getAlpha(context: Context): Int {
-            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            return prefs.getInt(KEY_ALPHA, 255).coerceIn(30, 255)
-        }
-
-        private fun cycleOpacity(context: Context) {
-            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val cur = prefs.getInt(KEY_ALPHA, 255)
-            val idx = ALPHA_STEPS.indexOfFirst { it == cur }.let { if (it < 0) 0 else it }
-            val next = ALPHA_STEPS[(idx + 1) % ALPHA_STEPS.size]
-            prefs.edit().putInt(KEY_ALPHA, next).apply()
-        }
+        /** شفافیت ثابت ۶۰٪ */
+        fun getAlpha(context: Context): Int = 153 // 0.6 * 255
 
         fun refreshAll(context: Context) {
             val mgr = AppWidgetManager.getInstance(context)
@@ -150,9 +135,7 @@ class AdelWidgetProvider : AppWidgetProvider() {
             val bg = Color.argb(alpha, 0x1A, 0x1F, 0x16)
             views.setInt(R.id.widget_root, "setBackgroundColor", bg)
 
-            val pct = (alpha * 100 / 255)
-            views.setTextViewText(R.id.btn_opacity, "شفاف $pct٪")
-            views.setOnClickPendingIntent(R.id.btn_opacity, opacityIntent(context))
+            views.setTextViewText(R.id.btn_opacity, "شفاف ۶۰٪")
 
             views.setOnClickPendingIntent(
                 R.id.btn_daily_report,
