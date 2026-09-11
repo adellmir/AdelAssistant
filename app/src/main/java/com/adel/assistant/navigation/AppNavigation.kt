@@ -27,6 +27,7 @@ import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
 import com.adel.assistant.ui.screens.InvoiceScreen
+import com.adel.assistant.data.InvoiceDraftStore
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
@@ -91,7 +92,11 @@ fun AppNavigation() {
                 onBack = { navController.popBackStack() },
                 initialDay = entry.arguments?.getString("day"),
                 initialMonth = entry.arguments?.getString("month"),
-                initialYear = entry.arguments?.getString("year")
+                initialYear = entry.arguments?.getString("year"),
+                onInvoice = { list ->
+                    InvoiceDraftStore.selectedProjects = list
+                    navController.navigate(Routes.FIN_PROJECT_INVOICE)
+                }
             )
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
