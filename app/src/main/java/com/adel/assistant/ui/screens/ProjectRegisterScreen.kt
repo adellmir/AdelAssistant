@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,7 +47,8 @@ fun ProjectRegisterScreen(
     onBack: () -> Unit,
     initialDay: String? = null,
     initialMonth: String? = null,
-    initialYear: String? = null
+    initialYear: String? = null,
+    onInvoice: (List<ProjectEntry>) -> Unit = {}
 ) {
     val context = LocalContext.current
     val today = remember { CalendarStore.todayJalali() }
@@ -217,7 +219,7 @@ fun ProjectRegisterScreen(
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
                     val text = FileExport.readAsCsvText(context, "projects")
-                    val uri = FileExport.exportTextToDocuments(context, "projects.csv", text, "text/csv")
+                    val uri = FileExport.exportTextToDocuments(context, "projects.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })
             }
@@ -326,6 +328,9 @@ fun ProjectRegisterScreen(
                                 editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
+                            }
+                            IconButton(onClick = { onInvoice(listOf(p)) }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
                             }
                             IconButton(onClick = { confirmDeleteFor = p }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFC2685E))
