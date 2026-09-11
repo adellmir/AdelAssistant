@@ -58,7 +58,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
             IconButton(onClick = {
                 val text = TunnelFinanceStore.exportCsvText(context)
-                val uri = FileExport.exportTextToDocuments(context, "tunnel_financial.csv", text)
+                val uri = FileExport.exportTextToDocuments(context, "tunnel_financial.csv", text, "text/csv")
                 statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا"
             }) { Icon(Icons.Filled.Settings, null, tint = Color(0xFFAAB697)) }
             TextButton(onClick = {
@@ -69,7 +69,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 
         Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryRow("جمع کل صورت‌وضعیت‌ها", formatMoney(summary.sumPayable))
+                SummaryRow("جمع کل درآمدها", formatMoney(summary.sumPayable))
                 SummaryRow("حسن‌انجام بلوکه‌شده (از آخرین اردیبهشت)", formatMoney(summary.blockedRetention))
                 SummaryRow("جمع کل دریافتی‌ها", formatMoney(summary.sumReceived))
                 HorizontalDivider(color = Color(0xFF3A4530))

@@ -178,6 +178,13 @@ object TunnelFinanceStore {
         return true
     }
 
+    fun updateReceipt(context: Context, dateCode: Int, amount: Double, receiveDate: String, note: String) {
+        val list = all(context).map {
+            if (it.dateCode == dateCode) it.copy(receiveAmount = amount, receiveDate = receiveDate, note = note) else it
+        }
+        writeAll(context, list)
+    }
+
     fun clearReceipt(context: Context, dateCode: Int) {
         val list = all(context).map {
             if (it.dateCode == dateCode) it.copy(receiveAmount = null, receiveDate = "") else it
@@ -192,16 +199,18 @@ object TunnelFinanceStore {
      */
     fun summary(context: Context): TunnelFinanceSummary {
         val rows = all(context)
-        val sumM = rows.sumOf { it.payable }
+        // جمع درآمدها (Q) نه صورت‌وضعیت
+        val sumIncome = rows.sumOf { it.income }
         val sumS = rows.mapNotNull { it.receiveAmount }.sum()
-        val lastOrdibehesht = rows.lastOrNull { it.month == 2 }
+        val lastOrdibehesht = rows.filter { it.month == 2 }.maxByOrNull { it.dateCode }
         val blocked = if (lastOrdibehesht != null) {
             rows.filter { it.dateCode >= lastOrdibehesht.dateCode }.sumOf { it.retention }
         } else {
             0.0
         }
-        val remaining = sumM - blocked - sumS
-        return TunnelFinanceSummary(sumM, sumS, blocked, remaining)
+        // مانده = جمع درآمدها − حسن‌انجام بلوکه − جمع دریافتی‌ها
+        val remaining = sumIncome - blocked - sumS
+        return TunnelFinanceSummary(sumIncome, sumS, blocked, remaining)
     }
 
     fun exportCsvText(context: Context): String {

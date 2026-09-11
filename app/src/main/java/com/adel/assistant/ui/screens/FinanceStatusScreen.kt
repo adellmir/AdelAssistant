@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -11,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
@@ -35,25 +37,25 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
     var toM by remember { mutableStateOf(tm.toString()) }
     var toD by remember { mutableStateOf(td.toString()) }
     var result by remember { mutableStateOf<StatusResult?>(null) }
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
-    fun key(y: String, m: String, d: String): String {
-        val yi = y.toIntOrNullFa() ?: 0
-        val mi = m.toIntOrNullFa() ?: 0
-        val di = d.toIntOrNullFa() ?: 0
-        return "%d%02d%02d".format(yi, mi, di)
-    }
+    fun ym(y: Int, m: Int) = y * 100 + m
 
     fun compute() {
         val fy = fromY.toIntOrNullFa() ?: 0
         val fm = fromM.toIntOrNullFa() ?: 1
-        val fd = fromD.toIntOrNullFa() ?: 1
         val tyi = toY.toIntOrNullFa() ?: 9999
         val tmi = toM.toIntOrNullFa() ?: 12
-        val td = toD.toIntOrNullFa() ?: 31
-        val fromKey = "%d%02d%02d".format(fy, fm, fd)
-        val toKey = "%d%02d%02d".format(tyi, tmi, td)
+        val fromYm = ym(fy, fm)
+        val toYm = ym(tyi, tmi)
 
-        val projects = ProjectStore.all(context).filter { it.dateSortKey in fromKey..toKey }
+        val projects = ProjectStore.all(context).filter { p ->
+            val y = p.year.toIntOrNullFa() ?: 0
+            val m = p.month.toIntOrNullFa() ?: 0
+            if (y <= 0 || m <= 0) return@filter false
+            if (p.name.isBlank() || p.name == "پروژه") return@filter false
+            ym(y, m) in fromYm..toYm
+        }
         val incomeProj = projects.sumOf { it.amount }
         val recvProjSettled = projects.sumOf { it.settled }
         val partial = CsvStore.readAll(context, "project_partial_payments").mapNotNull { row ->
@@ -61,11 +63,7 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
         }.sum()
         val recvProjAll = recvProjSettled + partial
 
-        fun monthInRange(y: Int, m: Int): Boolean {
-            val v = y * 100 + m
-            return v in (fy * 100 + fm)..(tyi * 100 + tmi)
-        }
-        val tRows = TunnelFinanceStore.all(context).filter { monthInRange(it.year, it.month) }
+        val tRows = TunnelFinanceStore.all(context).filter { ym(it.year, it.month) in fromYm..toYm }
         val incomeTun = tRows.sumOf { it.income }
         val recvTun = tRows.mapNotNull { it.receiveAmount }.sum()
 
@@ -80,48 +78,33 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState())
+        modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp).verticalScroll(rememberScrollState())
     ) {
         ScreenTopBar(title = "وضعیت مالی", color = color, onBack = onBack)
         Text("بازه تاریخ (شمسی)", color = TextSecondary, style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(6.dp))
-        Text("از تاریخ", color = TextPrimary)
+        Text("از", color = TextPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(8.dp))
-        Text("تا تاریخ", color = TextPrimary)
+        Text("تا", color = TextPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(toD, { toD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(toD, { toD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { compute() },
-            colors = ButtonDefaults.buttonColors(containerColor = color),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("محاسبه") }
-
+        Button(onClick = { compute() }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) {
+            Text("محاسبه")
+        }
         result?.let { r ->
             Spacer(Modifier.height(16.dp))
-            StatusCard("درآمد", listOf(
-                "پروژه‌ها" to r.incomeProject,
-                "تونل" to r.incomeTunnel,
-                "جمع" to r.incomeTotal
-            ), color)
+            StatusCard("درآمد", listOf("پروژه‌ها" to r.incomeProject, "تونل" to r.incomeTunnel, "جمع" to r.incomeTotal), color)
             Spacer(Modifier.height(12.dp))
-            StatusCard("دریافتی", listOf(
-                "پروژه‌ها" to r.recvProject,
-                "تونل" to r.recvTunnel,
-                "جمع" to r.recvTotal
-            ), color)
+            StatusCard("دریافتی", listOf("پروژه‌ها" to r.recvProject, "تونل" to r.recvTunnel, "جمع" to r.recvTotal), color)
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -144,11 +127,7 @@ private fun StatusCard(title: String, rows: List<Pair<String, Double>>, color: C
             rows.forEach { (label, value) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(label, color = TextSecondary)
-                    Text(
-                        formatMoney(value),
-                        color = TextPrimary,
-                        fontWeight = if (label == "جمع") FontWeight.Bold else FontWeight.Normal
-                    )
+                    Text(formatMoney(value), color = TextPrimary, fontWeight = if (label == "جمع") FontWeight.Bold else FontWeight.Normal)
                 }
             }
         }
