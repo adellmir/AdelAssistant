@@ -67,6 +67,37 @@ object CalendarStore {
         return "%d%02d%02d".format(py, pm, pd)
     }
 
+
+    private fun jalaliToGregorian(jy: Int, jm: Int, jd: Int): Triple<Int, Int, Int> {
+        val jy2 = jy + 1595
+        var days = -355668 + (365 * jy2) + (jy2 / 33) * 8 + ((jy2 % 33) + 3) / 4 + jd
+        days += if (jm < 7) (jm - 1) * 31 else ((jm - 7) * 30 + 186)
+        var gy = 400 * (days / 146097)
+        days %= 146097
+        if (days > 36524) {
+            days -= 1
+            gy += 100 * (days / 36524)
+            days %= 36524
+            if (days >= 365) days += 1
+        }
+        gy += 4 * (days / 1461)
+        days %= 1461
+        if (days > 365) {
+            gy += (days - 1) / 365
+            days = (days - 1) % 365
+        }
+        val gd = days + 1
+        val leap = (gy % 4 == 0 && gy % 100 != 0) || (gy % 400 == 0)
+        val salA = intArrayOf(0, 31, if (leap) 29 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+        var gm = 1
+        var v = gd
+        while (gm <= 12 && v > salA[gm]) {
+            v -= salA[gm]
+            gm++
+        }
+        return Triple(gy, gm, v)
+    }
+
     private fun gregorianToJalali(gy: Int, gm: Int, gd: Int): Triple<Int, Int, Int> {
         val gDaysInMonth = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
         val gy2 = if (gm > 2) gy + 1 else gy
