@@ -93,7 +93,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 when (stage) {
-                    0 -> "تبدیل به DXF"
+                    0 -> "ترسیم نقشه"
                     1 -> "دسته‌بندی کدها"
                     else -> "نتیجه"
                 },
@@ -177,6 +177,19 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
+                        onClick = {
+                            if (points.isNotEmpty()) {
+                                val kml = com.adel.assistant.data.UtmGeo.toKml(points, fileName)
+                                saveAndShareKml(context, kml, fileName)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("ذخیره و اشتراک KML")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
                         onClick = { stage = 1 },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp)
@@ -223,6 +236,27 @@ private fun saveAndShare(context: Context, content: String, originalName: String
         if (docUri == null) {
             // حتی اگر MediaStore شکست خورد، اشتراک از cache کار می‌کند
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+
+private fun saveAndShareKml(context: Context, content: String, originalName: String) {
+    try {
+        val base = originalName.substringBeforeLast(".").ifBlank { "map" }
+        val fileName = "${base}_map.kml"
+        FileExport.exportTextToDocuments(context, fileName, content, mimeType = "application/vnd.google-earth.kml+xml")
+        val cacheFile = File(context.cacheDir, fileName)
+        FileOutputStream(cacheFile).use { it.write(content.toByteArray(Charsets.UTF_8)) }
+        val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.google-earth.kml+xml"
+            putExtra(Intent.EXTRA_STREAM, shareUri)
+            putExtra(Intent.EXTRA_SUBJECT, fileName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "اشتراک KML"))
     } catch (e: Exception) {
         e.printStackTrace()
     }

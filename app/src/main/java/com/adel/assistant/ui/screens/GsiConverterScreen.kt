@@ -22,7 +22,7 @@ import com.adel.assistant.ui.theme.Background
 import java.io.File
 
 @Composable
-fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
+fun GsiConverterScreen(color: Color, onBack: () -> Unit, title: String = "مبدل") {
     val context = LocalContext.current
     var sourceName by remember { mutableStateOf("") }
     var sourceExt by remember { mutableStateOf("") }
@@ -51,12 +51,12 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
-        ScreenTopBar(title = "مبدل و ویرایشگر نقاط", color = color, onBack = onBack)
+        ScreenTopBar(title = title, color = color, onBack = onBack)
         Button(onClick = { openFile.launch(arrayOf("text/*", "application/octet-stream", "application/dxf")) }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) { Text("انتخاب فایل") }
         if (sourceName.isNotBlank()) Text("فایل: $sourceName", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            listOf("CSV", "TXT", "DAT", "DXF", "GSI", "IDX").forEach { ext -> FilterChip(selected = target == ext, onClick = { target = ext }, label = { Text(ext) }) }
+            listOf("CSV", "TXT", "DAT", "DXF", "GSI", "IDX", "KML").forEach { ext -> FilterChip(selected = target == ext, onClick = { target = ext }, label = { Text(ext) }) }
         }
         Text(message, style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

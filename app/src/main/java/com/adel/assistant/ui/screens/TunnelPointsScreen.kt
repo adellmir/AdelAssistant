@@ -3,6 +3,7 @@ package com.adel.assistant.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +18,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CsvStore
@@ -26,6 +32,7 @@ import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.TunnelReportStore.TunnelPoint
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
+import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -36,6 +43,7 @@ private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 @Composable
 fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
 
     var pointNo by remember { mutableStateOf("") }
     var km by remember { mutableStateOf("") }
@@ -186,18 +194,68 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         Text("نتایج", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(results) { p ->
+                val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
+                val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)
+                val gmaps = UtmGeo.googleMapsUrl(lat, lon)
+                val neshan = UtmGeo.neshanIntentUri(lat, lon)
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("نقطه ${p.pointNo} — کیلومتر ${p.km}", style = MaterialTheme.typography.bodySmall)
-                            Text(p.type, style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("نقطه ${p.pointNo} — کیلومتر ${p.km}", style = MaterialTheme.typography.bodySmall)
+                                Text(p.type, style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                            }
+                            IconButton(onClick = {
+                                autofillFromPoint(p)
+                                isEditMode = true
+                                editingOriginalNo = p.pointNo
+                            }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                            }
                         }
-                        IconButton(onClick = {
-                            autofillFromPoint(p)
-                            isEditMode = true
-                            editingOriginalNo = p.pointNo
-                        }) {
-                            Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Background,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { clipboard.setText(AnnotatedString(coordTxt)) }
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(coordTxt, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                Text("ضربه = کپی مختصات", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7C8A6B))
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = color.copy(alpha = 0.12f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(gmaps)))
+                                    } catch (_: Exception) {}
+                                }
+                        ) {
+                            Text("Google Maps", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodySmall, color = color)
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = color.copy(alpha = 0.12f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(neshan)))
+                                    } catch (_: Exception) {
+                                        try {
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_VIEW, Uri.parse(formatEn("https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)))
+                                            )
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                        ) {
+                            Text("مسیریاب نشان", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodySmall, color = color)
                         }
                     }
                 }

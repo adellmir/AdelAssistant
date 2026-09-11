@@ -18,6 +18,7 @@ object PointConverter {
         "dxf" -> dxf(points)
         "gsi" -> gsi(points)
         "idx" -> idx(points)
+        "kml" -> UtmGeo.toKml(points)
         else -> throw IllegalArgumentException("فرمت خروجی پشتیبانی نمی‌شود")
     }
 
