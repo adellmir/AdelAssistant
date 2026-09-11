@@ -1,6 +1,7 @@
 package com.adel.assistant.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -8,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.adel.assistant.ui.HomeScreen
+import com.adel.assistant.data.DeepLinkHolder
 import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.ChainageScreen
@@ -26,8 +28,6 @@ import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
-import com.adel.assistant.ui.screens.InvoiceScreen
-import com.adel.assistant.data.InvoiceDraftStore
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
@@ -39,6 +39,22 @@ import com.adel.assistant.ui.theme.WorkPrimary
 @Composable
 fun AppNavigation() {
     val navController: NavHostController = rememberNavController()
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val route = DeepLinkHolder.pendingRoute
+            if (route != null) {
+                DeepLinkHolder.pendingRoute = null
+                try {
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            kotlinx.coroutines.delay(300)
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
 
@@ -70,14 +86,7 @@ fun AppNavigation() {
 
         // ---- نقشه‌برداری: پروژه‌ها ----
         composable(Routes.SURVEY_PROJECT_REGISTER) {
-            ProjectRegisterScreen(
-                color = WorkPrimary,
-                onBack = { navController.popBackStack() },
-                onInvoice = { list ->
-                    InvoiceDraftStore.selectedProjects = list
-                    navController.navigate(Routes.FIN_PROJECT_INVOICE)
-                }
-            )
+            ProjectRegisterScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(
             route = "${Routes.SURVEY_PROJECT_REGISTER}/{day}/{month}/{year}",
@@ -92,11 +101,7 @@ fun AppNavigation() {
                 onBack = { navController.popBackStack() },
                 initialDay = entry.arguments?.getString("day"),
                 initialMonth = entry.arguments?.getString("month"),
-                initialYear = entry.arguments?.getString("year"),
-                onInvoice = { list ->
-                    InvoiceDraftStore.selectedProjects = list
-                    navController.navigate(Routes.FIN_PROJECT_INVOICE)
-                }
+                initialYear = entry.arguments?.getString("year")
             )
         }
         composable(Routes.SURVEY_PROJECT_EVENTS) {
@@ -134,14 +139,11 @@ fun AppNavigation() {
 
         // ---- مالی: پروژه‌ها ----
         composable(Routes.FIN_PROJECT_INVOICE) {
-            val draft = InvoiceDraftStore.selectedProjects
-            InvoiceScreen(
+            ViaClaudeScreen(
+                title = "صدور فاکتور",
                 color = FinancePrimary,
-                onBack = {
-                    InvoiceDraftStore.selectedProjects = emptyList()
-                    navController.popBackStack()
-                },
-                preselected = draft
+                description = "این صفحه در حال تکمیل است.",
+                onBack = { navController.popBackStack() }
             )
         }
         composable(Routes.FIN_PROJECT_RECEIPT) {

@@ -40,6 +40,7 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
+import com.adel.assistant.widget.AdelWidgetProvider
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.BorderColor
@@ -149,8 +150,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             if (it.title == title && it.createdAt == createdAt) it.copy(completed = true) else it
         }
         TaskStore.save(context, storeName, all)
-        val open = all.filter { !it.completed }.sortedByDescending { it.createdAt }
+        val open = all.filter { !it.completed }.sortedByDescending { it.createdAt }.take(3)
         if (storeName == "tunnel_tasks") tunnelTasks = open else projectTasks = open
+        try { AdelWidgetProvider.refreshAll(context) } catch (_: Exception) {}
     }
 
     val section = sections.getOrElse(sectionIndex) { sections.first() }
@@ -259,10 +261,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             // ---- تسک‌ها ----
             DashboardCard(title = "تسک‌های انجام‌نشده") {
                 Text(
-                    "پروژه‌ها",
+                    "تسک‌های پروژه ▶",
                     color = WorkPrimary,
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        onNavigate(com.adel.assistant.navigation.Routes.SURVEY_PROJECT_TASKS)
+                    }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 if (projectTasks.isEmpty()) {
@@ -299,10 +304,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    "تونل",
+                    "تسک‌های تونل ▶",
                     color = WorkPrimary,
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        onNavigate(com.adel.assistant.navigation.Routes.SURVEY_TUNNEL_TASKS)
+                    }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 if (tunnelTasks.isEmpty()) {

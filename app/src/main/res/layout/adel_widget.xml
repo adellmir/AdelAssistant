@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="#FF1A1F16"
+    android:layoutDirection="rtl">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_daily_report"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:layout_margin="3dp"
+            android:background="#FF3D5A3A"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:text="گزارش روزانه" />
+
+        <TextView
+            android:id="@+id/btn_project_register"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:layout_margin="3dp"
+            android:background="#FF4A6B3A"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:text="ثبت پروژه" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/title_project_tasks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
+        android:text="تسک‌های پروژه ▶"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="12sp" />
+
+    <LinearLayout android:id="@+id/row_pt1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/project_task_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/project_task_1_done" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انجام" android:textColor="#FF8FCB5A" android:textSize="11sp" android:padding="4dp" android:visibility="gone" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/row_pt2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/project_task_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/project_task_2_done" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انجام" android:textColor="#FF8FCB5A" android:textSize="11sp" android:padding="4dp" android:visibility="gone" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/row_pt3" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/project_task_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/project_task_3_done" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انجام" android:textColor="#FF8FCB5A" android:textSize="11sp" android:padding="4dp" android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/title_tunnel_tasks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
+        android:text="تسک‌های تونل ▶"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="12sp" />
+
+    <LinearLayout android:id="@+id/row_tt1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/tunnel_task_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/tunnel_task_1_done" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انجام" android:textColor="#FF8FCB5A" android:textSize="11sp" android:padding="4dp" android:visibility="gone" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/row_tt2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/tunnel_task_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/tunnel_task_2_done" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انجام" android:textColor="#FF8FCB5A" android:textSize="11sp" android:padding="4dp" android:visibility="gone" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/row_tt3" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/tunnel_task_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/tunnel_task_3_done" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="انجام" android:textColor="#FF8FCB5A" android:textSize="11sp" android:padding="4dp" android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/title_upcoming"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
+        android:text="برنامه کاری پیش‌رو"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="12sp" />
+
+    <TextView android:id="@+id/upcoming_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/upcoming_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/upcoming_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+</LinearLayout>

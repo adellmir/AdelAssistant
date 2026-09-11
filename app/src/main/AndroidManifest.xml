@@ -17,6 +17,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:label="@string/app_name"
             android:theme="@style/Theme.AdelAssistant">
             <intent-filter>
@@ -24,6 +25,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".widget.AdelWidgetProvider"
+            android:exported="true"
+            android:label="ویجت عادل">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.adel.assistant.widget.COMPLETE_TASK" />
+                <action android:name="com.adel.assistant.widget.REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/adel_widget_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
