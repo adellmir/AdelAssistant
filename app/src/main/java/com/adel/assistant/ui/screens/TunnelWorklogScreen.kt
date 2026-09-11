@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.input.KeyboardType
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.TunnelFinanceStore
@@ -40,6 +40,7 @@ import com.adel.assistant.ui.theme.Surface as SurfaceColor
 @Composable
 fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val today = remember { CalendarStore.todayJalali() }
 
     var year by remember { mutableStateOf(today.first.toString()) }
@@ -53,7 +54,6 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     var cameraTimeDed by remember { mutableStateOf("0") }
     var surveyor by remember { mutableStateOf("0") }
     var note by remember { mutableStateOf("") }
-    var adjustment by remember { mutableStateOf("0") }
     var editingCode by remember { mutableStateOf<Int?>(null) }
     var statusMsg by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
@@ -66,7 +66,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         year = today.first.toString(); month = today.second.toString()
         days = ""; unitPrice = TunnelFinanceStore.lastUnitPrice(context).let { if (it > 0) it.toLong().toString() else "" }
         lunchDed = "0"; overtime = "0"; timesheetDed = "0"; cameraDed = "0"; cameraTimeDed = "0"
-        surveyor = "0"; note = ""; editingCode = null; adjustment = "0"
+        surveyor = "0"; note = ""; editingCode = null
     }
     BackHandler(enabled = editingCode != null) { clearForm() }
 
@@ -90,17 +90,16 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         if (d < 0 || d > 31) { statusMsg = "روز باید بین ۰ تا ۳۱ باشد"; return }
         val code = editingCode ?: TunnelMonthRow.makeDateCode(y, m)
         val existing = TunnelFinanceStore.all(context).firstOrNull { it.dateCode == code }
-        val adj = adjustment.toDoubleOrNullFa() ?: 0.0
         val row = TunnelMonthRow(
             dateCode = code,
             days = d,
             unitPrice = c,
-            lunchDeduction = 0.0,
-            overtimeAdd = adj,
-            timesheetDeduction = 0.0,
-            cameraDeduction = 0.0,
-            cameraTimeDeduction = 0.0,
-            surveyorPay = existing?.surveyorPay ?: 0.0,
+            lunchDeduction = lunchDed.toDoubleOrNullFa() ?: 0.0,
+            overtimeAdd = overtime.toDoubleOrNullFa() ?: 0.0,
+            timesheetDeduction = timesheetDed.toDoubleOrNullFa() ?: 0.0,
+            cameraDeduction = cameraDed.toDoubleOrNullFa() ?: 0.0,
+            cameraTimeDeduction = cameraTimeDed.toDoubleOrNullFa() ?: 0.0,
+            surveyorPay = surveyor.toDoubleOrNullFa() ?: 0.0,
             receiveDate = existing?.receiveDate ?: "",
             receiveAmount = existing?.receiveAmount,
             note = note.ifBlank { existing?.note ?: "" }
@@ -112,11 +111,15 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
 
     val dPrev = days.toDoubleOrNullFa()
     val cPrev = unitPrice.toDoubleOrNullFa()
-    val adjPrev = adjustment.toDoubleOrNullFa() ?: 0.0
     val preview = if (dPrev != null && cPrev != null) {
         TunnelMonthRow(
             dateCode = 0, days = dPrev, unitPrice = cPrev,
-            overtimeAdd = adjPrev
+            lunchDeduction = lunchDed.toDoubleOrNullFa() ?: 0.0,
+            overtimeAdd = overtime.toDoubleOrNullFa() ?: 0.0,
+            timesheetDeduction = timesheetDed.toDoubleOrNullFa() ?: 0.0,
+            cameraDeduction = cameraDed.toDoubleOrNullFa() ?: 0.0,
+            cameraTimeDeduction = cameraTimeDed.toDoubleOrNullFa() ?: 0.0,
+            surveyorPay = surveyor.toDoubleOrNullFa() ?: 0.0
         )
     } else null
 
@@ -133,22 +136,41 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false
                     val text = TunnelFinanceStore.exportCsvText(context)
-                    val uri = FileExport.exportTextToDocuments(context, "Tunel-financial.csv", text, "text/csv")
+                    val uri = FileExport.exportTextToDocuments(context, "Tunel-financial.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خروجی"
                 })
             }
         }
 
-        val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
+                keyboardOptions = numKb)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("روز کارکرد") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = it }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("روز کارکرد") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = it }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
         }
-        OutlinedTextField(value = adjustment, onValueChange = { adjustment = it }, label = { Text("کسر/اضافه") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(value = lunchDed, onValueChange = { lunchDed = it }, label = { Text("کسر نهاری") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = overtime, onValueChange = { overtime = it }, label = { Text("اضافه تایم") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(value = timesheetDed, onValueChange = { timesheetDed = it }, label = { Text("کسر تایم‌شیت") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = cameraDed, onValueChange = { cameraDed = it }, label = { Text("کسر دوربین") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(value = cameraTimeDed, onValueChange = { cameraTimeDed = it }, label = { Text("کسر تایم دوربین") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = surveyor, onValueChange = { surveyor = it }, label = { Text("نقشه‌بردار") }, modifier = Modifier.weight(1f))
+        }
         OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 
         preview?.let { p ->
@@ -183,7 +205,12 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 year = item.year.toString(); month = item.month.toString()
                                 days = item.days.toString(); unitPrice = item.unitPrice.toLong().toString()
-                                adjustment = item.overtimeAdd.let { v -> if (kotlin.math.abs(v - v.toLong()) < 1e-9) v.toLong().toString() else v.toString() }
+                                lunchDed = item.lunchDeduction.toLong().toString()
+                                overtime = item.overtimeAdd.toLong().toString()
+                                timesheetDed = item.timesheetDeduction.toLong().toString()
+                                cameraDed = item.cameraDeduction.toLong().toString()
+                                cameraTimeDed = item.cameraTimeDeduction.toLong().toString()
+                                surveyor = item.surveyorPay.toLong().toString()
                                 note = item.note; editingCode = item.dateCode
                             }, modifier = Modifier.size(28.dp)) { Icon(Icons.Filled.Edit, null, tint = TextMuted) }
                             IconButton(onClick = { confirmDelete = item }, modifier = Modifier.size(28.dp)) {

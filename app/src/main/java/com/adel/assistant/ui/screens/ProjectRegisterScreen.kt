@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,6 +53,7 @@ fun ProjectRegisterScreen(
     onInvoice: (List<ProjectEntry>) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val today = remember { CalendarStore.todayJalali() }
 
     var day by remember { mutableStateOf(initialDay?.takeIf { it.isNotBlank() } ?: today.third.toString()) }
@@ -226,21 +229,28 @@ fun ProjectRegisterScreen(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f))
+            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
+                keyboardOptions = numKb)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = hour, onValueChange = { hour = it }, label = { Text("ساعت") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = minute, onValueChange = { minute = it }, label = { Text("دقیقه") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = hour, onValueChange = { hour = it }, label = { Text("ساعت") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            OutlinedTextField(value = minute, onValueChange = { minute = it }, label = { Text("دقیقه") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
         }
 
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") })
-            OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
+                keyboardOptions = numKb)
+            OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
         }
         OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 

@@ -4,19 +4,18 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
-import kotlin.math.min
 
 data class InvoiceLine(
     val service: String,
-    val amount: Double, // ریال / واحد نمایش
+    val amount: Double,
     val note: String
 )
 
@@ -39,9 +38,8 @@ data class InvoiceData(
 object InvoiceExport {
 
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
-        val bytes = buildXlsx(data)
-        val name = "invoice_${data.letterNo.ifBlank { "draft" }}.xlsx"
-            .replace(" ", "_")
+        val bytes = buildFromTemplate(context, data)
+        val name = "invoice_${data.letterNo.ifBlank { "draft" }}.xlsx".replace(" ", "_")
         return FileExport.exportBytesToDocuments(
             context, name, bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -52,7 +50,6 @@ object InvoiceExport {
         val bytes = buildPdf(data)
         val name = "invoice_${data.letterNo.ifBlank { "draft" }}.pdf".replace(" ", "_")
         val uri = FileExport.exportBytesToDocuments(context, name, bytes, "application/pdf")
-        // share from cache copy
         try {
             val cache = File(context.cacheDir, name)
             cache.writeBytes(bytes)
@@ -63,106 +60,118 @@ object InvoiceExport {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(intent, "اشتراک فاکتور"))
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         return uri
     }
 
-    private fun esc(s: String): String =
-        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+    private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
+        val updates = mutableMapOf<String, Pair<String, Boolean>>()
+        // شماره نامه
+        updates["C7"] = data.letterNo to true
+        // کارفرمای محترم ...
+        updates["E7"] = data.employerTitle to true
 
-    private fun buildXlsx(data: InvoiceData): ByteArray {
-        val rows = mutableListOf<String>()
-        var r = 1
-        fun addRow(cells: List<Pair<String, Boolean>>) {
-            val sb = StringBuilder("""<row r="$r">""")
-            cells.forEachIndexed { idx, (v, isText) ->
-                val col = ('A'.code + idx).toChar()
-                val ref = "$col$r"
-                if (isText) {
-                    sb.append("""<c r="$ref" t="inlineStr"><is><t>${esc(v)}</t></is></c>""")
-                } else {
-                    sb.append("""<c r="$ref"><v>$v</v></c>""")
-                }
-            }
-            sb.append("</row>")
-            rows += sb.toString()
-            r++
+        val maxRows = 13 // rows 10..22
+        data.lines.take(maxRows).forEachIndexed { idx, line ->
+            val row = 10 + idx
+            updates["G$row"] = line.service to true
+            updates["D$row"] = formatAmount(line.amount) to true
+            updates["C$row"] = line.note to true
+        }
+        // clear unused sample rows content
+        for (row in (10 + data.lines.size).coerceAtMost(22)..22) {
+            updates["G$row"] = "" to true
+            updates["D$row"] = "" to true
+            updates["C$row"] = "" to true
         }
 
-        addRow(listOf("مهندس سید عادل پورمیر" to true))
-        addRow(listOf("نقشه بردار  تونل - راه - ساختمان - اراضی - سازه - UTM" to true))
-        addRow(listOf("کارکرد نقشه برداری" to true))
-        addRow(listOf("شماره: ${data.letterNo}" to true, data.dateLabel to true, data.employerTitle to true))
-        addRow(listOf("شرح خدمات" to true, "مبلغ ( ریال )" to true, "توضیحات" to true))
-        data.lines.forEach { line ->
-            addRow(listOf(
-                line.service to true,
-                formatPlain(line.amount) to false,
-                line.note to true
-            ))
-        }
-        // spacer rows to mimic template
-        repeat(maxOf(0, 8 - data.lines.size)) { addRow(listOf("" to true, "" to true, "" to true)) }
-        addRow(listOf("جمع کل" to true, formatPlain(data.total) to false, "شماره کارت جهت واریز" to true))
-        addRow(listOf("دریافتی" to true, formatPlain(data.received) to false, data.cardNo to true))
-        addRow(listOf("مانده پرداختی" to true, formatPlain(data.remaining) to false, data.iban to true))
-        addRow(listOf("E-MAIL: pourmir.surveyor@yahoo.com" to true))
-        addRow(listOf("لطفا پس از انجام پرداخت اطلاع رسانی بفرمایید                با سپاس" to true))
+        updates["D24"] = formatAmount(data.total) to true
+        updates["D25"] = formatAmount(data.received) to true
+        updates["D26"] = formatAmount(data.remaining) to true
+        updates["F25"] = data.cardNo to true
+        updates["F26"] = data.iban to true
 
-        val sheet = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<sheetData>
-${rows.joinToString("\n")}
-</sheetData>
-</worksheet>"""
-
-        val workbook = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="فاکتور" sheetId="1" r:id="rId1"/></sheets>
-</workbook>"""
-
-        val rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>"""
-
-        val wbRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-</Relationships>"""
-
-        val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-</Types>"""
-
-        val bos = ByteArrayOutputStream()
-        ZipOutputStream(bos).use { zos ->
-            fun put(path: String, body: String) {
-                zos.putNextEntry(ZipEntry(path))
-                zos.write(body.toByteArray(Charsets.UTF_8))
-                zos.closeEntry()
-            }
-            put("[Content_Types].xml", contentTypes)
-            put("_rels/.rels", rels)
-            put("xl/workbook.xml", workbook)
-            put("xl/_rels/workbook.xml.rels", wbRels)
-            put("xl/worksheets/sheet1.xml", sheet)
-        }
-        return bos.toByteArray()
+        val templateBytes = context.assets.open("invoice_template.xlsx").use { it.readBytes() }
+        return rewriteXlsx(templateBytes, updates)
     }
 
-    private fun formatPlain(v: Double): String {
-        return if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9) v.toLong().toString()
-        else String.format(java.util.Locale.US, "%.0f", v)
+    private fun formatAmount(v: Double): String {
+        val longVal = kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9
+        val raw = if (longVal) v.toLong().toString() else String.format(java.util.Locale.US, "%.0f", v)
+        val neg = raw.startsWith("-")
+        val digits = raw.removePrefix("-")
+        val sb = StringBuilder()
+        var i = digits.length
+        while (i > 0) {
+            val start = (i - 3).coerceAtLeast(0)
+            if (sb.isNotEmpty()) sb.insert(0, "/")
+            sb.insert(0, digits.substring(start, i))
+            i = start
+        }
+        return if (neg) "-$sb" else sb.toString()
+    }
+
+    private fun rewriteXlsx(templateBytes: ByteArray, updates: Map<String, Pair<String, Boolean>>): ByteArray {
+        val outBuffer = ByteArrayOutputStream()
+        ZipOutputStream(outBuffer).use { zos ->
+            ZipInputStream(templateBytes.inputStream()).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    val bytes = zis.readBytes()
+                    val name = entry.name
+                    zos.putNextEntry(ZipEntry(name))
+                    if (name == "xl/worksheets/sheet1.xml") {
+                        val xml = bytes.toString(Charsets.UTF_8)
+                        zos.write(applyCellUpdates(xml, updates).toByteArray(Charsets.UTF_8))
+                    } else {
+                        zos.write(bytes)
+                    }
+                    zos.closeEntry()
+                    entry = zis.nextEntry
+                }
+            }
+        }
+        return outBuffer.toByteArray()
+    }
+
+    private fun applyCellUpdates(xml: String, updates: Map<String, Pair<String, Boolean>>): String {
+        var result = xml
+        updates.forEach { (ref, pair) ->
+            val (value, isText) = pair
+            val cellRegex = Regex(
+                """<c r="$ref"([^>/]*?)(?:/>|>.*?</c>)""",
+                setOf(RegexOption.DOT_MATCHES_ALL)
+            )
+            val match = cellRegex.find(result)
+            val styleAttr = match?.groupValues?.get(1)?.let { attrs ->
+                Regex("""s="(\d+)"""").find(attrs)?.value?.let { " $it" } ?: attrs.trim().let {
+                    if (it.isNotBlank() && !it.startsWith(" ")) " $it" else if (it.isNotBlank()) it else ""
+                }
+            } ?: ""
+            // keep only style s="N"
+            val onlyStyle = Regex("""s="(\d+)"""").find(styleAttr)?.value?.let { " $it" } ?: ""
+            val escaped = value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            val newCell = if (isText) {
+                """<c r="$ref"$onlyStyle t="inlineStr"><is><t>$escaped</t></is></c>"""
+            } else {
+                """<c r="$ref"$onlyStyle><v>$value</v></c>"""
+            }
+            result = if (match != null) {
+                result.replaceRange(match.range, newCell)
+            } else {
+                result
+            }
+        }
+        return result
     }
 
     private fun buildPdf(data: InvoiceData): ByteArray {
         val doc = PdfDocument()
-        val pageWidth = 595 // A4
+        val pageWidth = 595
         val pageHeight = 842
         val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
         val page = doc.startPage(pageInfo)
@@ -181,8 +190,8 @@ ${rows.joinToString("\n")}
         }
         var y = 40f
         val right = pageWidth - 40f
-        fun t(text: String, paint: Paint, yy: Float = y) {
-            c.drawText(text, right, yy, paint)
+        fun t(text: String, paint: Paint) {
+            c.drawText(text, right, y, paint)
         }
         t("مهندس سید عادل پورمیر", title); y += 22
         t("نقشه بردار  تونل - راه - ساختمان - اراضی - سازه - UTM", small); y += 18
@@ -193,10 +202,8 @@ ${rows.joinToString("\n")}
         t("شرح خدمات          مبلغ (ریال)          توضیحات", body); y += 6
         c.drawLine(40f, y, right, y, linePaint); y += 18
         data.lines.forEach { line ->
-            val amt = formatMoney(line.amount)
-            t("${line.service}    $amt    ${line.note}", body)
+            t("${line.service}    ${formatMoney(line.amount)}    ${line.note}", body)
             y += 18
-            if (y > pageHeight - 120) return@forEach
         }
         y += 10
         c.drawLine(40f, y, right, y, linePaint); y += 20

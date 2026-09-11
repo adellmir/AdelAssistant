@@ -38,6 +38,19 @@
             android:textSize="12sp"
             android:textStyle="bold"
             android:text="ثبت پروژه" />
+
+        <TextView
+            android:id="@+id/btn_opacity"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:layout_margin="3dp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:background="#FF2A2F26"
+            android:textColor="#FFB8D48A"
+            android:textSize="11sp"
+            android:text="شفاف" />
     </LinearLayout>
 
     <TextView

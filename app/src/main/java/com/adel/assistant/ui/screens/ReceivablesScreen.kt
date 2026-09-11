@@ -59,7 +59,7 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var employer by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(0) } // 0 مانده 1 پرداخت‌شده
+    var tab by remember { mutableStateOf(0) }
     var all by remember { mutableStateOf(ProjectStore.all(context)) }
     var editing by remember { mutableStateOf<ProjectEntry?>(null) }
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -68,6 +68,7 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
         all = ProjectStore.all(context)
     }
 
+    // مبلغ پروژه به میلیون تومان ذخیره شده — محاسبات و نمایش بر همان مبنا
     val filtered = all.filter { p ->
         if (p.name.isBlank() || p.name == "پروژه") return@filter false
         val okName = name.isBlank() || p.name.contains(name, ignoreCase = true)
@@ -80,6 +81,11 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
     val totalWork = filtered.sumOf { it.amount }
     val totalReceived = filtered.sumOf { it.settled }
     val totalRemain = filtered.sumOf { it.remaining.coerceAtLeast(0.0) }
+
+    fun projectDate(p: ProjectEntry): String {
+        val parts = listOf(p.year, p.month, p.day).filter { it.isNotBlank() }
+        return if (parts.isEmpty()) "—" else parts.joinToString("/")
+    }
 
     Column(
         modifier = Modifier
@@ -123,9 +129,9 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("کارکرد: ${formatMoney(totalWork)}", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                Text("دریافتی: ${formatMoney(totalReceived)}", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                Text("مانده: ${formatMoney(totalRemain)}", style = MaterialTheme.typography.titleSmall, color = color)
+                Text("کارکرد: ${formatMoney(totalWork)} میلیون", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                Text("دریافتی: ${formatMoney(totalReceived)} میلیون", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                Text("مانده: ${formatMoney(totalRemain)} میلیون", style = MaterialTheme.typography.titleSmall, color = color)
             }
         }
 
@@ -133,18 +139,14 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
+                value = name, onValueChange = { name = it },
                 label = { Text("نام پروژه") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
+                modifier = Modifier.weight(1f), singleLine = true
             )
             OutlinedTextField(
-                value = employer,
-                onValueChange = { employer = it },
+                value = employer, onValueChange = { employer = it },
                 label = { Text("کارفرما") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
+                modifier = Modifier.weight(1f), singleLine = true
             )
         }
 
@@ -158,11 +160,7 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                 modifier = Modifier.weight(1f)
             ) { Text("جستجو") }
             OutlinedButton(
-                onClick = {
-                    name = ""
-                    employer = ""
-                    refresh()
-                },
+                onClick = { name = ""; employer = ""; refresh() },
                 modifier = Modifier.weight(1f)
             ) { Text("رفرش") }
         }
@@ -188,7 +186,12 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                                 color = TextPrimary
                             )
                             Text(
-                                "مبلغ: ${formatMoney(p.amount)} | دریافتی: ${formatMoney(p.settled)} | مانده: ${formatMoney(p.remaining)}",
+                                "تاریخ: ${projectDate(p)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                            Text(
+                                "مبلغ: ${formatMoney(p.amount)} م | دریافتی: ${formatMoney(p.settled)} م | مانده: ${formatMoney(p.remaining)} م",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
@@ -196,9 +199,7 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                         if (p.phone.isNotBlank()) {
                             IconButton(
                                 onClick = {
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phone}"))
-                                    )
+                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phone}")))
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
@@ -207,25 +208,19 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                             IconButton(
                                 onClick = {
                                     val msg =
-                                        "سلام، مانده مطالبه پروژه «${p.name}» برابر ${formatMoney(p.remaining)} می‌باشد. با سپاس"
+                                        "سلام، مانده مطالبه پروژه «${p.name}» برابر ${formatMoney(p.remaining)} میلیون تومان می‌باشد. با سپاس"
                                     val intent = Intent(Intent.ACTION_SENDTO).apply {
                                         data = Uri.parse("smsto:${p.phone}")
                                         putExtra("sms_body", msg)
                                     }
-                                    try {
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {
-                                    }
+                                    try { context.startActivity(intent) } catch (_: Exception) {}
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(Icons.Filled.Sms, contentDescription = "پیامک", tint = color)
                             }
                         }
-                        IconButton(
-                            onClick = { editing = p },
-                            modifier = Modifier.size(28.dp)
-                        ) {
+                        IconButton(onClick = { editing = p }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
                         }
                         if (tab == 0) {
@@ -233,10 +228,7 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                                 checked = false,
                                 onCheckedChange = { checked ->
                                     if (checked) {
-                                        ProjectStore.save(
-                                            context,
-                                            p.copy(settled = p.amount, remaining = 0.0)
-                                        )
+                                        ProjectStore.save(context, p.copy(settled = p.amount, remaining = 0.0))
                                         refresh()
                                     }
                                 }
@@ -263,11 +255,11 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                     OutlinedTextField(eName, { eName = it }, label = { Text("نام پروژه") }, singleLine = true)
                     OutlinedTextField(eEmployer, { eEmployer = it }, label = { Text("کارفرما") }, singleLine = true)
                     OutlinedTextField(
-                        eAmount, { eAmount = it }, label = { Text("مبلغ") },
+                        eAmount, { eAmount = it }, label = { Text("مبلغ (میلیون)") },
                         singleLine = true, keyboardOptions = numKb
                     )
                     OutlinedTextField(
-                        eSettled, { eSettled = it }, label = { Text("دریافتی") },
+                        eSettled, { eSettled = it }, label = { Text("دریافتی (میلیون)") },
                         singleLine = true, keyboardOptions = numKb
                     )
                     OutlinedTextField(
@@ -285,22 +277,15 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                     ProjectStore.save(
                         context,
                         p.copy(
-                            name = eName,
-                            employer = eEmployer,
-                            amount = amt,
-                            settled = set,
-                            remaining = remain,
-                            phone = ePhone,
-                            description = eDesc
+                            name = eName, employer = eEmployer, amount = amt,
+                            settled = set, remaining = remain, phone = ePhone, description = eDesc
                         )
                     )
                     editing = null
                     refresh()
                 }) { Text("ذخیره") }
             },
-            dismissButton = {
-                TextButton(onClick = { editing = null }) { Text("انصراف") }
-            }
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("انصراف") } }
         )
     }
 }

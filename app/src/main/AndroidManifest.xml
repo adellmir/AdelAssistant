@@ -34,6 +34,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.adel.assistant.widget.COMPLETE_TASK" />
                 <action android:name="com.adel.assistant.widget.REFRESH" />
+                <action android:name="com.adel.assistant.widget.CYCLE_OPACITY" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
