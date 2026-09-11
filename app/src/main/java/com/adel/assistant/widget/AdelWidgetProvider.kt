@@ -135,7 +135,6 @@ class AdelWidgetProvider : AppWidgetProvider() {
             val bg = Color.argb(alpha, 0x1A, 0x1F, 0x16)
             views.setInt(R.id.widget_root, "setBackgroundColor", bg)
 
-            views.setTextViewText(R.id.btn_opacity, "شفاف ۶۰٪")
 
             views.setOnClickPendingIntent(
                 R.id.btn_daily_report,

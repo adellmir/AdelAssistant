@@ -62,6 +62,7 @@ private fun utmToLatLon(x: Double, y: Double): Pair<Double, Double> {
 @Composable
 fun ChainageScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val clipboard = LocalClipboardManager.current
     var kmInput by remember { mutableStateOf("") }
 

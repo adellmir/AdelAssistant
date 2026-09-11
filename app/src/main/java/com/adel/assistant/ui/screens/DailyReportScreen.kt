@@ -49,6 +49,7 @@ private data class PreviewRow(
 @Composable
 fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     val today = remember { CalendarStore.todayJalali() }
     var day by remember { mutableStateOf(today.third.toString()) }
@@ -159,7 +160,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
                     val text = FileExport.readAsCsvText(context, "survey_tunnel_report")
-                    val uri = FileExport.exportTextToDocuments(context, "survey_tunnel_report.csv", text, "text/csv")
+                    val uri = FileExport.exportTextToDocuments(context, "survey_tunnel_report.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })
             }

@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,6 +41,7 @@ private data class Pt(val name: String, val x: Double, val y: Double)
 @Composable
 fun AreaScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     var nameInput by remember { mutableStateOf("") }
     var xInput by remember { mutableStateOf("") }
     var yInput by remember { mutableStateOf("") }
@@ -80,8 +83,10 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(nameInput, { nameInput = it }, label = { Text("نام") }, modifier = Modifier.weight(.8f), singleLine = true)
-            OutlinedTextField(xInput, { xInput = it }, label = { Text("X") }, modifier = Modifier.weight(1.2f), singleLine = true)
-            OutlinedTextField(yInput, { yInput = it }, label = { Text("Y") }, modifier = Modifier.weight(1.2f), singleLine = true)
+            OutlinedTextField(xInput, { xInput = it }, label = { Text("X") }, modifier = Modifier.weight(1.2f), singleLine = true,
+                keyboardOptions = numKb)
+            OutlinedTextField(yInput, { yInput = it }, label = { Text("Y") }, modifier = Modifier.weight(1.2f), singleLine = true,
+                keyboardOptions = numKb)
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -101,8 +106,8 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
             placeholder = { Text("هر خط: نام X Y   یا   X,Y") },
             minLines = 2,
             maxLines = 4,
-            modifier = Modifier.fillMaxWidth()
-        )
+            modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = numKb)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = {
                 val imported = parsePoints(bulkInput)
@@ -130,8 +135,10 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                     Row(modifier = Modifier.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text("${index + 1}", modifier = Modifier.width(22.dp).padding(top = 14.dp))
                         OutlinedTextField(name, { name = it; points = points.toMutableList().also { list -> list[index] = point.copy(name = it) } }, label = { Text("نام") }, modifier = Modifier.weight(.8f), singleLine = true)
-                        OutlinedTextField(x, { x = it; it.trim().replace(',', '.').toDoubleOrNull()?.let { v -> points = points.toMutableList().also { list -> list[index] = list[index].copy(x = v) }; result = null } }, label = { Text("X") }, modifier = Modifier.weight(1.1f), singleLine = true)
-                        OutlinedTextField(y, { y = it; it.trim().replace(',', '.').toDoubleOrNull()?.let { v -> points = points.toMutableList().also { list -> list[index] = list[index].copy(y = v) }; result = null } }, label = { Text("Y") }, modifier = Modifier.weight(1.1f), singleLine = true)
+                        OutlinedTextField(x, { x = it; it.trim().replace(',', '.').toDoubleOrNull()?.let { v -> points = points.toMutableList().also { list -> list[index] = list[index].copy(x = v) }; result = null } }, label = { Text("X") }, modifier = Modifier.weight(1.1f), singleLine = true,
+                keyboardOptions = numKb)
+                        OutlinedTextField(y, { y = it; it.trim().replace(',', '.').toDoubleOrNull()?.let { v -> points = points.toMutableList().also { list -> list[index] = list[index].copy(y = v) }; result = null } }, label = { Text("Y") }, modifier = Modifier.weight(1.1f), singleLine = true,
+                keyboardOptions = numKb)
                         IconButton(onClick = { points = points.toMutableList().also { it.removeAt(index) }; result = null }) { Icon(Icons.Default.Delete, "حذف") }
                     }
                 }

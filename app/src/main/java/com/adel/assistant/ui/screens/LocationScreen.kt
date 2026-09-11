@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -31,6 +33,7 @@ private data class GpsPoint(val name: String, val lat: Double, val lon: Double, 
 @Composable
 fun LocationScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     var points by remember { mutableStateOf(listOf<GpsPoint>()) }
     var pointName by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }

@@ -13,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ private val PERSIAN_MONTHS = listOf(
 @Composable
 fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: Int, month: Int, year: Int) -> Unit)? = null) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val today = remember { CalendarStore.todayJalali() }
     var year by remember { mutableStateOf(today.first) }
     var month by remember { mutableStateOf(today.second) }

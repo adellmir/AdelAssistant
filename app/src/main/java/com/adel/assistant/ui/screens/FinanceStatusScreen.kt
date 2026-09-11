@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +29,7 @@ import com.adel.assistant.ui.theme.TextSecondary
 @Composable
 fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val (ty, tm, td) = CalendarStore.todayJalali()
     var fromY by remember { mutableStateOf(ty.toString()) }
     var fromM by remember { mutableStateOf("1") }
@@ -49,17 +52,27 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
         val fd = fromD.toIntOrNullFa() ?: 1
         val tyi = toY.toIntOrNullFa() ?: 9999
         val tmi = toM.toIntOrNullFa() ?: 12
-        val td = toD.toIntOrNullFa() ?: 31
-        val fromKey = "%d%02d%02d".format(fy, fm, fd)
-        val toKey = "%d%02d%02d".format(tyi, tmi, td)
+        val tdi = toD.toIntOrNullFa() ?: 31
+        val fromKey = fy * 10000L + fm * 100L + fd
+        val toKey = tyi * 10000L + tmi * 100L + tdi
 
-        val projects = ProjectStore.all(context).filter { it.dateSortKey in fromKey..toKey }
-        // مبالغ پروژه به میلیون تومان ذخیره شده‌اند → در محاسبات وضعیت × ۱٬۰۰۰٬۰۰۰
+        // روز خالی = ۱ ؛ نام «پروژه»/خالی رد می‌شود
+        val projects = ProjectStore.all(context).filter { p ->
+            if (p.name.isBlank() || p.name == "پروژه") return@filter false
+            val y = p.year.toIntOrNullFa() ?: 1405
+            val m = p.month.toIntOrNullFa() ?: return@filter false
+            val d = p.day.toIntOrNullFa() ?: 1
+            val k = y * 10000L + m * 100L + d
+            k in fromKey..toKey
+        }
         val million = 1_000_000.0
         val incomeProj = projects.sumOf { it.amount } * million
         val recvProjSettled = projects.sumOf { it.settled } * million
         val partial = CsvStore.readAll(context, "project_partial_payments").mapNotNull { row ->
-            row.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
+            // مبلغ معمولاً ستون دوم است
+            row.drop(1).firstNotNullOfOrNull { cell ->
+                cell.replace(",", "").replace("/", "").toDoubleOrNull()
+            }
         }.sum() * million
         val recvProjAll = recvProjSettled + partial
 
@@ -93,16 +106,16 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text("از تاریخ", color = TextPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(8.dp))
         Text("تا تاریخ", color = TextPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(toD, { toD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            OutlinedTextField(toD, { toD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(12.dp))
         Button(
