@@ -1,6 +1,11 @@
 package com.adel.assistant.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.ContextCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,6 +64,65 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     var results by remember { mutableStateOf(listOf<TunnelPoint>()) }
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
+    var myLocationResult by remember { mutableStateOf<String?>(null) }
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasPermission = granted
+        if (granted) findNearestPoint()
+    }
+
+    fun findNearestPoint() {
+        if (!hasPermission) {
+            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            return
+        }
+        try {
+            val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+            var best: Location? = null
+            for (provider in lm.getProviders(true)) {
+                val loc = lm.getLastKnownLocation(provider) ?: continue
+                if (best == null || loc.accuracy < best!!.accuracy) best = loc
+            }
+            if (best == null) {
+                myLocationResult = "موقعیتی دریافت نشد؛ GPS را روشن کنید"
+                return
+            }
+            val pts = TunnelReportStore.allPoints(context)
+            if (pts.isEmpty()) {
+                myLocationResult = "نقطه تونل ثبت نشده"
+                return
+            }
+            var nearest = pts.first()
+            var minDist = Double.MAX_VALUE
+            pts.forEach { p ->
+                val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)
+                val d = FloatArray(1)
+                Location.distanceBetween(best!!.latitude, best!!.longitude, lat, lon, d)
+                if (d[0].toDouble() < minDist) {
+                    minDist = d[0].toDouble()
+                    nearest = p
+                }
+            }
+            results = listOf(nearest)
+            autofillFromPoint(nearest)
+            myLocationResult = formatEn(
+                "نزدیک‌ترین: نقطه %s — کیلومتر %.3f — فاصله حدود %.0f متر (دقت GPS تقریبی)",
+                nearest.pointNo, nearest.km, minDist
+            )
+        } catch (e: SecurityException) {
+            myLocationResult = "دسترسی موقعیت داده نشده"
+        } catch (e: Exception) {
+            myLocationResult = "خطا: ${e.message}"
+        }
+    }
+
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -191,6 +255,16 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { findNearestPoint() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("موقعیت من (نزدیک‌ترین نقطه)")
+        }
+        myLocationResult?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697), modifier = Modifier.padding(vertical = 4.dp))
+        }
+        Spacer(modifier = Modifier.height(6.dp))
         Text("نتایج", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(results) { p ->

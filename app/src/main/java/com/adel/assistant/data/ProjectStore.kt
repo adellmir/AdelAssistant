@@ -86,6 +86,14 @@ object ProjectStore {
         writeAll(context, list)
     }
 
+    /** لغو پرداخت‌شده — برگشت کامل به مانده */
+    fun markUnsettled(context: Context, row: String) {
+        val list = all(context).map {
+            if (it.row == row) it.copy(settled = 0.0, remaining = it.amount) else it
+        }
+        writeAll(context, list)
+    }
+
     fun search(context: Context, name: String, employer: String): List<ProjectEntry> {
         return all(context).filter {
             (name.isBlank() || it.name.contains(name)) &&

@@ -107,28 +107,19 @@ object DxfMapGenerator {
         pair(sb, 0, "SECTION")
         pair(sb, 2, "ENTITIES")
 
-        val byCode = points.groupBy { it.code }
-        byCode.forEach { (code, codePoints) ->
-            val setting = settings[code] ?: return@forEach
-            if (setting.category == CodeCategory.IGNORE) return@forEach
+        // خطوط: به‌ترتیب فایل (نه groupBy که ترتیب را برای کدهای پراکنده خراب کند)
+        writeAllLinesInOrder(sb, points, settings)
 
+        // نقاط
+        points.forEach { p ->
+            val setting = resolveSetting(settings, p.code) ?: return@forEach
+            if (setting.category != CodeCategory.POINT) return@forEach
             val layer = sanitizeLayer(
-                setting.layerName.ifBlank {
-                    if (setting.category == CodeCategory.LINE) "L-$code" else "P-$code"
-                }
+                setting.layerName.ifBlank { "P-${p.code}" }
             )
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
-
-            when (setting.category) {
-                CodeCategory.LINE -> writePolylinesAsLines(sb, codePoints, layer, color, setting.closeOnE)
-                CodeCategory.POINT -> {
-                    codePoints.forEach { p ->
-                        writePointSymbol(sb, p, layer, color)
-                        writePointLabel(sb, p, layer, color, setting)
-                    }
-                }
-                else -> {}
-            }
+            writePointSymbol(sb, p, layer, color)
+            writePointLabel(sb, p, layer, color, setting)
         }
 
         pair(sb, 0, "ENDSEC")
@@ -154,6 +145,64 @@ object DxfMapGenerator {
         pair(sb, 70, "0")
         pair(sb, 62, color.toString())
         pair(sb, 6, "CONTINUOUS")
+    }
+
+
+    private fun resolveSetting(settings: Map<String, CodeSetting>, code: String): CodeSetting? {
+        settings[code]?.let { return it }
+        val base = code.substringBefore(".").ifBlank { code }
+        settings[base]?.let { return it }
+        settings[code.lowercase()]?.let { return it }
+        settings[base.lowercase()]?.let { return it }
+        // تطبیق بدون توجه به نقطه انتهایی .E
+        val stripped = code.replace(Regex("""\.E$""", RegexOption.IGNORE_CASE), "")
+        return settings[stripped] ?: settings.entries.firstOrNull {
+            it.key.equals(code, true) || it.key.equals(base, true)
+        }?.value
+    }
+
+    private fun writeAllLinesInOrder(
+        sb: StringBuilder,
+        points: List<SurveyPoint>,
+        settings: Map<String, CodeSetting>
+    ) {
+        var current = mutableListOf<SurveyPoint>()
+        var currentLayer = "0"
+        var currentColor = 7
+        var closeOnE = false
+
+        fun flush() {
+            if (current.size >= 2) {
+                for (i in 0 until current.size - 1) {
+                    writeLine(sb, current[i], current[i + 1], currentLayer, currentColor)
+                }
+            } else if (current.size == 1) {
+                writePointSymbol(sb, current[0], currentLayer, currentColor)
+            }
+            current = mutableListOf()
+        }
+
+        points.forEach { p ->
+            val setting = resolveSetting(settings, p.code)
+            if (setting == null || setting.category != CodeCategory.LINE) {
+                flush()
+                return@forEach
+            }
+            val layer = sanitizeLayer(
+                setting.layerName.ifBlank { "L-${p.code.substringBefore(".")}" }
+            )
+            val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
+            // اگر لایه عوض شد، خط قبلی بسته شود
+            if (current.isNotEmpty() && (layer != currentLayer)) {
+                flush()
+            }
+            currentLayer = layer
+            currentColor = color
+            closeOnE = setting.closeOnE
+            current.add(p)
+            if (closeOnE && p.isEndOfLine()) flush()
+        }
+        flush()
     }
 
     private fun writePolylinesAsLines(
@@ -254,7 +303,7 @@ object DxfMapGenerator {
 
         pair(sb, 0, "TEXT")
         pair(sb, 8, layer)
-        pair(sb, 62, "250")
+        pair(sb, 62, "250")  // مشکی ثابت برای نوشته
         pair(sb, 10, fmt(p.x + 0.3))
         pair(sb, 20, fmt(p.y + 0.3))
         pair(sb, 30, fmt(p.z))

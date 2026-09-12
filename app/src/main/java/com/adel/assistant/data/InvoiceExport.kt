@@ -72,25 +72,28 @@ object InvoiceExport {
 
     private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
         val updates = linkedMapOf<String, Pair<String, Boolean>>()
-        updates["C7"] = data.letterNo to true
+        // C7: شماره فاکتور + شماره
+        updates["C7"] = "شماره فاکتور ${data.letterNo}".trim() to true
+        // E7: کارفرمای محترم + نام
         updates["E7"] = data.employerTitle to true
 
-        val maxRows = 13
+        val maxRows = 13 // E10..E22
         data.lines.take(maxRows).forEachIndexed { idx, line ->
             val row = 10 + idx
-            updates["G$row"] = line.service to true
-            updates["D$row"] = formatAmount(line.amount) to true
-            updates["C$row"] = line.note to true
+            updates["E$row"] = line.service to true   // شرح خدمات
+            updates["D$row"] = formatAmount(line.amount) to true  // مبلغ
+            updates["C$row"] = line.note to true      // توضیحات
         }
         for (row in (10 + data.lines.size).coerceAtMost(23)..22) {
-            updates["G$row"] = "" to true
+            updates["E$row"] = "" to true
             updates["D$row"] = "" to true
             updates["C$row"] = "" to true
         }
 
-        updates["D24"] = formatAmount(data.total) to true
-        updates["D25"] = formatAmount(data.received) to true
-        updates["D26"] = formatAmount(data.remaining) to true
+        updates["C24"] = formatAmount(data.total) to true
+        updates["C25"] = formatAmount(data.received) to true
+        updates["C26"] = formatAmount(data.remaining) to true
+        // کارت و شبا در قالب اگر سلول دارند
         updates["F25"] = data.cardNo to true
         updates["F26"] = data.iban to true
 
