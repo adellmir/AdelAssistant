@@ -222,7 +222,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             Text(it, style = MaterialTheme.typography.titleSmall, color = color)
         }
 
-        Spacer(Modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = if (satellite) Color(0xFF1A1A1A) else SurfaceColor,
@@ -339,7 +339,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 }
             }
         }
-        Spacer(Modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
     }
 
     if (showLayers && model != null) {
@@ -350,7 +350,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 LazyColumn {
                     items(model!!.layers.values.toList(), key = { it.name }) { layer ->
                         var expanded by remember(layer.name) { mutableStateOf(false) }
-                        Column(Modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
                                     checked = layer.visible,

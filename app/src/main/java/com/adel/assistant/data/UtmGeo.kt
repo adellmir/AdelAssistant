@@ -12,8 +12,26 @@ import kotlin.math.tan
 object UtmGeo {
     fun zoneToCentralMeridian(zone: Int): Double = (zone - 1) * 6.0 - 180.0 + 3.0
 
-    fun toLatLon(easting: Double, northing: Double, zone: Int = 40, northernHemisphere: Boolean = true): Pair<Double, Double> {
+    /** سازگاری با کدهای قبلی که نصف‌النهار مرکزی می‌دادند */
+    fun toLatLon(easting: Double, northing: Double, zoneCentralMeridian: Double = 57.0): Pair<Double, Double> {
+        // اگر عدد بین ۱ تا ۶۰ باشد به‌عنوان زون تفسیر می‌شود
+        val lon0 = if (zoneCentralMeridian in 1.0..60.0 && zoneCentralMeridian == zoneCentralMeridian.toInt().toDouble()) {
+            zoneToCentralMeridian(zoneCentralMeridian.toInt())
+        } else zoneCentralMeridian
+        return toLatLonZone(easting, northing, lon0)
+    }
+
+    fun toLatLon(easting: Double, northing: Double, zone: Int, northernHemisphere: Boolean = true): Pair<Double, Double> {
         val lon0 = zoneToCentralMeridian(zone)
+        return toLatLonZone(easting, northing, lon0, northernHemisphere)
+    }
+
+    private fun toLatLonZone(
+        easting: Double,
+        northing: Double,
+        lon0: Double,
+        northernHemisphere: Boolean = true
+    ): Pair<Double, Double> {
         val a = 6378137.0
         val f = 1 / 298.257223563
         val k0 = 0.9996
@@ -75,4 +93,34 @@ object UtmGeo {
             )
         return easting to northing
     }
+
+    fun googleMapsUrl(lat: Double, lon: Double): String =
+        "https://www.google.com/maps/search/?api=1&query=$lat,$lon"
+
+    fun neshanIntentUri(lat: Double, lon: Double): String {
+        val fallback = "https://nshn.ir/?lat=$lat&lng=$lon"
+        return "intent://nshn.ir/?lat=$lat&lng=$lon#Intent;scheme=http;package=org.rajman.neshan.traffic.tehran.navigator;S.browser_fallback_url=$fallback;end"
+    }
+
+    fun toKml(points: List<SurveyPoint>, documentName: String = "AdelAssistant", zone: Int = 40): String {
+        val sb = StringBuilder()
+        sb.appendLine("""<?xml version="1.0" encoding="UTF-8"?>""")
+        sb.appendLine("""<kml xmlns="http://www.opengis.net/kml/2.2">""")
+        sb.appendLine("<Document>")
+        sb.appendLine("<name>${escapeXml(documentName)}</name>")
+        points.forEach { p ->
+            val (lat, lon) = toLatLon(p.x, p.y, zone)
+            val name = escapeXml("${p.id} ${p.code}".trim())
+            sb.appendLine("<Placemark>")
+            sb.appendLine("<name>$name</name>")
+            sb.appendLine("<description>${escapeXml("Z=${p.z}")}</description>")
+            sb.appendLine("<Point><coordinates>$lon,$lat,${p.z}</coordinates></Point>")
+            sb.appendLine("</Placemark>")
+        }
+        sb.appendLine("</Document></kml>")
+        return sb.toString()
+    }
+
+    private fun escapeXml(s: String): String =
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 }
