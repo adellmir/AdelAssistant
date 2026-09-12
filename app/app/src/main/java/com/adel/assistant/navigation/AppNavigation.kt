@@ -20,6 +20,8 @@ import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
 import com.adel.assistant.ui.screens.ProjectRegisterScreen
 import com.adel.assistant.ui.screens.ReceivablesScreen
+import com.adel.assistant.ui.screens.InvoiceScreen
+import com.adel.assistant.data.InvoiceLaunch
 import com.adel.assistant.ui.screens.SimpleRecordScreen
 import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
@@ -123,11 +125,10 @@ fun AppNavigation() {
 
         // ---- مالی: پروژه‌ها ----
         composable(Routes.FIN_PROJECT_INVOICE) {
-            ViaClaudeScreen(
-                title = "صدور فاکتور",
+            InvoiceScreen(
                 color = FinancePrimary,
-                description = "این صفحه در حال تکمیل است.",
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                preselected = InvoiceLaunch.preselected.also { InvoiceLaunch.preselected = emptyList() }
             )
         }
         composable(Routes.FIN_PROJECT_RECEIPT) {
@@ -140,7 +141,14 @@ fun AppNavigation() {
             )
         }
         composable(Routes.FIN_PROJECT_RECEIVABLES) {
-            ReceivablesScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
+            ReceivablesScreen(
+                color = FinancePrimary,
+                onBack = { navController.popBackStack() },
+                onInvoice = { p ->
+                    InvoiceLaunch.preselected = listOf(p)
+                    navController.navigate(Routes.FIN_PROJECT_INVOICE)
+                }
+            )
         }
         composable(Routes.FIN_PROJECT_STATUS) {
             FinanceStatusScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
@@ -150,15 +158,6 @@ fun AppNavigation() {
         composable(Routes.TOOL_DXF) {
             DxfConverterScreen(onBack = { navController.popBackStack() })
         }
-        composable(Routes.TOOL_LINES) {
-            ViaClaudeScreen(
-                title = "ترسیم خطوط",
-                color = ToolPrimary,
-                description = "بازسازی خطوط پیوسته از روی ابر نقاط فعلاً از طریق چت با کلود انجام می‌شود.",
-                onBack = { navController.popBackStack() }
-            )
-        }
-
         composable(Routes.TOOL_DXF_PREVIEW) {
             DxfPreviewScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }

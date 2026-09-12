@@ -78,9 +78,8 @@ object AppMenu {
         tabs = listOf(
             MenuTab("", listOf(
                 MenuItem("تبدیل به DXF", Icons.Filled.Architecture, Routes.TOOL_DXF),
-                MenuItem("پیش‌نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
+                MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
                 MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
-                MenuItem("ترسیم خطوط", Icons.Filled.Timeline, Routes.TOOL_LINES),
                 MenuItem("مبدل GSI", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
                 MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),

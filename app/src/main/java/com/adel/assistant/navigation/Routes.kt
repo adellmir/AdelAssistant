@@ -22,7 +22,6 @@ object Routes {
     const val FIN_PROJECT_STATUS = "finance/project/status"
 
     const val TOOL_DXF = "tool/dxf"
-    const val TOOL_LINES = "tool/lines"
     const val TOOL_GSI = "tool/gsi"
     const val TOOL_LOCATION = "tool/location"
     const val TOOL_INTERPOLATE = "tool/interpolate"

@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +41,8 @@ fun TaskScreen(
     val context = LocalContext.current
     var tasks by remember { mutableStateOf(TaskStore.load(context, storeName)) }
     var newTask by remember { mutableStateOf("") }
+    var editingIndex by remember { mutableStateOf<Int?>(null) }
+    var editText by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
     var showCompleted by remember { mutableStateOf(true) }
 
@@ -170,6 +173,14 @@ fun TaskScreen(
                             )
                             IconButton(onClick = {
                                 if (originalIndex >= 0) {
+                                    editingIndex = originalIndex
+                                    editText = task.title
+                                }
+                            }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                            }
+                            IconButton(onClick = {
+                                if (originalIndex >= 0) {
                                     val updated = tasks.toMutableList()
                                     updated.removeAt(originalIndex)
                                     persist(updated)
@@ -182,5 +193,38 @@ fun TaskScreen(
                 }
             }
         }
+    }
+
+
+    if (editingIndex != null) {
+        AlertDialog(
+            onDismissRequest = { editingIndex = null },
+            title = { Text("ویرایش تسک") },
+            text = {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it },
+                    label = { Text("متن تسک") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val idx = editingIndex
+                    if (idx != null && editText.isNotBlank()) {
+                        val updated = tasks.toMutableList()
+                        if (idx in updated.indices) {
+                            updated[idx] = updated[idx].copy(title = editText.trim())
+                            persist(updated)
+                        }
+                    }
+                    editingIndex = null
+                }) { Text("ذخیره") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingIndex = null }) { Text("انصراف") }
+            }
+        )
     }
 }

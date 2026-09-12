@@ -16,6 +16,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ZoomOutMap
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.Satellite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,6 +65,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var distanceMsg by remember { mutableStateOf<String?>(null) }
+    var measureMode by remember { mutableStateOf(false) }
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) } // UTM x,y
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -176,48 +186,95 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             .background(Background)
             .padding(horizontal = 12.dp)
     ) {
-        ScreenTopBar(title = "پیش‌نمایش نقشه", color = color, onBack = onBack)
+        ScreenTopBar(title = "نمایش نقشه", color = color, onBack = onBack)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        // نوار ابزار فقط آیکون
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")) }) {
+                Icon(Icons.Filled.FolderOpen, contentDescription = "وارد کردن نقشه", tint = color)
+            }
+            IconButton(onClick = {
+                satellite = !satellite
+            }) {
+                Icon(
+                    Icons.Filled.Satellite,
+                    contentDescription = "ماهواره",
+                    tint = if (satellite) color else TextSecondary
+                )
+            }
+            IconButton(onClick = { requestMyLocation() }) {
+                Icon(Icons.Filled.MyLocation, contentDescription = "مکان من", tint = color)
+            }
+            IconButton(onClick = {
+                // زوم استاندارد ×۱.۲۵
+                val cx = canvasSize.x / 2f
+                val cy = canvasSize.y / 2f
+                val factor = 1.25f
+                val newScale = (scale * factor).coerceIn(0.000001f, 5000f)
+                offset = Offset(
+                    cx - (cx - offset.x) * (newScale / scale),
+                    cy - (cy - offset.y) * (newScale / scale)
+                )
+                scale = newScale
+            }) {
+                Icon(Icons.Filled.Add, contentDescription = "بزرگ‌نمایی", tint = color)
+            }
+            IconButton(onClick = {
+                val cx = canvasSize.x / 2f
+                val cy = canvasSize.y / 2f
+                val factor = 0.8f
+                val newScale = (scale * factor).coerceIn(0.000001f, 5000f)
+                offset = Offset(
+                    cx - (cx - offset.x) * (newScale / scale),
+                    cy - (cy - offset.y) * (newScale / scale)
+                )
+                scale = newScale
+            }) {
+                Icon(Icons.Filled.Remove, contentDescription = "کوچک‌نمایی", tint = color)
+            }
+            IconButton(onClick = { model?.let { fitToModel(it, canvasSize.x, canvasSize.y) } }) {
+                Icon(Icons.Filled.ZoomOutMap, contentDescription = "Fit", tint = color)
+            }
+            IconButton(
+                onClick = {
+                    measureMode = !measureMode
+                    if (measureMode) {
+                        measureA = null; measureB = null
+                        distanceMsg = "حالت اندازه‌گیری: نقطه اول را بزن"
+                    } else {
+                        distanceMsg = null
+                        measureA = null; measureB = null
+                    }
+                }
+            ) {
+                Icon(
+                    Icons.Filled.Straighten,
+                    contentDescription = "اندازه‌گیری",
+                    tint = if (measureMode) color else TextSecondary
+                )
+            }
+            IconButton(onClick = { showLayers = true }, enabled = model != null) {
+                Icon(Icons.Filled.Layers, contentDescription = "لایه‌ها", tint = color)
+            }
+        }
+
+        // زون فقط وقتی ماهواره روشن است
+        if (satellite) {
             OutlinedTextField(
                 value = zoneText,
                 onValueChange = { zoneText = it.filter { ch -> ch.isDigit() }.take(2) },
                 label = { Text("زون UTM") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.width(100.dp),
+                modifier = Modifier.width(120.dp),
                 singleLine = true
             )
-            Button(
-                onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")) },
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.weight(1f)
-            ) { Text("وارد کردن نقشه") }
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp)
-        ) {
-            FilterChip(
-                selected = satellite,
-                onClick = { satellite = !satellite },
-                label = { Text(if (satellite) "ماهواره روشن" else "ماهواره") }
-            )
-            OutlinedButton(onClick = { requestMyLocation() }) { Text("مکان من") }
-            OutlinedButton(onClick = {
-                model?.let { fitToModel(it, canvasSize.x, canvasSize.y) }
-            }) { Text("Fit") }
-            OutlinedButton(onClick = { showLayers = true }, enabled = model != null) { Text("لایه‌ها") }
         }
 
         Text(message, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-        Text(
-            "اندازه: نقطه اول و آخر را روی نقشه بزن — فاصله افقی",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
         distanceMsg?.let {
             Text(it, style = MaterialTheme.typography.titleSmall, color = color)
         }
@@ -239,17 +296,19 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             offset += pan
                         }
                     }
-                    .pointerInput(model, scale, offset) {
+                    .pointerInput(model, scale, offset, measureMode) {
                         detectTapGestures { tap ->
+                            if (!measureMode) return@detectTapGestures
                             val (wx, wy) = screenToWorld(tap.x, tap.y)
                             if (measureA == null || measureB != null) {
                                 measureA = wx to wy
                                 measureB = null
-                                distanceMsg = "نقطه اول انتخاب شد — نقطه دوم را بزن"
+                                distanceMsg = "نقطه اول — حالا نقطه دوم را بزن"
                             } else {
                                 measureB = wx to wy
                                 val d = DxfParser.horizontalDistance(measureA!!.first, measureA!!.second, wx, wy)
                                 distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
+                                measureMode = false
                             }
                         }
                     }

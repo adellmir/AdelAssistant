@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +33,11 @@ import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 
 @Composable
-fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
+fun ReceivablesScreen(
+    color: Color,
+    onBack: () -> Unit,
+    onInvoice: (ProjectEntry) -> Unit = {}
+) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var employer by remember { mutableStateOf("") }
@@ -128,6 +133,9 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
                             }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Sms, contentDescription = "پیامک", tint = color)
                             }
+                        }
+                        IconButton(onClick = { onInvoice(p) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
                         }
                         IconButton(onClick = { editing = p }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
