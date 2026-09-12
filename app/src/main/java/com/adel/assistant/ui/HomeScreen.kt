@@ -1,3 +1,5 @@
+import androidx.compose.material.icons.filled.SmartToy
+import com.adel.assistant.ui.theme.ToolPrimary
 package com.adel.assistant.ui
 
 import androidx.compose.foundation.BorderStroke
@@ -33,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.R
+import com.adel.assistant.navigation.Routes
 import com.adel.assistant.data.AppMenu
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.MenuItem
@@ -423,6 +426,25 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             color = if (selected) s.color else TextMuted
                         )
                     }
+                }
+                // دستیار هوشمند — آیتم چهارم نوار پایین
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onNavigate(Routes.ASSISTANT) },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Filled.SmartToy,
+                        contentDescription = "دستیار",
+                        tint = ToolPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "دستیار",
+                        fontSize = 11.sp,
+                        color = ToolPrimary
+                    )
                 }
             }
         }

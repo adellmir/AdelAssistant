@@ -30,6 +30,7 @@ import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
+import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
@@ -46,6 +47,13 @@ fun AppNavigation() {
 
         composable(Routes.HOME) {
             HomeScreen(onNavigate = { route -> navController.navigate(route) })
+        }
+        composable(Routes.ASSISTANT) {
+            AssistantScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) }
+            )
         }
 
         // ---- نقشه‌برداری: تونل ----
