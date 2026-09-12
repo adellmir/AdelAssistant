@@ -71,17 +71,35 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                 PackageManager.PERMISSION_GRANTED
         )
     }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasPermission = granted
-        if (granted) findNearestPoint()
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val text = input.bufferedReader().readText()
+                    CsvStore.importRawText(context, "tunnel_points", text)
+                    statusMsg = "فایل نقاط با موفقیت وارد شد"
+                }
+            } catch (e: Exception) { statusMsg = "خطا در وارد کردن فایل" }
+        }
+    }
+
+    fun clearForm() {
+        pointNo = ""; km = ""; x = ""; y = ""; z = ""; elevDiff = ""; slope = ""; description = ""
+        isEditMode = false; editingOriginalNo = null
+        results = emptyList()
+        statusMsg = ""
+    }
+
+    fun autofillFromPoint(p: TunnelPoint) {
+        pointNo = p.pointNo; km = p.km.toString()
+        x = formatEn("%.3f", p.x); y = formatEn("%.3f", p.y); z = formatEn("%.3f", p.z)
+        elevDiff = p.elevDiff; slope = p.slope; description = p.type
     }
 
     fun findNearestPoint() {
         if (!hasPermission) {
-            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            return
+            return // permissionLauncher handles request below
         }
         try {
             val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
@@ -123,31 +141,22 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasPermission = granted
+        if (granted) findNearestPoint()
+    }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    val text = input.bufferedReader().readText()
-                    CsvStore.importRawText(context, "tunnel_points", text)
-                    statusMsg = "فایل نقاط با موفقیت وارد شد"
-                }
-            } catch (e: Exception) { statusMsg = "خطا در وارد کردن فایل" }
+    fun requestNearestPoint() {
+        if (!hasPermission) {
+            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        } else {
+            findNearestPoint()
         }
     }
 
-    fun clearForm() {
-        pointNo = ""; km = ""; x = ""; y = ""; z = ""; elevDiff = ""; slope = ""; description = ""
-        isEditMode = false; editingOriginalNo = null
-        results = emptyList()
-        statusMsg = ""
-    }
 
-    fun autofillFromPoint(p: TunnelPoint) {
-        pointNo = p.pointNo; km = p.km.toString()
-        x = formatEn("%.3f", p.x); y = formatEn("%.3f", p.y); z = formatEn("%.3f", p.z)
-        elevDiff = p.elevDiff; slope = p.slope; description = p.type
-    }
 
     fun search() {
         val byNo = if (pointNo.isNotBlank()) TunnelReportStore.findByPointNo(context, pointNo) else null
@@ -256,7 +265,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedButton(
-            onClick = { findNearestPoint() },
+            onClick = { requestNearestPoint() },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("موقعیت من (نزدیک‌ترین نقطه)")

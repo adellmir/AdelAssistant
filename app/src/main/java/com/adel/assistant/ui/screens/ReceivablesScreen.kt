@@ -58,7 +58,7 @@ fun ReceivablesScreen(color: Color, onBack: () -> Unit) {
     val totalReceived = filtered.sumOf { it.settled }
     val totalRemain = filtered.sumOf { it.remaining.coerceAtLeast(0.0) }
 
-    Column(Modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
         ScreenTopBar(title = "مطالبات کلی", color = color, onBack = onBack)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
