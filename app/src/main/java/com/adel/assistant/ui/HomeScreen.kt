@@ -1,5 +1,3 @@
-import androidx.compose.material.icons.filled.SmartToy
-import com.adel.assistant.ui.theme.ToolPrimary
 package com.adel.assistant.ui
 
 import androidx.compose.foundation.BorderStroke
@@ -35,7 +33,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.R
-import com.adel.assistant.navigation.Routes
 import com.adel.assistant.data.AppMenu
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.MenuItem
@@ -56,6 +53,10 @@ import com.adel.assistant.ui.theme.WorkPrimary
 import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Locale
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SmartToy
+import com.adel.assistant.navigation.Routes
+import com.adel.assistant.ui.theme.ToolPrimary
 
 private fun timeBasedGreeting(): String {
     val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -427,7 +428,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         )
                     }
                 }
-                // دستیار هوشمند — آیتم چهارم نوار پایین
                 Column(
                     modifier = Modifier
                         .weight(1f)

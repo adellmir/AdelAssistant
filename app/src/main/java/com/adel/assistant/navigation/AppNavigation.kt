@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.adel.assistant.ui.HomeScreen
+import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.DxfPreviewScreen
 import com.adel.assistant.ui.screens.TotalStationDumpScreen
@@ -30,7 +31,6 @@ import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.ViaClaudeScreen
-import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
