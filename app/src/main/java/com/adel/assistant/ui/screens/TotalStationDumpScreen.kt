@@ -322,7 +322,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                         .fillMaxWidth()
                         .clickable { selected = dev }
                 ) {
-                    Column(Modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Text(name, color = TextPrimary)
                         Text(dev.address, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
