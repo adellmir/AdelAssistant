@@ -57,7 +57,7 @@ import kotlin.math.*
 @Composable
 fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
-    var model by remember { mutableStateOf<DxfModel?>(null) }
+    var models by remember { mutableStateOf<List<DxfModel>>(emptyList()) }
     var message by remember { mutableStateOf("نقشه DXF را وارد کن") }
     var zoneText by remember { mutableStateOf("40") }
     var satellite by remember { mutableStateOf(false) }
@@ -75,16 +75,26 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
 
     val zone = zoneText.toIntOrNull()?.coerceIn(1, 60) ?: 40
 
-    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+
+    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
         try {
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-            val m = DxfParser.parse(text)
-            model = m
-            measureA = null; measureB = null; distanceMsg = null
-            fitTrigger++
-            message = if (m.isEmpty) "موجودیتی پیدا نشد" else
-                "خط: ${m.lines.size} | نقطه: ${m.circles.size} | متن: ${m.texts.size}"
+            val added = mutableListOf<DxfModel>()
+            uris.forEach { uri ->
+                val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                val m = DxfParser.parse(text)
+                if (!m.isEmpty) added += m
+            }
+            if (added.isEmpty()) {
+                message = "موجودیتی پیدا نشد"
+            } else {
+                models = models + added
+                measureA = null; measureB = null; distanceMsg = null
+                fitTrigger++
+                val totalL = models.sumOf { it.lines.size }
+                val totalC = models.sumOf { it.circles.size }
+                message = "${models.size} فایل | خط: $totalL | نقطه: $totalC"
+            }
         } catch (e: Exception) {
             message = "خطا در خواندن DXF: ${e.message}"
         }
@@ -126,13 +136,23 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         else readGps()
     }
 
-    fun fitToModel(m: DxfModel, w: Float, h: Float) {
-        if (w <= 0f || h <= 0f) return
-        val sx = (w * 0.9f) / m.width().toFloat()
-        val sy = (h * 0.9f) / m.height().toFloat()
+    fun fitAll(w: Float, h: Float) {
+        if (w <= 0f || h <= 0f || models.isEmpty()) return
+        var minX = Double.POSITIVE_INFINITY
+        var minY = Double.POSITIVE_INFINITY
+        var maxX = Double.NEGATIVE_INFINITY
+        var maxY = Double.NEGATIVE_INFINITY
+        models.forEach { m ->
+            minX = min(minX, m.minX); minY = min(minY, m.minY)
+            maxX = max(maxX, m.maxX); maxY = max(maxY, m.maxY)
+        }
+        val width = (maxX - minX).coerceAtLeast(1.0)
+        val height = (maxY - minY).coerceAtLeast(1.0)
+        val sx = (w * 0.9f) / width.toFloat()
+        val sy = (h * 0.9f) / height.toFloat()
         scale = min(sx, sy).coerceIn(0.000001f, 1000f)
-        val cx = ((m.minX + m.maxX) / 2.0).toFloat()
-        val cy = ((m.minY + m.maxY) / 2.0).toFloat()
+        val cx = ((minX + maxX) / 2.0).toFloat()
+        val cy = ((minY + maxY) / 2.0).toFloat()
         offset = Offset(w / 2f - cx * scale, h / 2f + cy * scale)
     }
 
@@ -150,12 +170,13 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     }
 
     // load satellite tiles when enabled
-    LaunchedEffect(satellite, model, scale, offset, canvasSize, zone, fitTrigger) {
-        if (!satellite || model == null || canvasSize.x <= 0f) {
+    LaunchedEffect(satellite, models, scale, offset, canvasSize, zone, fitTrigger) {
+        if (!satellite || models.isEmpty() || canvasSize.x <= 0f) {
             tiles = emptyList()
             return@LaunchedEffect
         }
-        val m = model!!
+        kotlinx.coroutines.delay(350) // debounce تا زوم/جابجایی تمام شود
+        val m = models.first()
         val corners = listOf(
             screenToWorld(0f, 0f),
             screenToWorld(canvasSize.x, 0f),
@@ -175,9 +196,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         tiles = loaded
     }
 
-    LaunchedEffect(fitTrigger, model, canvasSize) {
-        val m = model ?: return@LaunchedEffect
-        if (canvasSize.x > 0f) fitToModel(m, canvasSize.x, canvasSize.y)
+    LaunchedEffect(fitTrigger, models, canvasSize) {
+        if (models.isNotEmpty() && canvasSize.x > 0f) fitAll(canvasSize.x, canvasSize.y)
     }
 
     Column(
@@ -194,7 +214,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")) }) {
+            IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream")) }) {
                 Icon(Icons.Filled.FolderOpen, contentDescription = "وارد کردن نقشه", tint = color)
             }
             IconButton(onClick = {
@@ -236,7 +256,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }) {
                 Icon(Icons.Filled.Remove, contentDescription = "کوچک‌نمایی", tint = color)
             }
-            IconButton(onClick = { model?.let { fitToModel(it, canvasSize.x, canvasSize.y) } }) {
+            IconButton(onClick = { fitAll(canvasSize.x, canvasSize.y) }) {
                 Icon(Icons.Filled.ZoomOutMap, contentDescription = "Fit", tint = color)
             }
             IconButton(
@@ -257,7 +277,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     tint = if (measureMode) color else TextSecondary
                 )
             }
-            IconButton(onClick = { showLayers = true }, enabled = model != null) {
+            IconButton(onClick = { showLayers = true }, enabled = models.isNotEmpty()) {
                 Icon(Icons.Filled.Layers, contentDescription = "لایه‌ها", tint = color)
             }
         }
@@ -296,7 +316,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             offset += pan
                         }
                     }
-                    .pointerInput(model, scale, offset, measureMode) {
+                    .pointerInput(models, scale, offset, measureMode) {
                         detectTapGestures { tap ->
                             if (!measureMode) return@detectTapGestures
                             val (wx, wy) = screenToWorld(tap.x, tap.y)
@@ -314,7 +334,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     }
             ) {
                 canvasSize = Offset(size.width, size.height)
-                val m = model
+                // models drawn below
 
                 // satellite tiles
                 if (satellite && tiles.isNotEmpty()) {
@@ -338,7 +358,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
 
-                if (m != null) {
+                models.forEach { m ->
                     val layers = m.layers
                     fun layerVisible(name: String) = layers[name]?.visible != false
                     fun layerColor(name: String, entityAci: Int): Color {
@@ -351,7 +371,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         }
                         return DxfParser.aciToColor(aci)
                     }
-
                     m.lines.forEach { ln ->
                         if (!layerVisible(ln.layer)) return@forEach
                         val a = worldToScreen(ln.x1, ln.y1)
@@ -401,61 +420,48 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
     }
 
-    if (showLayers && model != null) {
+    if (showLayers && models.isNotEmpty()) {
+        val layerList = models.flatMap { it.layers.values }.distinctBy { it.name }
         AlertDialog(
             onDismissRequest = { showLayers = false },
             title = { Text("لایه‌ها") },
             text = {
                 LazyColumn {
-                    items(model!!.layers.values.toList(), key = { it.name }) { layer ->
-                        var expanded by remember(layer.name) { mutableStateOf(false) }
-                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = layer.visible,
-                                    onCheckedChange = {
-                                        layer.visible = it
-                                        // force recomposition
-                                        model = model!!.copy(layers = model!!.layers.toMutableMap().also { map ->
-                                            map[layer.name] = layer
-                                        })
-                                    }
-                                )
-                                Text(layer.name, modifier = Modifier.weight(1f), color = TextPrimary)
-                                Box(
-                                    Modifier
-                                        .size(22.dp)
-                                        .background(
-                                            layer.displayColor ?: DxfParser.aciToColor(layer.colorAci),
-                                            RoundedCornerShape(4.dp)
-                                        )
-                                )
-                                TextButton(onClick = { expanded = !expanded }) {
-                                    Text(if (expanded) "بستن" else "رنگ")
+                    items(layerList, key = { it.name }) { layer ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Checkbox(
+                                checked = layer.visible,
+                                onCheckedChange = { vis ->
+                                    layer.visible = vis
+                                    models = models.toList() // recompose
                                 }
-                            }
-                            if (expanded) {
-                                DxfColors.names.zip(DxfColors.compose).chunked(3).forEach { rowItems ->
-                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        rowItems.forEach { (name, col) ->
-                                            TextButton(onClick = {
-                                                layer.displayColor = col
-                                                model = model!!.copy(layers = model!!.layers.toMutableMap().also { map ->
-                                                    map[layer.name] = layer
-                                                })
-                                                expanded = false
-                                            }) { Text(name.take(4), color = col) }
-                                        }
-                                    }
-                                }
-                            }
+                            )
+                            Text(layer.name, modifier = Modifier.weight(1f), color = TextPrimary)
+                            Box(
+                                Modifier
+                                    .size(22.dp)
+                                    .background(
+                                        layer.displayColor ?: DxfParser.aciToColor(layer.colorAci),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                            )
                         }
-                        HorizontalDivider()
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showLayers = false }) { Text("بستن") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    models = emptyList()
+                    tiles = emptyList()
+                    message = "نقشه‌ها پاک شد — دوباره وارد کن"
+                    showLayers = false
+                }) { Text("پاک کردن نقشه‌ها") }
             }
         )
     }
@@ -473,7 +479,7 @@ private fun estimateZoom(minLat: Double, maxLat: Double, minLon: Double, maxLon:
     val latDiff = (maxLat - minLat).absoluteValue.coerceAtLeast(1e-6)
     val lonDiff = (maxLon - minLon).absoluteValue.coerceAtLeast(1e-6)
     val z = ln(360.0 / lonDiff) / ln(2.0)
-    return z.roundToInt().coerceIn(12, 18)
+    return z.roundToInt().coerceIn(13, 17)
 }
 
 private fun latLonToTile(lat: Double, lon: Double, zoom: Int): Pair<Int, Int> {
@@ -504,12 +510,12 @@ private fun loadEsriTiles(minLat: Double, maxLat: Double, minLon: Double, maxLon
     var count = 0
     for (x in minX..maxX) {
         for (y in minY..maxY) {
-            if (count >= 16) break
+            if (count >= 9) break
             try {
                 val url = URL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x")
                 val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
+                conn.connectTimeout = 2500
+                conn.readTimeout = 2500
                 conn.inputStream.use { input ->
                     val bmp = BitmapFactory.decodeStream(input) ?: return@use
                     val (latN, lonW) = tileToLatLon(x, y, zoom)

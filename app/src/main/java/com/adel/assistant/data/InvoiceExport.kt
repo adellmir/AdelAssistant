@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -38,8 +39,15 @@ data class InvoiceData(
 object InvoiceExport {
 
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
-        val bytes = buildFromTemplate(context, data)
-        val name = "invoice_${data.letterNo.ifBlank { "draft" }}.xlsx".replace(" ", "_")
+        val bytes = try {
+            buildFromTemplate(context, data)
+        } catch (e: Exception) {
+            buildMinimalXlsx(data)
+        }
+        // validate zip has sheet
+        if (bytes.size < 100) return null
+        val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
+            .replace(" ", "_")
         return FileExport.exportBytesToDocuments(
             context, name, bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -66,31 +74,26 @@ object InvoiceExport {
     }
 
     private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
-        val updates = mutableMapOf<String, Pair<String, Boolean>>()
-        // شماره نامه
-        updates["C7"] = data.letterNo to true
-        // کارفرمای محترم ...
-        updates["E7"] = data.employerTitle to true
+        // آدرس سلول‌ها طبق مشخصات کاربر
+        val updates = linkedMapOf<String, String>()
+        updates["C7"] = "شماره فاکتور ${data.letterNo}"
+        updates["E7"] = data.employerTitle
 
-        val maxRows = 13 // rows 10..22
+        val maxRows = 13
         data.lines.take(maxRows).forEachIndexed { idx, line ->
             val row = 10 + idx
-            updates["G$row"] = line.service to true
-            updates["D$row"] = formatAmount(line.amount) to true
-            updates["C$row"] = line.note to true
+            updates["E$row"] = line.service
+            updates["D$row"] = formatAmount(line.amount)
+            updates["C$row"] = line.note
         }
-        // clear unused sample rows content
-        for (row in (10 + data.lines.size).coerceAtMost(22)..22) {
-            updates["G$row"] = "" to true
-            updates["D$row"] = "" to true
-            updates["C$row"] = "" to true
+        for (row in (10 + data.lines.size.coerceAtMost(maxRows))..22) {
+            updates["E$row"] = ""
+            updates["D$row"] = ""
+            updates["C$row"] = ""
         }
-
-        updates["D24"] = formatAmount(data.total) to true
-        updates["D25"] = formatAmount(data.received) to true
-        updates["D26"] = formatAmount(data.remaining) to true
-        updates["F25"] = data.cardNo to true
-        updates["F26"] = data.iban to true
+        updates["C24"] = formatAmount(data.total)
+        updates["C25"] = formatAmount(data.received)
+        updates["C26"] = formatAmount(data.remaining)
 
         val templateBytes = context.assets.open("invoice_template.xlsx").use { it.readBytes() }
         return rewriteXlsx(templateBytes, updates)
@@ -105,14 +108,14 @@ object InvoiceExport {
         var i = digits.length
         while (i > 0) {
             val start = (i - 3).coerceAtLeast(0)
-            if (sb.isNotEmpty()) sb.insert(0, "/")
+            if (sb.isNotEmpty()) sb.insert(0, ",")
             sb.insert(0, digits.substring(start, i))
             i = start
         }
         return if (neg) "-$sb" else sb.toString()
     }
 
-    private fun rewriteXlsx(templateBytes: ByteArray, updates: Map<String, Pair<String, Boolean>>): ByteArray {
+    private fun rewriteXlsx(templateBytes: ByteArray, updates: Map<String, String>): ByteArray {
         val outBuffer = ByteArrayOutputStream()
         ZipOutputStream(outBuffer).use { zos ->
             ZipInputStream(templateBytes.inputStream()).use { zis ->
@@ -120,13 +123,15 @@ object InvoiceExport {
                 while (entry != null) {
                     val bytes = zis.readBytes()
                     val name = entry.name
-                    zos.putNextEntry(ZipEntry(name))
-                    if (name == "xl/worksheets/sheet1.xml") {
-                        val xml = bytes.toString(Charsets.UTF_8)
-                        zos.write(applyCellUpdates(xml, updates).toByteArray(Charsets.UTF_8))
+                    val data = if (name == "xl/worksheets/sheet1.xml" || name.endsWith("sheet1.xml")) {
+                        applyCellUpdates(bytes.toString(Charsets.UTF_8), updates).toByteArray(Charsets.UTF_8)
                     } else {
-                        zos.write(bytes)
+                        bytes
                     }
+                    val ze = ZipEntry(name)
+                    // STORED can break some readers if CRC wrong; use DEFLATED default
+                    zos.putNextEntry(ze)
+                    zos.write(data)
                     zos.closeEntry()
                     entry = zis.nextEntry
                 }
@@ -135,38 +140,96 @@ object InvoiceExport {
         return outBuffer.toByteArray()
     }
 
-    private fun applyCellUpdates(xml: String, updates: Map<String, Pair<String, Boolean>>): String {
+    private fun applyCellUpdates(xml: String, updates: Map<String, String>): String {
         var result = xml
-        updates.forEach { (ref, pair) ->
-            val (value, isText) = pair
-            val cellRegex = Regex(
-                """<c r="$ref"([^>/]*?)(?:/>|>.*?</c>)""",
-                setOf(RegexOption.DOT_MATCHES_ALL)
-            )
-            val match = cellRegex.find(result)
-            val styleAttr = match?.groupValues?.get(1)?.let { attrs ->
-                Regex("""s="(\d+)"""").find(attrs)?.value?.let { " $it" } ?: attrs.trim().let {
-                    if (it.isNotBlank() && !it.startsWith(" ")) " $it" else if (it.isNotBlank()) it else ""
-                }
-            } ?: ""
-            // keep only style s="N"
-            val onlyStyle = Regex("""s="(\d+)"""").find(styleAttr)?.value?.let { " $it" } ?: ""
+        updates.forEach { (ref, value) ->
             val escaped = value
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
-            val newCell = if (isText) {
-                """<c r="$ref"$onlyStyle t="inlineStr"><is><t>$escaped</t></is></c>"""
+                .replace("\"", "&quot;")
+            val newCell = """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
+            val cellRegex = Regex(
+                """<c r="$ref"[^>]*/>|<c r="$ref"[^>]*>.*?</c>""",
+                setOf(RegexOption.DOT_MATCHES_ALL)
+            )
+            val match = cellRegex.find(result)
+            if (match != null) {
+                result = result.replaceRange(match.range, newCell)
             } else {
-                """<c r="$ref"$onlyStyle><v>$value</v></c>"""
-            }
-            result = if (match != null) {
-                result.replaceRange(match.range, newCell)
-            } else {
-                result
+                // درج در ردیف: مثلاً C7 → row 7
+                val rowNum = Regex("""(\d+)$""").find(ref)?.groupValues?.get(1) ?: return@forEach
+                val rowOpen = Regex("""<row[^>]*r="$rowNum"[^>]*>""")
+                val m = rowOpen.find(result)
+                if (m != null) {
+                    val insertAt = m.range.last + 1
+                    result = result.substring(0, insertAt) + newCell + result.substring(insertAt)
+                }
             }
         }
         return result
+    }
+
+    /** خروجی حداقلی معتبر اگر قالب خراب باشد */
+    private fun buildMinimalXlsx(data: InvoiceData): ByteArray {
+        val sheet = buildString {
+            append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
+            append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>""")
+            fun row(r: Int, cells: List<Pair<String, String>>) {
+                append("""<row r="$r">""")
+                cells.forEach { (ref, v) ->
+                    val e = v.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+                    append("""<c r="$ref" t="inlineStr"><is><t>$e</t></is></c>""")
+                }
+                append("</row>")
+            }
+            row(1, listOf("A1" to "فاکتور نقشه برداری"))
+            row(7, listOf("C7" to "شماره فاکتور ${data.letterNo}", "E7" to data.employerTitle))
+            data.lines.forEachIndexed { i, line ->
+                val r = 10 + i
+                row(r, listOf(
+                    "C$r" to line.note,
+                    "D$r" to formatAmount(line.amount),
+                    "E$r" to line.service
+                ))
+            }
+            row(24, listOf("C24" to formatAmount(data.total)))
+            row(25, listOf("C25" to formatAmount(data.received)))
+            row(26, listOf("C26" to formatAmount(data.remaining)))
+            append("</sheetData></worksheet>")
+        }
+        val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"""
+        val rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+        val wb = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Invoice" sheetId="1" r:id="rId1"/></sheets></workbook>"""
+        val wbRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"""
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zos ->
+            fun put(name: String, text: String) {
+                zos.putNextEntry(ZipEntry(name))
+                zos.write(text.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+            put("[Content_Types].xml", contentTypes)
+            put("_rels/.rels", rels)
+            put("xl/workbook.xml", wb)
+            put("xl/_rels/workbook.xml.rels", wbRels)
+            put("xl/worksheets/sheet1.xml", sheet)
+        }
+        return out.toByteArray()
     }
 
     private fun buildPdf(data: InvoiceData): ByteArray {
@@ -185,35 +248,27 @@ object InvoiceExport {
         val small = Paint().apply {
             textSize = 10f; textAlign = Paint.Align.RIGHT; color = 0xFF444444.toInt()
         }
-        val linePaint = Paint().apply {
-            color = 0xFF888888.toInt(); strokeWidth = 1f; style = Paint.Style.STROKE
-        }
         var y = 40f
         val right = pageWidth - 40f
         fun t(text: String, paint: Paint) {
             c.drawText(text, right, y, paint)
         }
         t("مهندس سید عادل پورمیر", title); y += 22
-        t("نقشه بردار  تونل - راه - ساختمان - اراضی - سازه - UTM", small); y += 18
+        t("نقشه بردار  تونل - راه - ساختمان", small); y += 18
         t("کارکرد نقشه برداری", title); y += 28
         t(data.employerTitle, body); y += 18
-        t("شماره: ${data.letterNo}    تاریخ: ${data.dateLabel}", body); y += 24
-        c.drawLine(40f, y, right, y, linePaint); y += 16
-        t("شرح خدمات          مبلغ (ریال)          توضیحات", body); y += 6
-        c.drawLine(40f, y, right, y, linePaint); y += 18
+        t("شماره فاکتور ${data.letterNo}    تاریخ: ${data.dateLabel}", body); y += 24
         data.lines.forEach { line ->
-            t("${line.service}    ${formatMoney(line.amount)}    ${line.note}", body)
+            t("${line.service}  |  ${formatAmount(line.amount)}  |  ${line.note}", body)
             y += 18
+            if (y > pageHeight - 80) return@forEach
         }
         y += 10
-        c.drawLine(40f, y, right, y, linePaint); y += 20
-        t("جمع کل: ${formatMoney(data.total)}", title); y += 18
-        t("دریافتی: ${formatMoney(data.received)}", body); y += 18
-        t("مانده پرداختی: ${formatMoney(data.remaining)}", title); y += 24
-        t("شماره کارت: ${data.cardNo}", body); y += 16
-        t("شبا: ${data.iban}", body); y += 24
-        t("E-MAIL: pourmir.surveyor@yahoo.com", small); y += 16
-        t("لطفا پس از انجام پرداخت اطلاع رسانی بفرمایید — با سپاس", small)
+        t("جمع کل: ${formatAmount(data.total)}", title); y += 18
+        t("دریافتی: ${formatAmount(data.received)}", body); y += 18
+        t("مانده پرداختی: ${formatAmount(data.remaining)}", title); y += 22
+        t("کارت: ${data.cardNo}", small); y += 14
+        t("شبا: ${data.iban}", small)
         doc.finishPage(page)
         val bos = ByteArrayOutputStream()
         doc.writeTo(bos)

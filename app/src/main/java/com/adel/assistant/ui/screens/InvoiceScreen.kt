@@ -106,7 +106,7 @@ fun InvoiceScreen(
                 note = listOf(p.year, p.month, p.day).filter { it.isNotBlank() }.joinToString("/")
             )
         }
-        status = "${picks.size} ردیف اضافه شد"
+        status = "${picks.size} پروژه انتخاب شد — فیلدها را ویرایش و PDF/XLSX بزن"
     }
 
     fun buildData(): InvoiceData? {
@@ -197,10 +197,13 @@ fun InvoiceScreen(
                 }
                 item {
                     Button(
-                        onClick = { applySelectedProjects() },
+                        onClick = {
+                            applySelectedProjects()
+                            mode = 0 // برو به فرم صدور برای ویرایش و خروجی
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("افزودن انتخاب‌شده‌ها به فاکتور") }
+                    ) { Text("ادامه صدور فاکتور (ویرایش و خروجی)") }
                 }
             }
 
