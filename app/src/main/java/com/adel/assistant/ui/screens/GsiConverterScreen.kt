@@ -1,240 +1,247 @@
 package com.adel.assistant.ui.screens
 
-import android.content.Context
+import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.adel.assistant.data.PointConverter
-import com.adel.assistant.data.SurveyPoint
-import com.adel.assistant.ui.ScreenTopBar
-import com.adel.assistant.ui.theme.Background
+import androidx.compose.ui.unit.sp
+import com.adel.assistant.data.GsiParser
+import com.adel.assistant.data.GsiPoint
+import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStreamReader
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GsiConverterScreen(color: Color, onBack: () -> Unit, title: String = "مبدل") {
+fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
-    var sourceName by remember { mutableStateOf("") }
-    var sourceExt by remember { mutableStateOf("") }
-    var points by remember { mutableStateOf<List<SurveyPoint>>(emptyList()) }
-    var target by remember { mutableStateOf("CSV") }
-    var message by remember { mutableStateOf("یک فایل انتخاب کن. سپس می‌توانی ردیف‌ها را ویرایش یا گزینش کنی.") }
-    var editIndex by remember { mutableStateOf<Int?>(null) }
-    var showAdd by remember { mutableStateOf(false) }
-    // حالت گزینش: false = همه انتخاب‌شده برای خروجی
-    var selectMode by remember { mutableStateOf(false) }
+    var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
+    var status by remember { mutableStateOf("یک فایل GSI انتخاب کنید (هر دو مدل پشتیبانی می‌شود)") }
+    var selectAll by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var busy by remember { mutableStateOf(false) }
 
-    fun exportPoints(): List<SurveyPoint> =
-        if (!selectMode) points
-        else points.filterIndexed { i, _ -> i in selected }
-
-    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) try {
-            sourceName = fileName(context, uri)
-            sourceExt = sourceName.substringAfterLast('.', "").lowercase()
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-            points = PointConverter.read(text, sourceExt)
-            selected = points.indices.toSet()
-            selectMode = false
-            message = if (points.isEmpty()) "نقطه قابل خواندن پیدا نشد."
-            else "${points.size} نقطه خوانده شد. پیش‌فرض: انتخاب همه."
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: Exception) {
+        }
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.use { ins ->
+                BufferedReader(InputStreamReader(ins, Charsets.UTF_8)).readText()
+            } ?: ""
+            val parsed = GsiParser.parse(text)
+            points = parsed
+            selected = parsed.map { it.index }.toSet()
+            selectAll = true
+            status = if (parsed.isEmpty()) {
+                "نقطه‌ای پیدا نشد — فایل را بررسی کنید"
+            } else {
+                "${parsed.size} نقطه خوانده شد (OCUPAR/RE حذف شدند)"
+            }
         } catch (e: Exception) {
-            message = "خطا در خواندن فایل: ${e.message}"
+            status = "خطا در خواندن: ${e.message}"
+            points = emptyList()
+        } finally {
+            busy = false
         }
     }
 
-    val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-        if (uri != null) try {
-            val outPts = exportPoints()
-            if (outPts.isEmpty()) {
-                message = "ردیفی برای خروجی انتخاب نشده"
-                return@rememberLauncherForActivityResult
-            }
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
-                it.write(PointConverter.write(outPts, target.lowercase()))
-            }
-            message = "${outPts.size} نقطه با پسوند .$target ذخیره شد."
-        } catch (e: Exception) {
-            message = "خطا در ذخیره فایل: ${e.message}"
-        }
+    fun currentSelection(): List<GsiPoint> {
+        return if (selectAll) points else points.filter { it.index in selected }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .padding(horizontal = 16.dp)
-    ) {
-        ScreenTopBar(title = title, color = color, onBack = onBack)
-
-        Button(
-            onClick = { openFile.launch(arrayOf("text/*", "application/octet-stream", "application/dxf", "*/*")) },
-            colors = ButtonDefaults.buttonColors(containerColor = color),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("انتخاب فایل") }
-
-        Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            listOf("CSV", "TXT", "DAT", "DXF", "GSI", "IDX", "KML").forEach { ext ->
-                FilterChip(
-                    selected = target == ext,
-                    onClick = { target = ext },
-                    label = { Text(ext) }
+    fun saveToAdelFolder(fileName: String, body: String): Boolean {
+        return try {
+            val bytes = body.toByteArray(Charsets.UTF_8)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant"
+                    )
+                }
+                val uri = context.contentResolver.insert(
+                    MediaStore.Files.getContentUri("external"), values
+                ) ?: return false
+                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: return false
+                true
+            } else {
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "AdelAssistant"
                 )
+                if (!dir.exists()) dir.mkdirs()
+                FileOutputStream(File(dir, fileName)).use { it.write(bytes) }
+                true
             }
+        } catch (_: Exception) {
+            false
         }
+    }
 
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            FilterChip(
-                selected = !selectMode,
-                onClick = {
-                    selectMode = false
-                    selected = points.indices.toSet()
-                    message = "حالت انتخاب همه — همه ردیف‌ها خروجی می‌شوند"
+    fun exportTxt() {
+        val list = currentSelection()
+        if (list.isEmpty()) {
+            status = "نقطه‌ای برای خروجی انتخاب نشده"
+            return
+        }
+        val ok = saveToAdelFolder("gsi_export.txt", GsiParser.toTxt(list))
+        status = if (ok) "TXT ذخیره شد در Documents/AdelAssistant (${list.size} نقطه)" else "خطا در ذخیره TXT"
+    }
+
+    fun exportGsi() {
+        val list = currentSelection()
+        if (list.isEmpty()) {
+            status = "نقطه‌ای برای خروجی انتخاب نشده"
+            return
+        }
+        val ok = saveToAdelFolder("gsi_for_instrument.gsi", GsiParser.toGsiModel2(list))
+        status = if (ok) {
+            "GSI مدل‌۲ ذخیره شد (${list.size} نقطه) — برای بارگذاری روی دوربین"
+        } else {
+            "خطا در ذخیره GSI"
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("مبدل GSI") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("بازگشت", color = color) }
                 },
-                label = { Text("انتخاب همه") }
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF1A1F16),
+                    titleContentColor = Color.White
+                )
             )
-            FilterChip(
-                selected = selectMode,
-                onClick = {
-                    selectMode = true
-                    if (selected.isEmpty()) selected = points.indices.toSet()
-                    message = "حالت گزینش — ردیف‌های تیک‌خورده خروجی می‌شوند"
-                },
-                label = { Text("گزینش") }
+        },
+        containerColor = Color(0xFF12150F)
+    ) { pad ->
+        Column(
+            Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .padding(12.dp)
+        ) {
+            Text(status, color = Color(0xFFB0B8A8), fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        picker.launch(arrayOf("*/*", "text/*", "application/octet-stream"))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = color),
+                    enabled = !busy
+                ) { Text("انتخاب فایل GSI") }
+
+                OutlinedButton(
+                    onClick = {
+                        selectAll = true
+                        selected = points.map { it.index }.toSet()
+                    },
+                    enabled = points.isNotEmpty()
+                ) { Text("همه") }
+
+                OutlinedButton(
+                    onClick = {
+                        selectAll = false
+                        selected = emptySet()
+                    },
+                    enabled = points.isNotEmpty()
+                ) { Text("پاک‌کردن انتخاب") }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { exportTxt() },
+                    enabled = points.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = color)
+                ) { Text("خروجی TXT") }
+
+                Button(
+                    onClick = { exportGsi() },
+                    enabled = points.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                ) { Text("خروجی GSI دوربین") }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "خروجی GSI = فقط مختصات (مدل BAHAR) برای بارگذاری روی دستگاه",
+                color = Color(0xFF889078),
+                fontSize = 11.sp
             )
-            if (selectMode) {
-                TextButton(onClick = { selected = points.indices.toSet() }) { Text("همه") }
-                TextButton(onClick = { selected = emptySet() }) { Text("هیچ") }
-            }
-        }
+            Spacer(Modifier.height(8.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-            OutlinedButton(onClick = { showAdd = true }, enabled = points.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                Text("+ افزودن ردیف")
-            }
-            Button(
-                enabled = points.isNotEmpty() && exportPoints().isNotEmpty(),
-                onClick = {
-                    val base = sourceName.substringBeforeLast(".").ifBlank { "points" }
-                    saveFile.launch("$base.${target.lowercase()}")
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.weight(1f)
-            ) { Text("ذخیره خروجی") }
-        }
-
-        if (points.isNotEmpty()) {
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                itemsIndexed(points, key = { i, p -> "$i-${p.id}" }) { index, p ->
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(points, key = { it.index }) { p ->
+                    val checked = selectAll || p.index in selected
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1E241A), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (selectMode) {
-                            Checkbox(
-                                checked = index in selected,
-                                onCheckedChange = { checked ->
-                                    selected = if (checked) selected + index else selected - index
-                                }
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("${p.id}  |  ${p.code}", style = MaterialTheme.typography.bodyMedium)
+                        Checkbox(
+                            checked = checked,
+                            onCheckedChange = { on ->
+                                selectAll = false
+                                selected = if (on) selected + p.index else selected - p.index
+                            },
+                            colors = CheckboxDefaults.colors(checkedColor = color)
+                        )
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                "X=${p.x}  Y=${p.y}  Z=${p.z}",
-                                style = MaterialTheme.typography.bodySmall
+                                p.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                "E ${fmt(p.e)}  N ${fmt(p.n)}  Z ${fmt(p.z)}",
+                                color = Color(0xFFB0B8A8),
+                                fontSize = 12.sp
                             )
                         }
-                        TextButton(onClick = { editIndex = index }) { Text("ویرایش") }
-                        TextButton(onClick = {
-                            points = points.filterIndexed { i, _ -> i != index }
-                            selected = selected.filter { it != index }.map { if (it > index) it - 1 else it }.toSet()
-                        }) { Text("حذف") }
-                        TextButton(onClick = {
-                            val copy = p.copy(id = p.id + "_c")
-                            points = points.toMutableList().also { it.add(index + 1, copy) }
-                            if (!selectMode) selected = points.indices.toSet()
-                        }) { Text("کپی") }
                     }
-                    HorizontalDivider()
                 }
             }
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-        }
-    }
-
-    if (editIndex != null) {
-        PointEditorDialog(points[editIndex!!], "ویرایش ردیف", onDismiss = { editIndex = null }) { edited ->
-            val list = points.toMutableList()
-            list[editIndex!!] = edited
-            points = list
-            editIndex = null
-        }
-    }
-    if (showAdd) {
-        PointEditorDialog(null, "افزودن ردیف", onDismiss = { showAdd = false }) { added ->
-            points = points + added
-            selected = selected + (points.lastIndex)
-            showAdd = false
         }
     }
 }
 
-@Composable
-private fun PointEditorDialog(
-    point: SurveyPoint?,
-    title: String,
-    onDismiss: () -> Unit,
-    onSave: (SurveyPoint) -> Unit
-) {
-    var id by remember(point) { mutableStateOf(point?.id ?: "") }
-    var x by remember(point) { mutableStateOf(point?.x?.toString() ?: "") }
-    var y by remember(point) { mutableStateOf(point?.y?.toString() ?: "") }
-    var z by remember(point) { mutableStateOf(point?.z?.toString() ?: "") }
-    var code by remember(point) { mutableStateOf(point?.code ?: "") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                OutlinedTextField(id, { id = it }, label = { Text("نام/شماره نقطه") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(x, { x = it }, label = { Text("X") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(y, { y = it }, label = { Text("Y") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(z, { z = it }, label = { Text("ارتفاع Z") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(code, { code = it }, label = { Text("اطلاعات / کد") }, modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val px = x.replace(',', '.').toDoubleOrNull()
-                val py = y.replace(',', '.').toDoubleOrNull()
-                val pz = z.replace(',', '.').toDoubleOrNull()
-                if (id.isNotBlank() && px != null && py != null && pz != null) {
-                    onSave(SurveyPoint(id, px, py, pz, code))
-                }
-            }) { Text("ذخیره") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("لغو") } }
-    )
-}
-
-private fun fileName(context: Context, uri: Uri): String =
-    context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-        val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-        if (i >= 0 && c.moveToFirst()) c.getString(i) else null
-    } ?: File(uri.path ?: "points.txt").name
+private fun fmt(v: Double): String =
+    String.format(java.util.Locale.US, "%.3f", v)
