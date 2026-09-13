@@ -6,7 +6,6 @@ import androidx.compose.runtime.setValue
 
 /**
  * مسیر درخواستی از ویجت / اعلان.
- * با mutableStateOf تا Compose (LaunchedEffect) تغییر را ببیند.
  */
 object DeepLinkHolder {
     var pendingRoute by mutableStateOf<String?>(null)

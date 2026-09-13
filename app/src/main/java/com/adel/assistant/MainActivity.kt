@@ -34,8 +34,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureRoute(intent)
-        // علامت برای ناوبری که route جدید آمده
-        DeepLinkHolder.tick++
     }
 
     override fun onResume() {
@@ -51,7 +49,7 @@ class MainActivity : ComponentActivity() {
         val route = intent.getStringExtra("open_route")
             ?: intent.data?.getQueryParameter("route")
         if (!route.isNullOrBlank()) {
-            DeepLinkHolder.pendingRoute = route
+            DeepLinkHolder.setRoute(route)
             intent.removeExtra("open_route")
         }
     }

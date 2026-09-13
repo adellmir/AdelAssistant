@@ -44,7 +44,6 @@ import com.adel.assistant.ui.theme.WorkPrimary
 fun AppNavigation() {
     val navController: NavHostController = rememberNavController()
 
-    // deep link از ویجت — pendingRoute با mutableStateOf
     val pendingRoute = DeepLinkHolder.pendingRoute
     LaunchedEffect(pendingRoute) {
         if (!pendingRoute.isNullOrBlank()) {
