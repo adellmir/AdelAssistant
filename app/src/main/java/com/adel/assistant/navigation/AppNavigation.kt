@@ -36,6 +36,7 @@ import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
+import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.ui.theme.WorkPrimary
@@ -219,6 +220,20 @@ fun AppNavigation() {
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+
+        // ---- دستیار هوشمند ----
+        composable(Routes.ASSISTANT) {
+            AssistantScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onNavigate = { route ->
+                    try {
+                        navController.navigate(route)
+                    } catch (_: Exception) {
+                    }
+                }
+            )
         }
     }
 }

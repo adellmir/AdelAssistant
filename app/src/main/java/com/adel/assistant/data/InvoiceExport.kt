@@ -39,12 +39,14 @@ data class InvoiceData(
 object InvoiceExport {
 
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
+        // همیشه از خروجی حداقلی معتبر استفاده می‌کنیم تا فایل حتماً در Excel/Sheets باز شود.
+        // rewrite روی قالب اغلب XML را خراب می‌کند (sharedStrings / styles).
         val bytes = try {
-            buildFromTemplate(context, data)
-        } catch (e: Exception) {
+            val fromTemplate = buildFromTemplate(context, data)
+            if (isValidXlsx(fromTemplate)) fromTemplate else buildMinimalXlsx(data)
+        } catch (_: Exception) {
             buildMinimalXlsx(data)
         }
-        // validate zip has sheet
         if (bytes.size < 100) return null
         val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
             .replace(" ", "_")
@@ -52,6 +54,28 @@ object InvoiceExport {
             context, name, bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+    }
+
+    /** بررسی خیلی ساده: باید zip معتبر با sheet1 باشد */
+    private fun isValidXlsx(bytes: ByteArray): Boolean {
+        if (bytes.size < 200) return false
+        return try {
+            ZipInputStream(bytes.inputStream()).use { zis ->
+                var hasSheet = false
+                var hasContentTypes = false
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    val n = entry.name
+                    if (n.contains("sheet1.xml") || n.endsWith("sheet1.xml")) hasSheet = true
+                    if (n == "[Content_Types].xml") hasContentTypes = true
+                    zis.closeEntry()
+                    entry = zis.nextEntry
+                }
+                hasSheet && hasContentTypes
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun exportPdfAndShare(context: Context, data: InvoiceData): Uri? {
@@ -170,32 +194,43 @@ object InvoiceExport {
         return result
     }
 
-    /** خروجی حداقلی معتبر اگر قالب خراب باشد */
+    /** خروجی حداقلی معتبر و قابل‌بازشدن در Excel / Google Sheets / WPS */
     private fun buildMinimalXlsx(data: InvoiceData): ByteArray {
         val sheet = buildString {
             append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
             append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>""")
+            fun cell(ref: String, v: String): String {
+                val e = v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+                return """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$e</t></is></c>"""
+            }
             fun row(r: Int, cells: List<Pair<String, String>>) {
                 append("""<row r="$r">""")
-                cells.forEach { (ref, v) ->
-                    val e = v.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-                    append("""<c r="$ref" t="inlineStr"><is><t>$e</t></is></c>""")
-                }
+                cells.forEach { (ref, v) -> append(cell(ref, v)) }
                 append("</row>")
             }
-            row(1, listOf("A1" to "فاکتور نقشه برداری"))
-            row(7, listOf("C7" to "شماره فاکتور ${data.letterNo}", "E7" to data.employerTitle))
+            row(1, listOf("A1" to "فاکتور نقشه‌برداری — مهندس سید عادل پورمیر"))
+            row(2, listOf("A2" to "تاریخ: ${data.dateLabel}"))
+            row(4, listOf("A4" to data.employerTitle))
+            row(5, listOf("A5" to "شماره فاکتور: ${data.letterNo}"))
+            row(7, listOf("A7" to "شرح خدمت", "B7" to "مبلغ", "C7" to "توضیح"))
             data.lines.forEachIndexed { i, line ->
-                val r = 10 + i
+                val r = 8 + i
                 row(r, listOf(
-                    "C$r" to line.note,
-                    "D$r" to formatAmount(line.amount),
-                    "E$r" to line.service
+                    "A$r" to line.service,
+                    "B$r" to formatAmount(line.amount),
+                    "C$r" to line.note
                 ))
             }
-            row(24, listOf("C24" to formatAmount(data.total)))
-            row(25, listOf("C25" to formatAmount(data.received)))
-            row(26, listOf("C26" to formatAmount(data.remaining)))
+            val sumRow = 8 + data.lines.size + 1
+            row(sumRow, listOf("A$sumRow" to "جمع کل", "B$sumRow" to formatAmount(data.total)))
+            row(sumRow + 1, listOf("A${sumRow + 1}" to "دریافتی", "B${sumRow + 1}" to formatAmount(data.received)))
+            row(sumRow + 2, listOf("A${sumRow + 2}" to "مانده پرداختی", "B${sumRow + 2}" to formatAmount(data.remaining)))
+            if (data.cardNo.isNotBlank()) {
+                row(sumRow + 4, listOf("A${sumRow + 4}" to "کارت: ${data.cardNo}"))
+            }
+            if (data.iban.isNotBlank()) {
+                row(sumRow + 5, listOf("A${sumRow + 5}" to "شبا: ${data.iban}"))
+            }
             append("</sheetData></worksheet>")
         }
         val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

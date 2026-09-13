@@ -57,12 +57,18 @@ fun AssistantScreen(
         val reply: AgentReply = try {
             AssistantAgent.handle(context, t)
         } catch (e: Exception) {
-            AgentReply("خطا در پردازش: ${e.message}")
+            AgentReply("خطا در پردازش: ${e.message ?: e.javaClass.simpleName}")
         }
         messages = messages + ChatLine(false, reply.text)
-        reply.navigateTo?.let { route -> onNavigate(route) }
+        try {
+            reply.navigateTo?.let { route -> onNavigate(route) }
+        } catch (_: Exception) {
+        }
         scope.launch {
-            listState.animateScrollToItem(messages.lastIndex.coerceAtLeast(0))
+            try {
+                listState.animateScrollToItem(messages.lastIndex.coerceAtLeast(0))
+            } catch (_: Exception) {
+            }
         }
     }
 

@@ -11,9 +11,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -208,11 +210,13 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     ) {
         ScreenTopBar(title = "نمایش نقشه", color = color, onBack = onBack)
 
-        // نوار ابزار فقط آیکون
+        // نوار ابزار فقط آیکون — اسکرول افقی تا همه دکمه‌ها (از جمله لایه‌ها) دیده شوند
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
         ) {
             IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream")) }) {
                 Icon(Icons.Filled.FolderOpen, contentDescription = "وارد کردن نقشه", tint = color)
@@ -421,33 +425,43 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     }
 
     if (showLayers && models.isNotEmpty()) {
-        val layerList = models.flatMap { it.layers.values }.distinctBy { it.name }
+        // اگر جدول لایه خالی بود، از entityها جمع می‌کنیم
+        models.forEach { m ->
+            m.lines.forEach { m.layers.putIfAbsent(it.layer, com.adel.assistant.data.DxfLayerInfo(it.layer, if (it.color in 1..255) it.color else 7)) }
+            m.circles.forEach { m.layers.putIfAbsent(it.layer, com.adel.assistant.data.DxfLayerInfo(it.layer, if (it.color in 1..255) it.color else 7)) }
+            m.texts.forEach { m.layers.putIfAbsent(it.layer, com.adel.assistant.data.DxfLayerInfo(it.layer, 7)) }
+        }
+        val layerList = models.flatMap { it.layers.values }.distinctBy { it.name }.sortedBy { it.name }
         AlertDialog(
             onDismissRequest = { showLayers = false },
-            title = { Text("لایه‌ها") },
+            title = { Text("لایه‌ها (${layerList.size})") },
             text = {
-                LazyColumn {
-                    items(layerList, key = { it.name }) { layer ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        ) {
-                            Checkbox(
-                                checked = layer.visible,
-                                onCheckedChange = { vis ->
-                                    layer.visible = vis
-                                    models = models.toList() // recompose
-                                }
-                            )
-                            Text(layer.name, modifier = Modifier.weight(1f), color = TextPrimary)
-                            Box(
-                                Modifier
-                                    .size(22.dp)
-                                    .background(
-                                        layer.displayColor ?: DxfParser.aciToColor(layer.colorAci),
-                                        RoundedCornerShape(4.dp)
-                                    )
-                            )
+                if (layerList.isEmpty()) {
+                    Text("لایه‌ای پیدا نشد", color = TextSecondary)
+                } else {
+                    LazyColumn {
+                        items(layerList, key = { it.name }) { layer ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = layer.visible,
+                                    onCheckedChange = { vis ->
+                                        layer.visible = vis
+                                        models = models.toList() // recompose
+                                    }
+                                )
+                                Text(layer.name.ifBlank { "(بدون نام)" }, modifier = Modifier.weight(1f), color = TextPrimary)
+                                Box(
+                                    Modifier
+                                        .size(22.dp)
+                                        .background(
+                                            layer.displayColor ?: DxfParser.aciToColor(layer.colorAci),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                )
+                            }
                         }
                     }
                 }
