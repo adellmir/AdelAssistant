@@ -43,7 +43,7 @@ fun AssistantScreen(
             listOf(
                 ChatLine(
                     fromUser = false,
-                    text = "سلام، من دستیار آماری AdelAssistant هستم.\nبپرس: «آمار کلی»، «مانده مطالبات»، «تسک‌های باز»، یا «برو گزارش روزانه»."
+                    text = "سلام، من دستیار هوشمند AdelAssistant هستم. محاوره‌ای بگو چه کاری انجام بدهم؛ می‌توانم صفحه‌ها را باز کنم، تسک ثبت و تکمیل کنم و از داده‌های برنامه آمار بگیرم."
                 )
             )
         )
@@ -73,11 +73,11 @@ fun AssistantScreen(
     }
 
     val quick = listOf(
+        "امروز چه کارهایی دارم؟",
+        "کارهای باز تونل چیه؟",
         "آمار کلی",
-        "آمار تونل",
-        "مانده مطالبات",
-        "تسک‌های باز",
-        "برو مطالبات"
+        "برو درون‌یابی",
+        "وضعیت مالی پروژه‌ها"
     )
 
     Column(
@@ -151,7 +151,7 @@ fun AssistantScreen(
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("مثلاً آمار کلی…", color = TextSecondary) },
+                placeholder = { Text("مثلاً: برای تونل تسک برداشت مقطع ثبت کن…", color = TextSecondary) },
                 singleLine = true
             )
             IconButton(
