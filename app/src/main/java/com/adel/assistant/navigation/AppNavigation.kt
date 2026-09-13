@@ -1,42 +1,41 @@
 package com.adel.assistant.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import com.adel.assistant.data.DeepLinkHolder
+import com.adel.assistant.data.InvoiceLaunch
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.dxf.DxfConverterScreen
-import com.adel.assistant.ui.screens.DxfPreviewScreen
-import com.adel.assistant.ui.screens.TotalStationDumpScreen
 import com.adel.assistant.ui.screens.AreaScreen
+import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.ChainageScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
+import com.adel.assistant.ui.screens.DatabaseBackupScreen
+import com.adel.assistant.ui.screens.DxfPreviewScreen
+import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
+import com.adel.assistant.ui.screens.InvoiceScreen
 import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
 import com.adel.assistant.ui.screens.ProjectRegisterScreen
 import com.adel.assistant.ui.screens.ReceivablesScreen
-import com.adel.assistant.ui.screens.InvoiceScreen
-import com.adel.assistant.data.InvoiceLaunch
-import com.adel.assistant.data.DeepLinkHolder
-import androidx.compose.runtime.LaunchedEffect
 import com.adel.assistant.ui.screens.SimpleRecordScreen
+import com.adel.assistant.ui.screens.TaskScreen
+import com.adel.assistant.ui.screens.TotalStationDumpScreen
 import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
 import com.adel.assistant.ui.screens.TunnelReceiptsScreen
-import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
-import com.adel.assistant.ui.screens.ViaClaudeScreen
-import com.adel.assistant.ui.screens.FinanceStatusScreen
-import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
-import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.ui.theme.WorkPrimary
@@ -45,24 +44,29 @@ import com.adel.assistant.ui.theme.WorkPrimary
 fun AppNavigation() {
     val navController: NavHostController = rememberNavController()
 
+    // deep link از ویجت / اعلان
+    val deepTick = DeepLinkHolder.tick
+    LaunchedEffect(deepTick) {
+        val pending = DeepLinkHolder.pendingRoute
+        if (!pending.isNullOrBlank()) {
+            DeepLinkHolder.pendingRoute = null
+            try {
+                navController.navigate(pending) {
+                    launchSingleTop = true
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+    // بار اول هم route را بخوان
     LaunchedEffect(Unit) {
         val pending = DeepLinkHolder.pendingRoute
         if (!pending.isNullOrBlank()) {
             DeepLinkHolder.pendingRoute = null
             try {
-                navController.navigate(pending)
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    // گوش دادن به deep linkهای بعدی
-    LaunchedEffect(DeepLinkHolder.pendingRoute) {
-        val pending = DeepLinkHolder.pendingRoute
-        if (!pending.isNullOrBlank()) {
-            DeepLinkHolder.pendingRoute = null
-            try {
-                navController.navigate(pending)
+                navController.navigate(pending) {
+                    launchSingleTop = true
+                }
             } catch (_: Exception) {
             }
         }
@@ -72,6 +76,13 @@ fun AppNavigation() {
 
         composable(Routes.HOME) {
             HomeScreen(onNavigate = { route -> navController.navigate(route) })
+        }
+        composable(Routes.ASSISTANT) {
+            AssistantScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) }
+            )
         }
 
         // ---- نقشه‌برداری: تونل ----
@@ -139,7 +150,6 @@ fun AppNavigation() {
                 }
             )
         }
-
         composable(Routes.SURVEY_PROJECT_TASKS) {
             TaskScreen(
                 title = "تسک‌های پروژه",
@@ -201,8 +211,6 @@ fun AppNavigation() {
         composable(Routes.TOOL_TOTAL_STATION) {
             TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
-
-
         composable(Routes.TOOL_GSI) {
             GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
@@ -220,20 +228,6 @@ fun AppNavigation() {
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
-        }
-
-        // ---- دستیار هوشمند ----
-        composable(Routes.ASSISTANT) {
-            AssistantScreen(
-                color = ToolPrimary,
-                onBack = { navController.popBackStack() },
-                onNavigate = { route ->
-                    try {
-                        navController.navigate(route)
-                    } catch (_: Exception) {
-                    }
-                }
-            )
         }
     }
 }

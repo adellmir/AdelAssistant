@@ -9,7 +9,6 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -38,44 +37,28 @@ data class InvoiceData(
 
 object InvoiceExport {
 
+    /**
+     * خروجی XLSX فقط از روی قالب assets/invoice_template.xlsx
+     * سلول‌ها:
+     * C7 = شماره فاکتور …
+     * E7 = کارفرمای محترم …
+     * E10+ = شرح خدمات | D10+ = مبلغ | C10+ = توضیحات
+     * C24 = جمع کل | C25 = دریافتی | C26 = مانده
+     */
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
-        // همیشه از خروجی حداقلی معتبر استفاده می‌کنیم تا فایل حتماً در Excel/Sheets باز شود.
-        // rewrite روی قالب اغلب XML را خراب می‌کند (sharedStrings / styles).
         val bytes = try {
-            val fromTemplate = buildFromTemplate(context, data)
-            if (isValidXlsx(fromTemplate)) fromTemplate else buildMinimalXlsx(data)
-        } catch (_: Exception) {
+            buildFromTemplate(context, data)
+        } catch (e: Exception) {
+            // اگر قالب نبود/خراب بود، حداقل یک فایل قابل‌باز شدن بساز
             buildMinimalXlsx(data)
         }
-        if (bytes.size < 100) return null
+        if (bytes.size < 200) return null
         val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
             .replace(" ", "_")
         return FileExport.exportBytesToDocuments(
             context, name, bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    }
-
-    /** بررسی خیلی ساده: باید zip معتبر با sheet1 باشد */
-    private fun isValidXlsx(bytes: ByteArray): Boolean {
-        if (bytes.size < 200) return false
-        return try {
-            ZipInputStream(bytes.inputStream()).use { zis ->
-                var hasSheet = false
-                var hasContentTypes = false
-                var entry = zis.nextEntry
-                while (entry != null) {
-                    val n = entry.name
-                    if (n.contains("sheet1.xml") || n.endsWith("sheet1.xml")) hasSheet = true
-                    if (n == "[Content_Types].xml") hasContentTypes = true
-                    zis.closeEntry()
-                    entry = zis.nextEntry
-                }
-                hasSheet && hasContentTypes
-            }
-        } catch (_: Exception) {
-            false
-        }
     }
 
     fun exportPdfAndShare(context: Context, data: InvoiceData): Uri? {
@@ -97,8 +80,21 @@ object InvoiceExport {
         return uri
     }
 
+    private fun loadTemplateBytes(context: Context): ByteArray {
+        val names = listOf("invoice_template.xlsx", "1فاکتور.xlsx", "invoice.xlsx")
+        for (n in names) {
+            try {
+                return context.assets.open(n).use { it.readBytes() }
+            } catch (_: Exception) {
+            }
+        }
+        // fallback: filesDir copy if user placed template
+        val local = File(context.filesDir, "invoice_template.xlsx")
+        if (local.exists()) return local.readBytes()
+        throw IllegalStateException("قالب فاکتور (invoice_template.xlsx) در assets پیدا نشد")
+    }
+
     private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
-        // آدرس سلول‌ها طبق مشخصات کاربر
         val updates = linkedMapOf<String, String>()
         updates["C7"] = "شماره فاکتور ${data.letterNo}"
         updates["E7"] = data.employerTitle
@@ -119,7 +115,7 @@ object InvoiceExport {
         updates["C25"] = formatAmount(data.received)
         updates["C26"] = formatAmount(data.remaining)
 
-        val templateBytes = context.assets.open("invoice_template.xlsx").use { it.readBytes() }
+        val templateBytes = loadTemplateBytes(context)
         return rewriteXlsx(templateBytes, updates)
     }
 
@@ -144,21 +140,26 @@ object InvoiceExport {
         ZipOutputStream(outBuffer).use { zos ->
             ZipInputStream(templateBytes.inputStream()).use { zis ->
                 var entry = zis.nextEntry
+                var foundSheet = false
                 while (entry != null) {
                     val bytes = zis.readBytes()
                     val name = entry.name
-                    val data = if (name == "xl/worksheets/sheet1.xml" || name.endsWith("sheet1.xml")) {
-                        applyCellUpdates(bytes.toString(Charsets.UTF_8), updates).toByteArray(Charsets.UTF_8)
-                    } else {
-                        bytes
+                    val data = when {
+                        name == "xl/worksheets/sheet1.xml" ||
+                            name.endsWith("/sheet1.xml") ||
+                            (name.contains("worksheets/sheet") && name.endsWith(".xml")) -> {
+                            foundSheet = true
+                            applyCellUpdates(bytes.toString(Charsets.UTF_8), updates)
+                                .toByteArray(Charsets.UTF_8)
+                        }
+                        else -> bytes
                     }
-                    val ze = ZipEntry(name)
-                    // STORED can break some readers if CRC wrong; use DEFLATED default
-                    zos.putNextEntry(ze)
+                    zos.putNextEntry(ZipEntry(name))
                     zos.write(data)
                     zos.closeEntry()
                     entry = zis.nextEntry
                 }
+                if (!foundSheet) throw IllegalStateException("sheet1.xml در قالب پیدا نشد")
             }
         }
         return outBuffer.toByteArray()
@@ -172,65 +173,63 @@ object InvoiceExport {
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
-            val newCell = """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
+            val newCell =
+                """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
             val cellRegex = Regex(
-                """<c r="$ref"[^>]*/>|<c r="$ref"[^>]*>.*?</c>""",
+                """<c r="$ref"(?:\s[^>]*)?(?:/>|>.*?</c>)""",
                 setOf(RegexOption.DOT_MATCHES_ALL)
             )
             val match = cellRegex.find(result)
             if (match != null) {
                 result = result.replaceRange(match.range, newCell)
             } else {
-                // درج در ردیف: مثلاً C7 → row 7
                 val rowNum = Regex("""(\d+)$""").find(ref)?.groupValues?.get(1) ?: return@forEach
-                val rowOpen = Regex("""<row[^>]*r="$rowNum"[^>]*>""")
+                // سعی در یافتن ردیف موجود
+                val rowOpen = Regex("""<row[^>]*\br="$rowNum"[^>]*>""")
                 val m = rowOpen.find(result)
                 if (m != null) {
                     val insertAt = m.range.last + 1
                     result = result.substring(0, insertAt) + newCell + result.substring(insertAt)
+                } else {
+                    // ردیف نیست — قبل از </sheetData> اضافه کن
+                    val close = result.lastIndexOf("</sheetData>")
+                    if (close >= 0) {
+                        val rowXml = """<row r="$rowNum">$newCell</row>"""
+                        result = result.substring(0, close) + rowXml + result.substring(close)
+                    }
                 }
             }
         }
         return result
     }
 
-    /** خروجی حداقلی معتبر و قابل‌بازشدن در Excel / Google Sheets / WPS */
     private fun buildMinimalXlsx(data: InvoiceData): ByteArray {
         val sheet = buildString {
             append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
             append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>""")
-            fun cell(ref: String, v: String): String {
-                val e = v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
-                return """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$e</t></is></c>"""
-            }
             fun row(r: Int, cells: List<Pair<String, String>>) {
                 append("""<row r="$r">""")
-                cells.forEach { (ref, v) -> append(cell(ref, v)) }
+                cells.forEach { (ref, v) ->
+                    val e = v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    append("""<c r="$ref" t="inlineStr"><is><t>$e</t></is></c>""")
+                }
                 append("</row>")
             }
-            row(1, listOf("A1" to "فاکتور نقشه‌برداری — مهندس سید عادل پورمیر"))
-            row(2, listOf("A2" to "تاریخ: ${data.dateLabel}"))
-            row(4, listOf("A4" to data.employerTitle))
-            row(5, listOf("A5" to "شماره فاکتور: ${data.letterNo}"))
-            row(7, listOf("A7" to "شرح خدمت", "B7" to "مبلغ", "C7" to "توضیح"))
+            row(1, listOf("A1" to "فاکتور نقشه برداری"))
+            row(7, listOf("C7" to "شماره فاکتور ${data.letterNo}", "E7" to data.employerTitle))
             data.lines.forEachIndexed { i, line ->
-                val r = 8 + i
-                row(r, listOf(
-                    "A$r" to line.service,
-                    "B$r" to formatAmount(line.amount),
-                    "C$r" to line.note
-                ))
+                val r = 10 + i
+                row(
+                    r, listOf(
+                        "C$r" to line.note,
+                        "D$r" to formatAmount(line.amount),
+                        "E$r" to line.service
+                    )
+                )
             }
-            val sumRow = 8 + data.lines.size + 1
-            row(sumRow, listOf("A$sumRow" to "جمع کل", "B$sumRow" to formatAmount(data.total)))
-            row(sumRow + 1, listOf("A${sumRow + 1}" to "دریافتی", "B${sumRow + 1}" to formatAmount(data.received)))
-            row(sumRow + 2, listOf("A${sumRow + 2}" to "مانده پرداختی", "B${sumRow + 2}" to formatAmount(data.remaining)))
-            if (data.cardNo.isNotBlank()) {
-                row(sumRow + 4, listOf("A${sumRow + 4}" to "کارت: ${data.cardNo}"))
-            }
-            if (data.iban.isNotBlank()) {
-                row(sumRow + 5, listOf("A${sumRow + 5}" to "شبا: ${data.iban}"))
-            }
+            row(24, listOf("C24" to formatAmount(data.total)))
+            row(25, listOf("C25" to formatAmount(data.received)))
+            row(26, listOf("C26" to formatAmount(data.remaining)))
             append("</sheetData></worksheet>")
         }
         val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

@@ -39,10 +39,6 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 TaskStore.save(context, store, all)
                 refreshAll(context)
             }
-            ACTION_CYCLE_OPACITY -> {
-                // شفافیت ثابت ۶۰٪ — تغییر نمی‌کند
-                refreshAll(context)
-            }
             ACTION_REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE -> refreshAll(context)
         }
     }
@@ -50,55 +46,18 @@ class AdelWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_COMPLETE_TASK = "com.adel.assistant.widget.COMPLETE_TASK"
         const val ACTION_REFRESH = "com.adel.assistant.widget.REFRESH"
-        const val ACTION_CYCLE_OPACITY = "com.adel.assistant.widget.CYCLE_OPACITY"
         const val EXTRA_STORE = "store"
         const val EXTRA_TITLE = "title"
         const val EXTRA_CREATED = "created"
-        /** شفافیت ثابت ۶۰٪ */
-        fun getAlpha(context: Context): Int = 153 // 0.6 * 255
+
+        fun getAlpha(context: Context): Int = 153 // 60%
 
         fun refreshAll(context: Context) {
             val mgr = AppWidgetManager.getInstance(context)
             val ids = mgr.getAppWidgetIds(ComponentName(context, AdelWidgetProvider::class.java))
-            if (ids.isNotEmpty()) {
-                val views = buildViews(context)
-                ids.forEach { mgr.updateAppWidget(it, views) }
-            }
-        }
-
-        private fun openRouteIntent(context: Context, route: String, requestCode: Int): PendingIntent {
-            val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("open_route", route)
-                action = "com.adel.assistant.OPEN_ROUTE_$requestCode"
-            }
-            return PendingIntent.getActivity(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
-        private fun completeIntent(context: Context, store: String, task: TaskItem, requestCode: Int): PendingIntent {
-            val intent = Intent(context, AdelWidgetProvider::class.java).apply {
-                action = ACTION_COMPLETE_TASK
-                putExtra(EXTRA_STORE, store)
-                putExtra(EXTRA_TITLE, task.title)
-                putExtra(EXTRA_CREATED, task.createdAt)
-            }
-            return PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
-        private fun opacityIntent(context: Context): PendingIntent {
-            val intent = Intent(context, AdelWidgetProvider::class.java).apply {
-                action = ACTION_CYCLE_OPACITY
-            }
-            return PendingIntent.getBroadcast(
-                context, 999, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            if (ids.isEmpty()) return
+            val views = buildViews(context)
+            ids.forEach { mgr.updateAppWidget(it, views) }
         }
 
         private fun openTasks(context: Context, store: String): List<TaskItem> {
@@ -109,7 +68,11 @@ class AdelWidgetProvider : AppWidgetProvider() {
         }
 
         private fun upcomingProjects(context: Context): List<String> {
-            val (ty, tm, td) = CalendarStore.todayJalali()
+            val (ty, tm, td) = try {
+                CalendarStore.todayJalali()
+            } catch (_: Exception) {
+                return emptyList()
+            }
             val todayKey = ty * 10000 + tm * 100 + td
             return ProjectStore.all(context)
                 .filter { p ->
@@ -129,12 +92,54 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 .map { "${it.name} — ${it.year}/${it.month}/${it.day}" }
         }
 
+        /** Intent باز کردن یک Route مشخص داخل MainActivity */
+        private fun openRouteIntent(context: Context, route: String, requestCode: Int): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                // مهم: activity موجود را بالا بیاور و route را بده
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("open_route", route)
+                // action یکتا تا PendingIntentها با هم قاطی نشوند
+                action = "com.adel.assistant.OPEN_$requestCode"
+                data = android.net.Uri.parse(
+                    "adelassistant://open?route=" + android.net.Uri.encode(route)
+                )
+            }
+            return PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        private fun completeIntent(
+            context: Context,
+            store: String,
+            task: TaskItem,
+            requestCode: Int
+        ): PendingIntent {
+            val intent = Intent(context, AdelWidgetProvider::class.java).apply {
+                action = ACTION_COMPLETE_TASK
+                putExtra(EXTRA_STORE, store)
+                putExtra(EXTRA_TITLE, task.title)
+                putExtra(EXTRA_CREATED, task.createdAt)
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
         fun buildViews(context: Context): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.adel_widget)
             val alpha = getAlpha(context)
             val bg = Color.argb(alpha, 0x1A, 0x1F, 0x16)
             views.setInt(R.id.widget_root, "setBackgroundColor", bg)
-
 
             views.setOnClickPendingIntent(
                 R.id.btn_daily_report,

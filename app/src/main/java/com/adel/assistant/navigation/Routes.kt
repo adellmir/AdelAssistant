@@ -2,6 +2,7 @@ package com.adel.assistant.navigation
 
 object Routes {
     const val HOME = "home"
+    const val ASSISTANT = "assistant"
 
     const val SURVEY_TUNNEL_REPORT = "survey/tunnel/report"
     const val SURVEY_TUNNEL_CHAINAGE = "survey/tunnel/chainage"
@@ -30,7 +31,4 @@ object Routes {
     const val TOOL_BACKUP = "tool/backup"
     const val TOOL_DXF_PREVIEW = "tool/dxf_preview"
     const val TOOL_TOTAL_STATION = "tool/total_station"
-
-
-    const val ASSISTANT = "assistant"
 }

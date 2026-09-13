@@ -34,11 +34,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureRoute(intent)
+        // علامت برای ناوبری که route جدید آمده
+        DeepLinkHolder.tick++
     }
 
     override fun onResume() {
         super.onResume()
-        // به‌روزرسانی ویجت وقتی به اپ برمی‌گردیم
         try {
             AdelWidgetProvider.refreshAll(this)
         } catch (_: Exception) {
@@ -46,10 +47,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun captureRoute(intent: Intent?) {
-        val route = intent?.getStringExtra("open_route")
+        if (intent == null) return
+        val route = intent.getStringExtra("open_route")
+            ?: intent.data?.getQueryParameter("route")
         if (!route.isNullOrBlank()) {
             DeepLinkHolder.pendingRoute = route
-            intent?.removeExtra("open_route")
+            intent.removeExtra("open_route")
         }
     }
 }
