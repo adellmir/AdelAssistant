@@ -45,14 +45,9 @@ private data class PreviewRow(
     val deviation: String = "", val collapse: String = ""
 )
 
-/** سمت «کمتر»؟ (بیشتر → +1 ، کمتر → -1) */
-private fun isTowardLess(side: String): Boolean {
-    val s = side.trim()
-    return s.contains("کم") ||
-        s.equals("less", ignoreCase = true) ||
-        s == "-" ||
-        s.equals("L", ignoreCase = true)
-}
+/** سمت «کمتر»؟ — از منطق یکسان Store استفاده می‌شود */
+private fun isTowardLess(shaft: String, side: String): Boolean =
+    TunnelReportStore.isTowardLessSide(shaft, side)
 
 @Composable
 fun DailyReportScreen(color: Color, onBack: () -> Unit) {
@@ -79,13 +74,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         if (shaft.isNotBlank() && side.isNotBlank() && editingIndex < 0) {
             val suggested = TunnelReportStore.suggestedNextPointNo(context, shaft, side)
             if (suggested != null) {
-                // Store الان برای هر دو سمت last+1 می‌دهد.
-                // درست: بیشتر → last+1 (=suggested) ، کمتر → last-1 (=suggested-2)
-                pointNo = if (isTowardLess(side)) {
-                    (suggested - 2).coerceAtLeast(0).toString()
-                } else {
-                    suggested.toString()
-                }
+                // Store خودش برای کمتر last-1 و برای بیشتر last+1 می‌دهد
+                pointNo = suggested.toString()
             }
         }
     }

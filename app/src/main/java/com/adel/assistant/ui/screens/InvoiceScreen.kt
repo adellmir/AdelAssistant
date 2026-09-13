@@ -97,6 +97,7 @@ fun InvoiceScreen(
             return
         }
         employer = picks.firstOrNull { it.employer.isNotBlank() }?.employer ?: employer
+        // مبلغ پروژه‌ها در Store به میلیون است → تبدیل به ریال برای فاکتور
         lines = picks.map { p ->
             LineDraft(
                 service = p.description.ifBlank { p.name },
@@ -106,7 +107,11 @@ fun InvoiceScreen(
                 note = listOf(p.year, p.month, p.day).filter { it.isNotBlank() }.joinToString("/")
             )
         }
-        status = "${picks.size} پروژه انتخاب شد — فیلدها را ویرایش و PDF/XLSX بزن"
+        // جمع دریافتی‌های ثبت‌شده روی پروژه‌های انتخابی (میلیون → ریال)
+        val sumSettled = picks.sumOf { it.settled } * 1_000_000.0
+        received = if (kotlin.math.abs(sumSettled - sumSettled.toLong()) < 1e-9)
+            sumSettled.toLong().toString() else sumSettled.toString()
+        status = "${picks.size} پروژه انتخاب شد — جمع و مانده محاسبه شد؛ ویرایش و خروجی بزن"
     }
 
     fun buildData(): InvoiceData? {
@@ -161,6 +166,21 @@ fun InvoiceScreen(
             modifier = Modifier.weight(1f)
         ) {
             if (mode == 1) {
+                // دکمه صدور بالا — وقتی حداقل یک پروژه انتخاب شده
+                if (selected.isNotEmpty()) {
+                    item {
+                        Button(
+                            onClick = {
+                                applySelectedProjects()
+                                mode = 0
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("صدور فاکتور (${selected.size} پروژه انتخاب‌شده)")
+                        }
+                    }
+                }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedTextField(
@@ -188,25 +208,29 @@ fun InvoiceScreen(
                             Column(Modifier.weight(1f)) {
                                 Text("${p.name} — ${p.employer}", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "مبلغ: ${formatMoney(p.amount)} | ${p.year}/${p.month}/${p.day}",
+                                    "مبلغ: ${formatMoney(p.amount)} | مانده: ${formatMoney(p.remaining)} | ${p.year}/${p.month}/${p.day}",
                                     color = TextSecondary, style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
                     }
                 }
-                item {
-                    Button(
-                        onClick = {
-                            applySelectedProjects()
-                            mode = 0 // برو به فرم صدور برای ویرایش و خروجی
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = color),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("ادامه صدور فاکتور (ویرایش و خروجی)") }
+                if (selected.isNotEmpty()) {
+                    item {
+                        Button(
+                            onClick = {
+                                applySelectedProjects()
+                                mode = 0
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("صدور فاکتور (${selected.size} پروژه) — ویرایش و خروجی") }
+                    }
                 }
             }
 
+            // فرم دستی / ویرایش فقط در mode 0 (بعد از انتخاب پروژه یا از اول دستی)
+            if (mode == 0) {
             item {
                 OutlinedTextField(
                     employer, { employer = it },
@@ -320,6 +344,8 @@ fun InvoiceScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("خروجی XLSX") }
             }
+            } // end if (mode == 0)
+
             if (status.isNotBlank()) {
                 item { Text(status, color = TextSecondary) }
             }

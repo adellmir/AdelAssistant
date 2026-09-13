@@ -137,12 +137,34 @@ object TunnelReportStore {
         return latest?.pointNo?.toIntOrNull()
     }
 
+    /**
+     * پیش‌بینی شماره نقطه بعدی بر اساس آخرین ثبت همان شفت-سمت.
+     * سمت «کمتر» (به‌سمت start یا شفت با شماره کوچک‌تر): last - 1
+     * سمت «بیشتر» (به‌سمت end یا شفت با شماره بزرگ‌تر): last + 1
+     *
+     * نمونه‌ها طبق TUNNEL_LAYOUT:
+     * 1→start ، 2→1 ، 3→2 ، 4→3  → کمتر → -1
+     * 1→2 ، 2→3 ، 3→4 ، 4→end   → بیشتر → +1
+     */
     fun suggestedNextPointNo(context: Context, shaft: String, side: String): Int? {
         val last = lastPointNoFor(context, shaft, side) ?: return null
-        val s = side.trim()
-        val towardLess = s.contains("کمتر") || s.equals("0", true) || s.equals("start", true) ||
-            s.contains("less", true) || s.contains("left", true) || s == "L" || s == "l"
-        return if (towardLess) last - 1 else last + 1
+        return if (isTowardLessSide(shaft, side)) (last - 1).coerceAtLeast(0) else last + 1
+    }
+
+    /** آیا سمت انتخاب‌شده به‌سمت کمتر (start / شفت پایین‌تر) است؟ */
+    fun isTowardLessSide(shaft: String, side: String): Boolean {
+        val s = normalizeSide(side.trim())
+        if (s.equals("start", true) || s == "0") return true
+        if (s.equals("end", true)) return false
+        val sideNum = s.toIntOrNullFa()
+        val shaftNum = shaft.trim().toIntOrNullFa()
+        if (sideNum != null && shaftNum != null) {
+            // سمت عددی کوچک‌تر از شفت = حرکت به‌سمت کمتر
+            return sideNum < shaftNum
+        }
+        // متن‌های فارسی/انگلیسی
+        val lower = s.lowercase()
+        return lower.contains("کم") || lower.contains("less") || lower == "l" || lower.contains("left")
     }
 
     fun computeEntryValues(context: Context, shaft: String, side: String, pointNo: String, lengthCm: Double, dateKeyToday: String): ReportEntryValues? {

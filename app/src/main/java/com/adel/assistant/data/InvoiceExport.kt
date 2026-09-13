@@ -239,21 +239,36 @@ object InvoiceExport {
         }
     }
 
+    /**
+     * مثل XlsxReportWriter: استایل سلول (s="…") حفظ می‌شود تا قالب پایه از بین نرود.
+     * سلول‌های مبلغی (D10.. و C24/C25/C26) به‌صورت عددی نوشته می‌شوند.
+     */
     private fun applyCellUpdates(xml: String, updates: Map<String, String>): String {
         var result = xml
+        val numericRefs = updates.keys.filter { ref ->
+            ref.startsWith("D") || ref == "C24" || ref == "C25" || ref == "C26"
+        }.toSet()
         updates.forEach { (ref, value) ->
-            val escaped = value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-            val newCell =
-                """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
             val cellRegex = Regex(
                 """<c r="$ref"(?:\s[^>/]*)?(?:/>|>.*?</c>)""",
                 setOf(RegexOption.DOT_MATCHES_ALL)
             )
             val match = cellRegex.find(result)
+            val styleAttr = match?.groupValues?.get(0)?.let { full ->
+                Regex("""\bs="\d+\"""").find(full)?.value?.let { " $it" } ?: ""
+            } ?: ""
+            val newCell = if (ref in numericRefs) {
+                // فقط رقم و کاما/نقطه — برای <v> کاما را حذف می‌کنیم
+                val num = value.replace(",", "").replace(" ", "")
+                """<c r="$ref"$styleAttr><v>$num</v></c>"""
+            } else {
+                val escaped = value
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                """<c r="$ref"$styleAttr t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
+            }
             if (match != null) {
                 result = result.replaceRange(match.range, newCell)
             } else {
