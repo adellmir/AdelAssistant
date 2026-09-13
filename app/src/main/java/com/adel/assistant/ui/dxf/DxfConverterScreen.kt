@@ -64,7 +64,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                             val gsi = GsiParser.parse(bytes.toString(Charsets.UTF_8))
                             gsi.map { g ->
                                 SurveyPoint(
-                                    name = g.name,
+                                    id = g.name,
                                     x = g.e,
                                     y = g.n,
                                     z = g.z,
