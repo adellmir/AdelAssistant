@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
@@ -38,21 +39,28 @@ data class InvoiceData(
 object InvoiceExport {
 
     /**
-     * خروجی XLSX فقط از روی قالب assets/invoice_template.xlsx
-     * سلول‌ها:
-     * C7 = شماره فاکتور …
-     * E7 = کارفرمای محترم …
-     * E10+ = شرح خدمات | D10+ = مبلغ | C10+ = توضیحات
-     * C24 = جمع کل | C25 = دریافتی | C26 = مانده
+     * خروجی XLSX از روی قالب assets
+     * C7 شماره فاکتور | E7 کارفرمای محترم
+     * E10+ شرح | D10+ مبلغ | C10+ توضیحات
+     * C24 جمع | C25 دریافتی | C26 مانده
      */
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
         val bytes = try {
             buildFromTemplate(context, data)
         } catch (e: Exception) {
-            // اگر قالب نبود/خراب بود، حداقل یک فایل قابل‌باز شدن بساز
+            // فقط اگر قالب نبود — فایل سادهٔ معتبر
             buildMinimalXlsx(data)
         }
         if (bytes.size < 200) return null
+        // اعتبارسنجی حداقلی: باید Content_Types داشته باشد
+        if (!zipHasEntry(bytes, "[Content_Types].xml")) {
+            val fixed = ensureValidPackage(bytes, data)
+            return save(context, data, fixed)
+        }
+        return save(context, data, bytes)
+    }
+
+    private fun save(context: Context, data: InvoiceData, bytes: ByteArray): Uri? {
         val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
             .replace(" ", "_")
         return FileExport.exportBytesToDocuments(
@@ -84,14 +92,17 @@ object InvoiceExport {
         val names = listOf("invoice_template.xlsx", "1فاکتور.xlsx", "invoice.xlsx")
         for (n in names) {
             try {
-                return context.assets.open(n).use { it.readBytes() }
+                val b = context.assets.open(n).use { it.readBytes() }
+                if (b.size > 500 && zipHasEntry(b, "[Content_Types].xml")) return b
             } catch (_: Exception) {
             }
         }
-        // fallback: filesDir copy if user placed template
         val local = File(context.filesDir, "invoice_template.xlsx")
-        if (local.exists()) return local.readBytes()
-        throw IllegalStateException("قالب فاکتور (invoice_template.xlsx) در assets پیدا نشد")
+        if (local.exists()) {
+            val b = local.readBytes()
+            if (b.size > 500) return b
+        }
+        throw IllegalStateException("قالب فاکتور در assets پیدا نشد")
     }
 
     private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
@@ -115,8 +126,7 @@ object InvoiceExport {
         updates["C25"] = formatAmount(data.received)
         updates["C26"] = formatAmount(data.remaining)
 
-        val templateBytes = loadTemplateBytes(context)
-        return rewriteXlsx(templateBytes, updates)
+        return rewriteXlsx(loadTemplateBytes(context), updates)
     }
 
     private fun formatAmount(v: Double): String {
@@ -135,34 +145,98 @@ object InvoiceExport {
         return if (neg) "-$sb" else sb.toString()
     }
 
+    /** خواندن همهٔ ورودی‌های ZIP، اصلاح شیت، نوشتن دوباره با ساختار کامل */
     private fun rewriteXlsx(templateBytes: ByteArray, updates: Map<String, String>): ByteArray {
-        val outBuffer = ByteArrayOutputStream()
-        ZipOutputStream(outBuffer).use { zos ->
-            ZipInputStream(templateBytes.inputStream()).use { zis ->
-                var entry = zis.nextEntry
-                var foundSheet = false
-                while (entry != null) {
-                    val bytes = zis.readBytes()
-                    val name = entry.name
-                    val data = when {
-                        name == "xl/worksheets/sheet1.xml" ||
-                            name.endsWith("/sheet1.xml") ||
-                            (name.contains("worksheets/sheet") && name.endsWith(".xml")) -> {
-                            foundSheet = true
-                            applyCellUpdates(bytes.toString(Charsets.UTF_8), updates)
-                                .toByteArray(Charsets.UTF_8)
-                        }
-                        else -> bytes
-                    }
-                    zos.putNextEntry(ZipEntry(name))
-                    zos.write(data)
-                    zos.closeEntry()
-                    entry = zis.nextEntry
+        val entries = linkedMapOf<String, ByteArray>()
+        ZipInputStream(ByteArrayInputStream(templateBytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    entries[entry.name] = zis.readBytes()
                 }
-                if (!foundSheet) throw IllegalStateException("sheet1.xml در قالب پیدا نشد")
+                zis.closeEntry()
+                entry = zis.nextEntry
             }
         }
-        return outBuffer.toByteArray()
+
+        val sheetKey = entries.keys.firstOrNull { name ->
+            name == "xl/worksheets/sheet1.xml" ||
+                name.endsWith("/sheet1.xml") ||
+                (name.contains("worksheets/sheet") && name.endsWith(".xml") && !name.contains("_rels"))
+        } ?: throw IllegalStateException("sheet1.xml در قالب پیدا نشد")
+
+        val sheetXml = entries[sheetKey]!!.toString(Charsets.UTF_8)
+        entries[sheetKey] = applyCellUpdates(sheetXml, updates).toByteArray(Charsets.UTF_8)
+
+        // اگر Content_Types یا rels نبود، فایل قالب ناقص است
+        if (!entries.containsKey("[Content_Types].xml")) {
+            throw IllegalStateException("قالب فاقد [Content_Types].xml است")
+        }
+        if (!entries.keys.any { it == "_rels/.rels" || it.endsWith(".rels") }) {
+            throw IllegalStateException("قالب فاقد فایل rels است")
+        }
+
+        return writeZip(entries)
+    }
+
+    private fun writeZip(entries: Map<String, ByteArray>): ByteArray {
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zos ->
+            zos.setLevel(6)
+            for ((name, data) in entries) {
+                val ze = ZipEntry(name)
+                // برای فایل‌های کوچک XML فشرده؛ برای باینری هم DEFLATED مشکلی ندارد
+                ze.method = ZipEntry.DEFLATED
+                zos.putNextEntry(ze)
+                zos.write(data)
+                zos.closeEntry()
+            }
+        }
+        return out.toByteArray()
+    }
+
+    private fun zipHasEntry(bytes: ByteArray, entryName: String): Boolean {
+        return try {
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
+                var e = zis.nextEntry
+                while (e != null) {
+                    if (e.name == entryName || e.name.endsWith(entryName)) return true
+                    e = zis.nextEntry
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun ensureValidPackage(bytes: ByteArray, data: InvoiceData): ByteArray {
+        // اگر خروجی ناقص بود، حداقل فایل معتبر بساز
+        return try {
+            val entries = linkedMapOf<String, ByteArray>()
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
+                var e = zis.nextEntry
+                while (e != null) {
+                    if (!e.isDirectory) entries[e.name] = zis.readBytes()
+                    e = zis.nextEntry
+                }
+            }
+            if (!entries.containsKey("[Content_Types].xml")) {
+                entries["[Content_Types].xml"] = DEFAULT_CONTENT_TYPES.toByteArray(Charsets.UTF_8)
+            }
+            if (!entries.containsKey("_rels/.rels")) {
+                entries["_rels/.rels"] = DEFAULT_RELS.toByteArray(Charsets.UTF_8)
+            }
+            if (!entries.containsKey("xl/_rels/workbook.xml.rels")) {
+                entries["xl/_rels/workbook.xml.rels"] = DEFAULT_WB_RELS.toByteArray(Charsets.UTF_8)
+            }
+            if (!entries.containsKey("xl/workbook.xml")) {
+                entries["xl/workbook.xml"] = DEFAULT_WB.toByteArray(Charsets.UTF_8)
+            }
+            writeZip(entries)
+        } catch (_: Exception) {
+            buildMinimalXlsx(data)
+        }
     }
 
     private fun applyCellUpdates(xml: String, updates: Map<String, String>): String {
@@ -176,7 +250,7 @@ object InvoiceExport {
             val newCell =
                 """<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
             val cellRegex = Regex(
-                """<c r="$ref"(?:\s[^>]*)?(?:/>|>.*?</c>)""",
+                """<c r="$ref"(?:\s[^>/]*)?(?:/>|>.*?</c>)""",
                 setOf(RegexOption.DOT_MATCHES_ALL)
             )
             val match = cellRegex.find(result)
@@ -184,14 +258,12 @@ object InvoiceExport {
                 result = result.replaceRange(match.range, newCell)
             } else {
                 val rowNum = Regex("""(\d+)$""").find(ref)?.groupValues?.get(1) ?: return@forEach
-                // سعی در یافتن ردیف موجود
                 val rowOpen = Regex("""<row[^>]*\br="$rowNum"[^>]*>""")
                 val m = rowOpen.find(result)
                 if (m != null) {
                     val insertAt = m.range.last + 1
                     result = result.substring(0, insertAt) + newCell + result.substring(insertAt)
                 } else {
-                    // ردیف نیست — قبل از </sheetData> اضافه کن
                     val close = result.lastIndexOf("</sheetData>")
                     if (close >= 0) {
                         val rowXml = """<row r="$rowNum">$newCell</row>"""
@@ -211,7 +283,7 @@ object InvoiceExport {
                 append("""<row r="$r">""")
                 cells.forEach { (ref, v) ->
                     val e = v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    append("""<c r="$ref" t="inlineStr"><is><t>$e</t></is></c>""")
+                    append("""<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$e</t></is></c>""")
                 }
                 append("</row>")
             }
@@ -232,38 +304,14 @@ object InvoiceExport {
             row(26, listOf("C26" to formatAmount(data.remaining)))
             append("</sheetData></worksheet>")
         }
-        val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-</Types>"""
-        val rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>"""
-        val wb = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Invoice" sheetId="1" r:id="rId1"/></sheets></workbook>"""
-        val wbRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-</Relationships>"""
-        val out = ByteArrayOutputStream()
-        ZipOutputStream(out).use { zos ->
-            fun put(name: String, text: String) {
-                zos.putNextEntry(ZipEntry(name))
-                zos.write(text.toByteArray(Charsets.UTF_8))
-                zos.closeEntry()
-            }
-            put("[Content_Types].xml", contentTypes)
-            put("_rels/.rels", rels)
-            put("xl/workbook.xml", wb)
-            put("xl/_rels/workbook.xml.rels", wbRels)
-            put("xl/worksheets/sheet1.xml", sheet)
-        }
-        return out.toByteArray()
+        val entries = linkedMapOf(
+            "[Content_Types].xml" to DEFAULT_CONTENT_TYPES.toByteArray(Charsets.UTF_8),
+            "_rels/.rels" to DEFAULT_RELS.toByteArray(Charsets.UTF_8),
+            "xl/workbook.xml" to DEFAULT_WB.toByteArray(Charsets.UTF_8),
+            "xl/_rels/workbook.xml.rels" to DEFAULT_WB_RELS.toByteArray(Charsets.UTF_8),
+            "xl/worksheets/sheet1.xml" to sheet.toByteArray(Charsets.UTF_8)
+        )
+        return writeZip(entries)
     }
 
     private fun buildPdf(data: InvoiceData): ByteArray {
@@ -309,4 +357,27 @@ object InvoiceExport {
         doc.close()
         return bos.toByteArray()
     }
+
+    private const val DEFAULT_CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"""
+
+    private const val DEFAULT_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+
+    private const val DEFAULT_WB = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Invoice" sheetId="1" r:id="rId1"/></sheets>
+</workbook>"""
+
+    private const val DEFAULT_WB_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"""
 }
