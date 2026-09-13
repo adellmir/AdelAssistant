@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -46,10 +45,18 @@ private data class PreviewRow(
     val deviation: String = "", val collapse: String = ""
 )
 
+/** سمت «کمتر»؟ (بیشتر → +1 ، کمتر → -1) */
+private fun isTowardLess(side: String): Boolean {
+    val s = side.trim()
+    return s.contains("کم") ||
+        s.equals("less", ignoreCase = true) ||
+        s == "-" ||
+        s.equals("L", ignoreCase = true)
+}
+
 @Composable
 fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
-    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     val today = remember { CalendarStore.todayJalali() }
     var day by remember { mutableStateOf(today.third.toString()) }
@@ -71,7 +78,15 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     LaunchedEffect(shaft, side) {
         if (shaft.isNotBlank() && side.isNotBlank() && editingIndex < 0) {
             val suggested = TunnelReportStore.suggestedNextPointNo(context, shaft, side)
-            if (suggested != null) pointNo = suggested.toString()
+            if (suggested != null) {
+                // Store الان برای هر دو سمت last+1 می‌دهد.
+                // درست: بیشتر → last+1 (=suggested) ، کمتر → last-1 (=suggested-2)
+                pointNo = if (isTowardLess(side)) {
+                    (suggested - 2).coerceAtLeast(0).toString()
+                } else {
+                    suggested.toString()
+                }
+            }
         }
     }
 
@@ -85,7 +100,9 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                     CsvStore.importRawText(context, "survey_tunnel_report", text)
                     statusMsg = "فایل گزارش‌ها با موفقیت وارد شد"
                 }
-            } catch (e: Exception) { statusMsg = "خطا در وارد کردن فایل" }
+            } catch (e: Exception) {
+                statusMsg = "خطا در وارد کردن فایل"
+            }
         }
     }
 
@@ -94,14 +111,19 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     fun loadDay() {
         val existing = TunnelReportStore.entriesForDate(context, year, month, day)
         rows = existing.map { e ->
-            PreviewRow(e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.shaftProgress, e.remaining, e.deviation, e.collapse)
+            PreviewRow(
+                e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.shaftProgress,
+                e.remaining, e.deviation, e.collapse
+            )
         }
         statusMsg = if (rows.isEmpty()) "برای این تاریخ رکوردی ثبت نشده" else "${rows.size} ردیف بارگذاری شد"
     }
 
     fun addOrUpdateRow() {
         val len = length.toDoubleOrNullFa() ?: return
-        if (len < 0) { statusMsg = "طول باید عدد مثبت باشد (به سانتی‌متر)"; return }
+        if (len < 0) {
+            statusMsg = "طول باید عدد مثبت باشد (به سانتی‌متر)"; return
+        }
         if (shaft.isBlank() || side.isBlank() || pointNo.isBlank()) {
             statusMsg = "شفت، سمت و شماره نقطه الزامی‌اند"; return
         }
@@ -110,7 +132,10 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             statusMsg = "نقطه‌ی $pointNo در فایل نقاط پیدا نشد — اول از «نقاط تونل» ثبتش کن"
             return
         }
-        val newRow = PreviewRow(shaft, side, pointNo, len, v.km, v.dailyProgress, v.shaftProgress, v.remaining, deviation, collapse)
+        val newRow = PreviewRow(
+            shaft, side, pointNo, len, v.km, v.dailyProgress, v.shaftProgress, v.remaining,
+            deviation, collapse
+        )
         rows = if (editingIndex >= 0) {
             rows.toMutableList().also { it[editingIndex] = newRow }
         } else {
@@ -134,8 +159,10 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
     fun registerAll() {
         val newEntries = rows.map {
-            ReportEntry(year, month, day, it.shaft, it.side, it.pointNo, it.lengthCm, it.deviation, it.collapse,
-                it.km, it.dailyProgress, it.shaftProgress, it.remaining)
+            ReportEntry(
+                year, month, day, it.shaft, it.side, it.pointNo, it.lengthCm, it.deviation, it.collapse,
+                it.km, it.dailyProgress, it.shaftProgress, it.remaining
+            )
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
         statusMsg = "ثبت شد"
@@ -184,7 +211,12 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             }
         }
         if (weekday != null) {
-            Text(weekday, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697), modifier = Modifier.padding(top = 2.dp))
+            Text(
+                weekday,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFAAB697),
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -194,15 +226,20 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 value = shaft, onValueChange = { shaft = filterNumericInput(it) }, label = { Text("شفت") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(value = side, onValueChange = { side = it }, label = { Text("سمت") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = side, onValueChange = { side = it }, label = { Text("سمت") },
+                modifier = Modifier.weight(1f)
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(
-                value = pointNo, onValueChange = { pointNo = filterNumericInput(it) }, label = { Text("شماره نقطه") },
+                value = pointNo, onValueChange = { pointNo = filterNumericInput(it) },
+                label = { Text("شماره نقطه") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = length, onValueChange = { length = filterNumericInput(it) }, label = { Text("طول (سانتی‌متر)") },
+                value = length, onValueChange = { length = filterNumericInput(it) },
+                label = { Text("طول (سانتی‌متر)") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { addOrUpdateRow() }) {
@@ -210,8 +247,14 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") },
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") },
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -221,19 +264,39 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(rows.size) { i ->
                 val r = rows[i]
-                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceColor,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("${r.shaft}به${r.side} (ن${r.pointNo})", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                "${r.shaft}به${r.side} (ن${r.pointNo})",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
                             IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp))
+                                Icon(
+                                    Icons.Filled.Edit, contentDescription = "ویرایش",
+                                    tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp)
+                                )
                             }
                             IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Filled.Delete, contentDescription = "پاک کردن", tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp))
+                                Icon(
+                                    Icons.Filled.Delete, contentDescription = "پاک کردن",
+                                    tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp)
+                                )
                             }
                         }
                         Text(
-                            formatEn("ک:%.3f  پ.روز:%.3f  پ.شفت:%.3f  مانده:%.3f", r.km, r.dailyProgress, r.shaftProgress, r.remaining),
+                            formatEn(
+                                "ک:%.3f  پ.روز:%.3f  پ.شفت:%.3f  مانده:%.3f",
+                                r.km, r.dailyProgress, r.shaftProgress, r.remaining
+                            ),
                             style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B)
                         )
                     }
@@ -242,10 +305,18 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
 
         if (statusMsg.isNotBlank()) {
-            Text(statusMsg, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697), modifier = Modifier.padding(vertical = 4.dp))
+            Text(
+                statusMsg,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFAAB697),
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(vertical = 12.dp)
+        ) {
             Button(
                 onClick = { registerAll() },
                 colors = ButtonDefaults.buttonColors(containerColor = color),

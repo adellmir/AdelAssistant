@@ -36,6 +36,8 @@ import java.io.InputStreamReader
 fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var selectAll by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
     var newestFirst by remember { mutableStateOf(true) }
     var editTarget by remember { mutableStateOf<GsiPoint?>(null) }
@@ -46,6 +48,10 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
 
     val displayList = remember(points, newestFirst) {
         if (newestFirst) points.asReversed() else points
+    }
+
+    fun selectedPoints(): List<GsiPoint> {
+        return if (selectAll) points else points.filter { it.id in selectedIds }
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -64,15 +70,20 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             } ?: ""
             val name = uri.lastPathSegment?.lowercase() ?: ""
             val parsed = when {
-                name.endsWith(".gsi") || text.trimStart().startsWith("*11") || text.contains("81..") || text.contains("81.") ->
-                    GsiParser.parse(text)
+                name.endsWith(".gsi") ||
+                    text.trimStart().startsWith("*11") ||
+                    text.contains("81..") ||
+                    text.contains("81.") -> GsiParser.parse(text)
                 else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
             }
             points = parsed
+            selectedIds = parsed.map { it.id }.toSet()
+            selectAll = true
             status = if (parsed.isEmpty()) "نقطه‌ای یافت نشد" else "${parsed.size} نقطه"
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
             points = emptyList()
+            selectedIds = emptySet()
         }
     }
 
@@ -108,22 +119,23 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun export(kind: String) {
-        if (points.isEmpty()) {
-            status = "لیست خالی است"
+        val list = selectedPoints()
+        if (list.isEmpty()) {
+            status = "نقطه‌ای انتخاب نشده"
             return
         }
         val ok = when (kind) {
-            "txt" -> saveFile("gsi_export.txt", GsiParser.toTxt(points))
-            "gsi" -> saveFile("gsi_export.gsi", GsiParser.toGsi(points))
+            "txt" -> saveFile("gsi_export.txt", GsiParser.toTxt(list))
+            "gsi" -> saveFile("gsi_export.gsi", GsiParser.toGsi(list))
             "kml" -> saveFile(
                 "gsi_export.kml",
-                GsiParser.toKml(points),
+                GsiParser.toKml(list),
                 "application/vnd.google-earth.kml+xml"
             )
-            "dxf" -> saveFile("gsi_export.dxf", GsiParser.toDxf(points), "application/dxf")
+            "dxf" -> saveFile("gsi_export.dxf", GsiParser.toDxf(list), "application/dxf")
             else -> false
         }
-        status = if (ok) "ذخیره شد: $kind" else "خطا در ذخیره $kind"
+        status = if (ok) "ذخیره شد: $kind (${list.size} نقطه)" else "خطا در ذخیره $kind"
     }
 
     fun applyEdit() {
@@ -182,6 +194,26 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 }
             }
 
+            Spacer(Modifier.height(6.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        selectAll = true
+                        selectedIds = points.map { it.id }.toSet()
+                    },
+                    enabled = points.isNotEmpty()
+                ) { Text("انتخاب همه") }
+
+                OutlinedButton(
+                    onClick = {
+                        selectAll = false
+                        selectedIds = emptySet()
+                    },
+                    enabled = points.isNotEmpty()
+                ) { Text("گزینش") }
+            }
+
             Spacer(Modifier.height(8.dp))
 
             Row(
@@ -211,13 +243,22 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(displayList, key = { it.id }) { p ->
+                    val checked = selectAll || p.id in selectedIds
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .background(Color(0xFF1E241A), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Checkbox(
+                            checked = checked,
+                            onCheckedChange = { on ->
+                                selectAll = false
+                                selectedIds = if (on) selectedIds + p.id else selectedIds - p.id
+                            },
+                            colors = CheckboxDefaults.colors(checkedColor = color)
+                        )
                         Column(Modifier.weight(1f)) {
                             Text(
                                 p.name,
@@ -243,6 +284,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                         TextButton(
                             onClick = {
                                 points = points.filter { it.id != p.id }
+                                selectedIds = selectedIds - p.id
                                 status = "حذف شد"
                             }
                         ) { Text("حذف", color = Color(0xFFE57373), fontSize = 12.sp) }

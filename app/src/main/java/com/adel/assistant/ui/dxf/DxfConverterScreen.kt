@@ -24,12 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DefaultCodeRules
+import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
-import com.adel.assistant.data.FileExport
 import com.adel.assistant.utils.DxfMapGenerator
 import com.adel.assistant.utils.DxfPointParser
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
 
@@ -52,11 +54,30 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                 val name = getFileName(context, uri) ?: "points.dat"
                 fileName = name
                 context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val result = DxfPointParser.parse(stream, name)
-                    points = result.points
-                    val uniqueCodes = result.points.map { it.code }.distinct().filter { it.isNotBlank() }
+                    val bytes = stream.readBytes()
+                    val lower = name.lowercase()
+                    val parsedPoints: List<SurveyPoint> =
+                        if (lower.endsWith(".gsi") ||
+                            bytes.toString(Charsets.UTF_8).trimStart().startsWith("*11")
+                        ) {
+                            // هر دو مدل GSI (B0619 و BAHAR)
+                            val gsi = GsiParser.parse(bytes.toString(Charsets.UTF_8))
+                            gsi.map { g ->
+                                SurveyPoint(
+                                    name = g.name,
+                                    x = g.e,
+                                    y = g.n,
+                                    z = g.z,
+                                    code = g.code.ifBlank { g.name }
+                                )
+                            }
+                        } else {
+                            DxfPointParser.parse(ByteArrayInputStream(bytes), name).points
+                        }
+                    points = parsedPoints
+                    val uniqueCodes = parsedPoints.map { it.code }.distinct().filter { it.isNotBlank() }
                     codeSettings = uniqueCodes.associateWith { DefaultCodeRules.createDefaultSetting(it) }
-                    if (result.points.isNotEmpty()) {
+                    if (parsedPoints.isNotEmpty()) {
                         stage = 1
                         statusMessage = null
                     } else {
@@ -74,7 +95,6 @@ fun DxfConverterScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(Background)
     ) {
-        // Top bar ساده
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,10 +134,14 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(40.dp))
                     Icon(Icons.Default.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("فایل نقاط را انتخاب کنید", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "فایل نقاط را انتخاب کنید",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        ".dat → ترتیب n y x z d\nسایر پسوندها → N x y z d",
+                        ".dat → n y x z d\nسایر متنی → N x y z d\n.gsi → هر دو مدل لیکا",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -159,7 +183,12 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Icon(Icons.Default.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("DXF ساخته شد", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1C1C1C))
+                    Text(
+                        "DXF ساخته شد",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1C1C1C)
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "فایل: $fileName\nنقاط: ${points.size}\nحجم: ${(generatedDxf?.length ?: 0) / 1024} KB\nمسیر: Documents/AdelAssistant",
@@ -215,14 +244,12 @@ private fun saveAndShare(context: Context, content: String, originalName: String
     try {
         val base = originalName.substringBeforeLast(".").ifBlank { "map" }
         val fileName = "${base}_map.dxf"
-        // 1) ذخیره در Documents/AdelAssistant
-        val docUri = FileExport.exportTextToDocuments(
+        FileExport.exportTextToDocuments(
             context,
             fileName,
             content,
             mimeType = "application/dxf"
         )
-        // 2) اشتراک از cache با FileProvider
         val cacheFile = File(context.cacheDir, fileName)
         FileOutputStream(cacheFile).use { it.write(content.toByteArray(Charsets.UTF_8)) }
         val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
@@ -233,20 +260,19 @@ private fun saveAndShare(context: Context, content: String, originalName: String
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "اشتراک DXF — ذخیره در Documents/AdelAssistant"))
-        if (docUri == null) {
-            // حتی اگر MediaStore شکست خورد، اشتراک از cache کار می‌کند
-        }
     } catch (e: Exception) {
         e.printStackTrace()
     }
 }
 
-
 private fun saveAndShareKml(context: Context, content: String, originalName: String) {
     try {
         val base = originalName.substringBeforeLast(".").ifBlank { "map" }
         val fileName = "${base}_map.kml"
-        FileExport.exportTextToDocuments(context, fileName, content, mimeType = "application/vnd.google-earth.kml+xml")
+        FileExport.exportTextToDocuments(
+            context, fileName, content,
+            mimeType = "application/vnd.google-earth.kml+xml"
+        )
         val cacheFile = File(context.cacheDir, fileName)
         FileOutputStream(cacheFile).use { it.write(content.toByteArray(Charsets.UTF_8)) }
         val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
