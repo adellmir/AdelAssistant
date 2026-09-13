@@ -44,27 +44,13 @@ import com.adel.assistant.ui.theme.WorkPrimary
 fun AppNavigation() {
     val navController: NavHostController = rememberNavController()
 
-    // deep link از ویجت / اعلان
-    val deepTick = DeepLinkHolder.tick
-    LaunchedEffect(deepTick) {
-        val pending = DeepLinkHolder.pendingRoute
-        if (!pending.isNullOrBlank()) {
-            DeepLinkHolder.pendingRoute = null
+    // deep link از ویجت — pendingRoute با mutableStateOf
+    val pendingRoute = DeepLinkHolder.pendingRoute
+    LaunchedEffect(pendingRoute) {
+        if (!pendingRoute.isNullOrBlank()) {
+            DeepLinkHolder.setRoute(null)
             try {
-                navController.navigate(pending) {
-                    launchSingleTop = true
-                }
-            } catch (_: Exception) {
-            }
-        }
-    }
-    // بار اول هم route را بخوان
-    LaunchedEffect(Unit) {
-        val pending = DeepLinkHolder.pendingRoute
-        if (!pending.isNullOrBlank()) {
-            DeepLinkHolder.pendingRoute = null
-            try {
-                navController.navigate(pending) {
+                navController.navigate(pendingRoute) {
                     launchSingleTop = true
                 }
             } catch (_: Exception) {
@@ -85,7 +71,6 @@ fun AppNavigation() {
             )
         }
 
-        // ---- نقشه‌برداری: تونل ----
         composable(Routes.SURVEY_TUNNEL_REPORT) {
             DailyReportScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
@@ -107,7 +92,6 @@ fun AppNavigation() {
             )
         }
 
-        // ---- نقشه‌برداری: پروژه‌ها ----
         composable(Routes.SURVEY_PROJECT_REGISTER) {
             ProjectRegisterScreen(
                 color = WorkPrimary,
@@ -159,7 +143,6 @@ fun AppNavigation() {
             )
         }
 
-        // ---- مالی: تونل ----
         composable(Routes.FIN_TUNNEL_WORKLOG) {
             TunnelWorklogScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
@@ -170,7 +153,6 @@ fun AppNavigation() {
             TunnelFinanceSummaryScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
 
-        // ---- مالی: پروژه‌ها ----
         composable(Routes.FIN_PROJECT_INVOICE) {
             InvoiceScreen(
                 color = FinancePrimary,
@@ -201,7 +183,6 @@ fun AppNavigation() {
             FinanceStatusScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
 
-        // ---- ابزار ----
         composable(Routes.TOOL_DXF) {
             DxfConverterScreen(onBack = { navController.popBackStack() })
         }
