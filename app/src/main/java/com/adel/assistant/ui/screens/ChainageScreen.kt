@@ -27,39 +27,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.*
-
-private fun utmToLatLon(x: Double, y: Double): Pair<Double, Double> {
-    val a = 6378137.0
-    val f = 1 / 298.257223563
-    val k0 = 0.9996
-    val e = sqrt(f * (2 - f))
-    val e1sq = e * e / (1 - e * e)
-    val m = y / k0
-    val mu = m / (a * (1 - e * e / 4 - 3 * e.pow(4) / 64 - 5 * e.pow(6) / 256))
-    val e1 = (1 - sqrt(1 - e * e)) / (1 + sqrt(1 - e * e))
-    val j1 = 3 * e1 / 2 - 27 * e1.pow(3) / 32
-    val j2 = 21 * e1.pow(2) / 16 - 55 * e1.pow(4) / 32
-    val j3 = 151 * e1.pow(3) / 96
-    val j4 = 1097 * e1.pow(4) / 512
-    val fp = mu + j1 * sin(2 * mu) + j2 * sin(4 * mu) + j3 * sin(6 * mu) + j4 * sin(8 * mu)
-    val c1 = e1sq * cos(fp).pow(2)
-    val t1 = tan(fp).pow(2)
-    val r1 = a * (1 - e * e) / (1 - e * e * sin(fp).pow(2)).pow(1.5)
-    val n1 = a / sqrt(1 - e * e * sin(fp).pow(2))
-    val d = (x - 500000.0) / (n1 * k0)
-    val lat = fp - (n1 * tan(fp) / r1) * (d.pow(2) / 2 - (5 + 3 * t1 + 10 * c1 - 4 * c1.pow(2) - 9 * e1sq) * d.pow(4) / 24 +
-            (61 + 90 * t1 + 298 * c1 + 45 * t1.pow(2) - 252 * e1sq - 3 * c1.pow(2)) * d.pow(6) / 720)
-    val lon = (d - (1 + 2 * t1 + c1) * d.pow(3) / 6 +
-            (5 - 2 * c1 + 28 * t1 - 3 * c1.pow(2) + 8 * e1sq + 24 * t1.pow(2)) * d.pow(5) / 120) / cos(fp)
-    val zoneCentralMeridian = 57.0
-    return Pair(Math.toDegrees(lat), zoneCentralMeridian + Math.toDegrees(lon))
-}
 
 @Composable
 fun ChainageScreen(color: Color, onBack: () -> Unit) {
@@ -85,10 +59,13 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
         if (km == null) { errorText = "کیلومتراژ نامعتبر است"; return }
         val p = TunnelReportStore.findByKm(context, km)
         if (p == null) { errorText = "داده‌ای برای این کیلومتراژ موجود نیست (فایل نقاط آپلود شده؟)"; return }
-        val (lat, lon) = utmToLatLon(p.x, p.y)
+        val (lat, lon) = UtmGeo.toLatLon(p.x, p.y, UtmGeo.DEFAULT_ZONE)
         coordText = formatEn("X: %.3f   Y: %.3f", p.x, p.y)
-        detailText = formatEn("Z: %.3f   اختلاف‌تراز: %s\nشیب: %s   نوع نقطه: %s\nLat/Lon: %.6f, %.6f", p.z, p.elevDiff, p.slope, p.type, lat, lon)
-        mapsUrl = formatEn("https://maps.google.com/?q=%.6f,%.6f", lat, lon)
+        detailText = formatEn(
+            "Z: %.3f   اختلاف‌تراز: %s\nشیب: %s   نوع نقطه: %s\nLat/Lon: %.6f, %.6f  (زون %d)",
+            p.z, p.elevDiff, p.slope, p.type, lat, lon, UtmGeo.DEFAULT_ZONE
+        )
+        mapsUrl = UtmGeo.googleMapsUrl(lat, lon)
     }
 
     fun findMyLocation() {
@@ -103,7 +80,17 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
             if (best == null) { myLocationResult = "موقعیتی دریافت نشد، کمی صبر کن"; return }
             val points = TunnelReportStore.allPoints(context)
             if (points.isEmpty()) { myLocationResult = "فایل نقاط آپلود نشده"; return }
-            myLocationResult = "دقت GPS ارتفاع/موقعیت تقریبی است (خطای ۱۰-۲۰ متر). این محاسبه در نسخه‌ی بعد کامل می‌شود."
+            val zone = UtmGeo.zoneFromLon(best.longitude)
+            val (ex, ny) = UtmGeo.fromLatLon(best.latitude, best.longitude, zone)
+            val nearest = points.minByOrNull { p ->
+                val dx = p.x - ex; val dy = p.y - ny
+                dx * dx + dy * dy
+            }!!
+            val dist = sqrt((nearest.x - ex).pow(2) + (nearest.y - ny).pow(2))
+            myLocationResult = formatEn(
+                "GPS: %.6f, %.6f (زون %d)\nUTM: E=%.3f  N=%.3f\nنزدیک‌ترین نقطه: %s  فاصله افقی ≈ %.1f m\n(دقت GPS گوشی معمولاً ۳–۱۵ متر)",
+                best.latitude, best.longitude, zone, ex, ny, nearest.pointNo, dist
+            )
         } catch (e: SecurityException) {
             myLocationResult = "دسترسی موقعیت داده نشده"
         }

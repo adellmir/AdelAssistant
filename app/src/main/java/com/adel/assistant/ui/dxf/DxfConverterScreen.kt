@@ -26,6 +26,8 @@ import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
+import com.adel.assistant.data.KmlParser
+import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
@@ -56,11 +58,11 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     val bytes = stream.readBytes()
                     val lower = name.lowercase()
-                    val parsedPoints: List<SurveyPoint> =
-                        if (lower.endsWith(".gsi") ||
-                            bytes.toString(Charsets.UTF_8).trimStart().startsWith("*11")
-                        ) {
-                            // هر دو مدل GSI (B0619 و BAHAR)
+                    val parsedPoints: List<SurveyPoint> = when {
+                        lower.endsWith(".kml") || lower.endsWith(".kmz") ->
+                            KmlParser.parseBytes(bytes, name).points
+                        lower.endsWith(".gsi") ||
+                            bytes.toString(Charsets.UTF_8).trimStart().startsWith("*11") -> {
                             val gsi = GsiParser.parse(bytes.toString(Charsets.UTF_8))
                             gsi.map { g ->
                                 SurveyPoint(
@@ -71,9 +73,16 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                                     code = g.code.ifBlank { g.name }
                                 )
                             }
-                        } else {
-                            DxfPointParser.parse(ByteArrayInputStream(bytes), name).points
                         }
+                        else -> {
+                            // DAT/TXT/CSV/IDX و سایر
+                            try {
+                                PointConverter.readBytes(bytes, name)
+                            } catch (_: Exception) {
+                                DxfPointParser.parse(ByteArrayInputStream(bytes), name).points
+                            }
+                        }
+                    }
                     points = parsedPoints
                     val uniqueCodes = parsedPoints.map { it.code }.distinct().filter { it.isNotBlank() }
                     codeSettings = uniqueCodes.associateWith { DefaultCodeRules.createDefaultSetting(it) }

@@ -44,6 +44,7 @@ import androidx.core.content.ContextCompat
 import com.adel.assistant.data.DxfModel
 import com.adel.assistant.data.DxfParser
 import com.adel.assistant.data.DxfColors
+import com.adel.assistant.data.KmlParser
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -83,8 +84,17 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         try {
             val added = mutableListOf<DxfModel>()
             uris.forEach { uri ->
-                val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-                val m = DxfParser.parse(text)
+                val name = (uri.lastPathSegment ?: "").lowercase()
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@forEach
+                val isKml = name.endsWith(".kml") || name.endsWith(".kmz") ||
+                    bytes.toString(Charsets.UTF_8).trimStart().startsWith("<?xml") &&
+                    bytes.toString(Charsets.UTF_8).contains("<kml", ignoreCase = true)
+                val m = if (isKml || name.endsWith(".kmz")) {
+                    val r = KmlParser.parseBytes(bytes, name.ifBlank { "map.kml" }, zone)
+                    KmlParser.toDxfModel(r)
+                } else {
+                    DxfParser.parse(bytes.toString(Charsets.UTF_8))
+                }
                 if (!m.isEmpty) added += m
             }
             if (added.isEmpty()) {
@@ -98,7 +108,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 message = "${models.size} فایل | خط: $totalL | نقطه: $totalC"
             }
         } catch (e: Exception) {
-            message = "خطا در خواندن DXF: ${e.message}"
+            message = "خطا در خواندن فایل: ${e.message}"
         }
     }
 
@@ -218,8 +228,20 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
         ) {
-            IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream")) }) {
-                Icon(Icons.Filled.FolderOpen, contentDescription = "وارد کردن نقشه", tint = color)
+            IconButton(onClick = {
+                openFile.launch(
+                    arrayOf(
+                        "*/*",
+                        "application/dxf",
+                        "text/*",
+                        "application/octet-stream",
+                        "application/vnd.google-earth.kml+xml",
+                        "application/vnd.google-earth.kmz",
+                        "application/xml"
+                    )
+                )
+            }) {
+                Icon(Icons.Filled.FolderOpen, contentDescription = "وارد کردن DXF/KML/KMZ", tint = color)
             }
             IconButton(onClick = {
                 satellite = !satellite

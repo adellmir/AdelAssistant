@@ -9,7 +9,19 @@ object PointConverter {
         "gsi" -> parseGsi(text)
         "idx" -> parseIdx(text)
         "dxf" -> parseDxf(text)
+        "kml" -> KmlParser.parseKmlText(text).points
         else -> parseDelimited(text)
+    }
+
+    /** خواندن از بایت (برای KMZ که باینری/زیپ است) */
+    fun readBytes(bytes: ByteArray, fileName: String): List<SurveyPoint> {
+        val lower = fileName.lowercase()
+        return when {
+            lower.endsWith(".kmz") || lower.endsWith(".kml") ->
+                KmlParser.parseBytes(bytes, fileName).points
+            lower.endsWith(".gsi") -> parseGsi(bytes.toString(Charsets.UTF_8))
+            else -> read(bytes.toString(Charsets.UTF_8), lower.substringAfterLast('.', "txt"))
+        }
     }
 
     fun write(points: List<SurveyPoint>, extension: String): String = when (extension.lowercase()) {
