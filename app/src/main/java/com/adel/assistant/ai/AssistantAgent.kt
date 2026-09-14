@@ -30,18 +30,51 @@ object AssistantAgent {
     )
     private var pending: Pending? = null
 
+    /** فایل انتخاب‌شده از چت دستیار (نام نمایشی) */
+    @Volatile
+    private var selectedFileName: String? = null
+
+    fun setSelectedFile(name: String?) {
+        selectedFileName = name?.trim()?.ifBlank { null }
+    }
+
+    fun getSelectedFile(): String? = selectedFileName
+
+    fun clearSelectedFile() {
+        selectedFileName = null
+    }
+
     fun handle(context: Context, userMessage: String): AgentReply {
         val msg = normalize(userMessage)
         if (msg.isBlank()) return AgentReply("پیامت را بنویس. مثلاً «فردا برای تونل تسک برداشت مقطع ثبت کن». ")
 
         resolvePending(context, msg)?.let { return it }
         if (isHelp(msg)) return AgentReply(helpText())
+        fileIntent(msg)?.let { return it }
         navIntent(msg)?.let { return it }
         taskIntent(context, msg)?.let { return it }
         statsIntent(context, msg)?.let { return it }
         if (hasAny(msg, listOf("امروز", "برنامه امروز", "کارهای امروز"))) return AgentReply(todayPlan(context))
 
         return AgentReply("منظورت را کامل متوجه نشدم. می‌توانی محاوره‌ای بنویسی؛ مثلاً «برو درون‌یابی»، «کارهای باز تونل چیه؟»، «فردا برای پروژه تسک کنترل نقاط ثبت کن» یا «وضعیت مالی پروژه‌ها رو خلاصه کن». ")
+    }
+
+    /** درخواست‌های مربوط به فایل انتخاب‌شده در چت */
+    private fun fileIntent(msg: String): AgentReply? {
+        val wantsConvert = hasAny(msg, listOf("تبدیل", "dxf", "به dxf", "کنورت", "convert"))
+        val wantsFileInfo = hasAny(msg, listOf("فایل", "این فایل", "فایل انتخاب"))
+        if (!wantsConvert && !wantsFileInfo) return null
+        val name = selectedFileName
+        if (name.isNullOrBlank()) {
+            return AgentReply("هنوز فایلی انتخاب نشده. از دکمه 📎 یک فایل انتخاب کن، بعد بگو «به DXF تبدیل کن».")
+        }
+        if (wantsConvert) {
+            return AgentReply(
+                "فایل «$name» انتخاب شده است. برای تبدیل به DXF صفحهٔ ترسیم/مبدل را باز می‌کنم؛ فایل را آنجا دوباره انتخاب یا نتیجه را بگیر.",
+                navigateTo = Routes.TOOL_DXF
+            )
+        }
+        return AgentReply("فایل فعال: «$name». می‌توانی بگویی «به DXF تبدیل کن» یا صفحهٔ مربوط را باز کن.")
     }
 
     private fun resolvePending(context: Context, msg: String): AgentReply? {
