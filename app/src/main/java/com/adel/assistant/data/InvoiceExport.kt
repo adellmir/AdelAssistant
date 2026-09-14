@@ -48,15 +48,14 @@ object InvoiceExport {
         val bytes = try {
             buildFromTemplate(context, data)
         } catch (e: Exception) {
-            // فقط اگر قالب نبود — فایل سادهٔ معتبر
-            buildMinimalXlsx(data)
+            // فقط اگر قالب واقعاً نبود
+            try {
+                buildMinimalXlsx(data)
+            } catch (_: Exception) {
+                return null
+            }
         }
-        if (bytes.size < 200) return null
-        // اعتبارسنجی حداقلی: باید Content_Types داشته باشد
-        if (!zipHasEntry(bytes, "[Content_Types].xml")) {
-            val fixed = ensureValidPackage(bytes, data)
-            return save(context, data, fixed)
-        }
+        if (bytes.size < 500) return null
         return save(context, data, bytes)
     }
 
@@ -106,27 +105,36 @@ object InvoiceExport {
     }
 
     private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
-        val updates = linkedMapOf<String, String>()
-        updates["C7"] = "شماره فاکتور ${data.letterNo}"
-        updates["E7"] = data.employerTitle
+        // نگاشت مطابق قالب واقعی:
+        // C7 شماره | E7 کارفرما (ادغام E7:G7)
+        // ردیف ۱۰–۲۳: C توضیحات | D مبلغ | E شرح (ادغام E:G)
+        // C24 جمع | C25 دریافتی | C26 مانده
+        // F25 کارت | F26 شبا
+        val updates = linkedMapOf<String, Pair<String, Boolean>>() // value to isText
+        updates["C7"] = (data.letterNo.ifBlank { "—" }) to true
+        updates["E7"] = data.employerTitle to true
 
-        val maxRows = 13
+        val maxRows = 14 // ردیف ۱۰ تا ۲۳
         data.lines.take(maxRows).forEachIndexed { idx, line ->
             val row = 10 + idx
-            updates["E$row"] = line.service
-            updates["D$row"] = formatAmount(line.amount)
-            updates["C$row"] = line.note
+            updates["C$row"] = line.note to true
+            updates["D$row"] = formatAmountPlain(line.amount) to false
+            updates["E$row"] = line.service to true
         }
-        for (row in (10 + data.lines.size.coerceAtMost(maxRows))..22) {
-            updates["E$row"] = ""
-            updates["D$row"] = ""
-            updates["C$row"] = ""
-        }
-        updates["C24"] = formatAmount(data.total)
-        updates["C25"] = formatAmount(data.received)
-        updates["C26"] = formatAmount(data.remaining)
+        updates["C24"] = formatAmountPlain(data.total) to false
+        updates["C25"] = formatAmountPlain(data.received) to false
+        updates["C26"] = formatAmountPlain(data.remaining) to false
+        if (data.cardNo.isNotBlank()) updates["F25"] = data.cardNo to true
+        if (data.iban.isNotBlank()) updates["F26"] = data.iban to true
 
-        return rewriteXlsx(loadTemplateBytes(context), updates)
+        return rewriteXlsxLikeReport(loadTemplateBytes(context), updates)
+    }
+
+    /** مبلغ بدون جداکننده برای سلول عددی */
+    private fun formatAmountPlain(v: Double): String {
+        val longVal = kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9
+        return if (longVal) v.toLong().toString()
+        else String.format(java.util.Locale.US, "%.0f", v)
     }
 
     private fun formatAmount(v: Double): String {
@@ -145,49 +153,44 @@ object InvoiceExport {
         return if (neg) "-$sb" else sb.toString()
     }
 
-    /** خواندن همهٔ ورودی‌های ZIP، اصلاح شیت، نوشتن دوباره با ساختار کامل */
-    private fun rewriteXlsx(templateBytes: ByteArray, updates: Map<String, String>): ByteArray {
-        val entries = linkedMapOf<String, ByteArray>()
-        ZipInputStream(ByteArrayInputStream(templateBytes)).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                if (!entry.isDirectory) {
-                    entries[entry.name] = zis.readBytes()
+    /**
+     * همان روش موفق XlsxReportWriter:
+     * همهٔ فایل‌های ZIP قالب (تصاویر، استایل، drawing) کپی می‌شوند
+     * فقط sheet1.xml ویرایش می‌شود و ویژگی s="…" حفظ می‌گردد.
+     */
+    private fun rewriteXlsxLikeReport(
+        templateBytes: ByteArray,
+        updates: Map<String, Pair<String, Boolean>>
+    ): ByteArray {
+        val outBuffer = ByteArrayOutputStream()
+        ZipOutputStream(outBuffer).use { zos ->
+            ZipInputStream(ByteArrayInputStream(templateBytes)).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    val name = entry.name
+                    val bytes = zis.readBytes()
+                    zos.putNextEntry(ZipEntry(name))
+                    if (name == "xl/worksheets/sheet1.xml" ||
+                        (name.contains("worksheets/sheet") && name.endsWith(".xml") && !name.contains("_rels"))
+                    ) {
+                        val xml = bytes.toString(Charsets.UTF_8)
+                        zos.write(applyCellUpdatesReportStyle(xml, updates).toByteArray(Charsets.UTF_8))
+                    } else {
+                        zos.write(bytes)
+                    }
+                    zos.closeEntry()
+                    entry = zis.nextEntry
                 }
-                zis.closeEntry()
-                entry = zis.nextEntry
             }
         }
-
-        val sheetKey = entries.keys.firstOrNull { name ->
-            name == "xl/worksheets/sheet1.xml" ||
-                name.endsWith("/sheet1.xml") ||
-                (name.contains("worksheets/sheet") && name.endsWith(".xml") && !name.contains("_rels"))
-        } ?: throw IllegalStateException("sheet1.xml در قالب پیدا نشد")
-
-        val sheetXml = entries[sheetKey]!!.toString(Charsets.UTF_8)
-        entries[sheetKey] = applyCellUpdates(sheetXml, updates).toByteArray(Charsets.UTF_8)
-
-        // اگر Content_Types یا rels نبود، فایل قالب ناقص است
-        if (!entries.containsKey("[Content_Types].xml")) {
-            throw IllegalStateException("قالب فاقد [Content_Types].xml است")
-        }
-        if (!entries.keys.any { it == "_rels/.rels" || it.endsWith(".rels") }) {
-            throw IllegalStateException("قالب فاقد فایل rels است")
-        }
-
-        return writeZip(entries)
+        return outBuffer.toByteArray()
     }
 
     private fun writeZip(entries: Map<String, ByteArray>): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zos ->
-            zos.setLevel(6)
             for ((name, data) in entries) {
-                val ze = ZipEntry(name)
-                // برای فایل‌های کوچک XML فشرده؛ برای باینری هم DEFLATED مشکلی ندارد
-                ze.method = ZipEntry.DEFLATED
-                zos.putNextEntry(ze)
+                zos.putNextEntry(ZipEntry(name))
                 zos.write(data)
                 zos.closeEntry()
             }
@@ -240,51 +243,38 @@ object InvoiceExport {
     }
 
     /**
-     * مثل XlsxReportWriter: استایل سلول (s="…") حفظ می‌شود تا قالب پایه از بین نرود.
-     * سلول‌های مبلغی (D10.. و C24/C25/C26) به‌صورت عددی نوشته می‌شوند.
+     * استایل s="…" حفظ می‌شود.
+     * مهم: سلول‌های خالی قالب به‌صورت <c r="D10" s="26"/> هستند؛
+     * باید اول فرم self-closing مچ شود وگرنه DOT_MATCHES تا </c> بعدی می‌بلعد.
      */
-    private fun applyCellUpdates(xml: String, updates: Map<String, String>): String {
+    private fun applyCellUpdatesReportStyle(
+        xml: String,
+        updates: Map<String, Pair<String, Boolean>>
+    ): String {
         var result = xml
-        val numericRefs = updates.keys.filter { ref ->
-            ref.startsWith("D") || ref == "C24" || ref == "C25" || ref == "C26"
-        }.toSet()
-        updates.forEach { (ref, value) ->
-            val cellRegex = Regex(
-                """<c r="$ref"(?:\s[^>/]*)?(?:/>|>.*?</c>)""",
-                setOf(RegexOption.DOT_MATCHES_ALL)
-            )
-            val match = cellRegex.find(result)
-            val styleAttr = match?.groupValues?.get(0)?.let { full ->
-                Regex("""\bs="\d+\"""").find(full)?.value?.let { " $it" } ?: ""
-            } ?: ""
-            val newCell = if (ref in numericRefs) {
-                // فقط رقم و کاما/نقطه — برای <v> کاما را حذف می‌کنیم
-                val num = value.replace(",", "").replace(" ", "")
-                """<c r="$ref"$styleAttr><v>$num</v></c>"""
-            } else {
+        updates.forEach { (ref, pair) ->
+            val (value, isText) = pair
+            if (value.isEmpty()) return@forEach
+            // اول self-closing، بعد سلول معمولی
+            val selfClose = Regex("""<c r="$ref"([^>]*?)/>""")
+            val fullCell = Regex("""<c r="$ref"([^>]*?)>.*?</c>""", RegexOption.DOT_MATCHES_ALL)
+            val match = selfClose.find(result) ?: fullCell.find(result)
+            val attrs = match?.groupValues?.getOrNull(1).orEmpty()
+            val styleAttr = Regex("""\bs="\d+\"""").find(attrs)?.value?.let { " $it" } ?: ""
+            val newCell = if (isText) {
                 val escaped = value
                     .replace("&", "&amp;")
                     .replace("<", "&lt;")
                     .replace(">", "&gt;")
-                    .replace("\"", "&quot;")
-                """<c r="$ref"$styleAttr t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
-            }
-            if (match != null) {
-                result = result.replaceRange(match.range, newCell)
+                """<c r="$ref"$styleAttr t="inlineStr"><is><t>$escaped</t></is></c>"""
             } else {
-                val rowNum = Regex("""(\d+)$""").find(ref)?.groupValues?.get(1) ?: return@forEach
-                val rowOpen = Regex("""<row[^>]*\br="$rowNum"[^>]*>""")
-                val m = rowOpen.find(result)
-                if (m != null) {
-                    val insertAt = m.range.last + 1
-                    result = result.substring(0, insertAt) + newCell + result.substring(insertAt)
-                } else {
-                    val close = result.lastIndexOf("</sheetData>")
-                    if (close >= 0) {
-                        val rowXml = """<row r="$rowNum">$newCell</row>"""
-                        result = result.substring(0, close) + rowXml + result.substring(close)
-                    }
-                }
+                val num = value.replace(",", "").replace("/", "").replace(" ", "")
+                """<c r="$ref"$styleAttr><v>$num</v></c>"""
+            }
+            result = if (match != null) {
+                result.replaceRange(match.range, newCell)
+            } else {
+                result
             }
         }
         return result
