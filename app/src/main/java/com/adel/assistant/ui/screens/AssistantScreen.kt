@@ -8,9 +8,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +41,7 @@ fun AssistantScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
+    var selectedFileName by remember { mutableStateOf<String?>(null) }
     var messages by remember {
         mutableStateOf(
             listOf(
@@ -48,7 +52,14 @@ fun AssistantScreen(
             )
         )
     }
-
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "فایل انتخاب‌شده"
+            selectedFileName = name
+            AssistantAgent.setSelectedFile(name)
+            messages = messages + ChatLine(false, "📎 فایل «$name» انتخاب شد. حالا مثلاً بگو «به DXF تبدیل کن». ")
+        }
+    }
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty()) return
@@ -140,6 +151,15 @@ fun AssistantScreen(
             }
         }
 
+        selectedFileName?.let { name ->
+            Text(
+                text = "📎 $name",
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -147,6 +167,9 @@ fun AssistantScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            IconButton(onClick = { filePicker.launch("*/*") }) {
+                Icon(Icons.Filled.AttachFile, contentDescription = "انتخاب فایل", tint = color)
+            }
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
