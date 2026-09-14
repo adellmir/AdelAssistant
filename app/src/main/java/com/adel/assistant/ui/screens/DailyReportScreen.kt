@@ -217,8 +217,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = side, onValueChange = { side = it }, label = { Text("سمت") },
-                modifier = Modifier.weight(1f)
+                value = side, onValueChange = { side = filterNumericInput(it) }, label = { Text("سمت") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -238,12 +238,12 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(
-                value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") },
-                modifier = Modifier.weight(1f)
+                value = deviation, onValueChange = { deviation = filterNumericInput(it) }, label = { Text("انحراف") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") },
-                modifier = Modifier.weight(1f)
+                value = collapse, onValueChange = { collapse = filterNumericInput(it) }, label = { Text("ریزش") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
 

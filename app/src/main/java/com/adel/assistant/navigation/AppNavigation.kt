@@ -189,7 +189,11 @@ fun AppNavigation() {
             DxfPreviewScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_TOTAL_STATION) {
-            TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+            TotalStationDumpScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onOpenConverter = { navController.navigate(Routes.TOOL_GSI) }
+            )
         }
         composable(Routes.TOOL_GSI) {
             GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

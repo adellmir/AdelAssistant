@@ -71,17 +71,47 @@ object GsiParser {
         return points
     }
 
+    /**
+     * خواندن TXT/DAT/CSV
+     * برای DAT مثل ترسیم نقشه: name, Y, X, Z [,code] → e=X ، n=Y
+     */
     fun parseTxt(text: String): List<GsiPoint> {
         val out = mutableListOf<GsiPoint>()
+        val looksDat = text.lineSequence().take(8).any { line ->
+            val p = line.trim().split(Regex("""[\s,;\t]+""")).filter { it.isNotEmpty() }
+            p.size >= 5 && p[0].toDoubleOrNull() == null &&
+                p[1].toDoubleOrNull() != null && p[2].toDoubleOrNull() != null
+        }
         text.lineSequence().forEach { raw ->
             val line = raw.trim()
             if (line.isEmpty() || line.startsWith("#")) return@forEach
+            if (line.lowercase().contains("id") && line.lowercase().contains("x")) return@forEach
             val p = line.split(Regex("""[\s,;\t]+""")).filter { it.isNotEmpty() }
             if (p.size < 3) return@forEach
             try {
                 when {
+                    looksDat && p.size >= 4 && p[0].toDoubleOrNull() == null &&
+                        p[1].toDoubleOrNull() != null && p[2].toDoubleOrNull() != null -> {
+                        out.add(
+                            GsiPoint(
+                                name = p[0],
+                                e = p[2].replace(',', '.').toDouble(),
+                                n = p[1].replace(',', '.').toDouble(),
+                                z = p[3].replace(',', '.').toDouble(),
+                                code = p.getOrNull(4).orEmpty()
+                            )
+                        )
+                    }
                     p.size >= 4 && p[1].toDoubleOrNull() != null && p[0].toDoubleOrNull() == null -> {
-                        out.add(GsiPoint(name = p[0], e = p[1].toDouble(), n = p[2].toDouble(), z = p[3].toDouble()))
+                        out.add(
+                            GsiPoint(
+                                name = p[0],
+                                e = p[1].replace(',', '.').toDouble(),
+                                n = p[2].replace(',', '.').toDouble(),
+                                z = p[3].replace(',', '.').toDouble(),
+                                code = p.getOrNull(4).orEmpty()
+                            )
+                        )
                     }
                     p.size >= 4 && p[0].toDoubleOrNull() != null -> {
                         out.add(GsiPoint(name = p[3], e = p[0].toDouble(), n = p[1].toDouble(), z = p[2].toDouble()))
