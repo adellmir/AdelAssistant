@@ -83,6 +83,7 @@ object AppMenu {
                 MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
                 MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
+                MenuItem("الاین مختصات", Icons.Filled.CompareArrows, Routes.TOOL_ALIGN),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
                 MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))

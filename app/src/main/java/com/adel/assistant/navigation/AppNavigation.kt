@@ -12,6 +12,7 @@ import com.adel.assistant.data.DeepLinkHolder
 import com.adel.assistant.data.InvoiceLaunch
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.dxf.DxfConverterScreen
+import com.adel.assistant.ui.screens.AlignScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.ChainageScreen
@@ -206,6 +207,9 @@ fun AppNavigation() {
         }
         composable(Routes.TOOL_AREA) {
             AreaScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_ALIGN) {
+            AlignScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_VOLUME) {
             VolumeScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
