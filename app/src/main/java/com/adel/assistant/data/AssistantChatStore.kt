@@ -24,7 +24,7 @@ object AssistantChatStore {
         val c=Chat(System.currentTimeMillis().toString(),title,System.currentTimeMillis()); val all=chats(context); all.add(0,c); saveChats(context,all); return c
     }
     fun ensureDefault(context: Context): Chat = chats(context).firstOrNull() ?: create(context)
-    fun delete(context: Context,id:String){ saveChats(context,chats(context).filterNot{it.id==id}); saveMessages(context, messages(context).filterNot{it.chatId==id}) }
+    fun delete(context: Context,id:String){ saveChats(context,chats(context).filterNot{it.id==id}); saveMessages(context, allMessages(context).filterNot{it.chatId==id}) }
     fun messages(context: Context,id:String): MutableList<Message>{
         val f=messagesFile(context); if(!f.exists()) return mutableListOf()
         return runCatching { val a=JSONArray(f.readText()); MutableList(a.length()){i->val o=a.getJSONObject(i); Message(o.getString("chatId"),o.getBoolean("fromUser"),o.getString("text"),o.getLong("at"))}.filter{it.chatId==id}.toMutableList() }.getOrElse{mutableListOf()}

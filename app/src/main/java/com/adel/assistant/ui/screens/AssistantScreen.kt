@@ -88,4 +88,40 @@ fun AssistantScreen(color: Color = ToolPrimary, onBack: () -> Unit, onNavigate: 
     val labels=mapOf("navigation" to "باز کردن صفحات","tasks" to "مدیریت تسک‌ها","calculations" to "محاسبات","files_read" to "خواندن فایل","finance_write" to "تغییرات مالی","delete" to "حذف داده","online_ai" to "هوش مصنوعی آنلاین")
     AlertDialog(onDismissRequest=onDismiss,title={Text("تنظیمات دستیار")},text={Column{OutlinedTextField(value=url,onValueChange={url=it},label={Text("آدرس سرور AI")},singleLine=true);Spacer(Modifier.height(10.dp));Text("مجوزها",style=MaterialTheme.typography.titleSmall);labels.forEach{(k,l)->var v by remember(tick,k){mutableStateOf(AssistantPermissionStore.get(context,k))};Row(verticalAlignment=Alignment.CenterVertically){Text(l,Modifier.weight(1f));DropdownPermission(v){nv->AssistantPermissionStore.set(context,k,nv);tick++}}};Text("کلید API را داخل برنامه قرار نده؛ فقط آدرس بک‌اند را وارد کن.",style=MaterialTheme.typography.labelSmall,color=TextSecondary)}} ,confirmButton={TextButton(onClick={OnlineAiClient.setBackendUrl(context,url);onDismiss()}){Text("ذخیره")}},dismissButton={TextButton(onClick=onDismiss){Text("لغو")}})
 }
-@Composable private fun DropdownPermission(value:AssistantPermission,onChange:(AssistantPermission)->Unit){var open by remember{mutableStateOf(false)};Box{TextButton(onClick={open=true}){Text(when(value){AssistantPermission.AUTO->"خودکار";AssistantPermission.ASK->"تأیید";AssistantPermission.FORBIDDEN->"ممنوع"})}};DropdownMenu(open,{open=false}){AssistantPermission.values().forEach{v->DropdownMenuItem(text={Text(when(v){AssistantPermission.AUTO->"خودکار";AssistantPermission.ASK->"تأیید قبل اجرا";AssistantPermission.FORBIDDEN->"ممنوع"})},onClick={onChange(v);open=false})}}}}
+@Composable
+private fun DropdownPermission(value: AssistantPermission, onChange: (AssistantPermission) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) {
+            Text(
+                when (value) {
+                    AssistantPermission.AUTO -> "خودکار"
+                    AssistantPermission.ASK -> "تأیید"
+                    AssistantPermission.FORBIDDEN -> "ممنوع"
+                }
+            )
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false }
+        ) {
+            AssistantPermission.values().forEach { v ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            when (v) {
+                                AssistantPermission.AUTO -> "خودکار"
+                                AssistantPermission.ASK -> "تأیید قبل اجرا"
+                                AssistantPermission.FORBIDDEN -> "ممنوع"
+                            }
+                        )
+                    },
+                    onClick = {
+                        onChange(v)
+                        open = false
+                    }
+                )
+            }
+        }
+    }
+}
