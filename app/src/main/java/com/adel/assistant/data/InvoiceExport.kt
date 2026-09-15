@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
@@ -36,34 +35,25 @@ data class InvoiceData(
         else "کارفرمای محترم $employer"
 }
 
+/**
+ * صدور فاکتور XLSX — همان روش موفق [XlsxReportWriter]:
+ * کل ZIP قالب (استایل، تصویر، drawing) کپی می‌شود و فقط sheet1 پر می‌شود.
+ * دیگر به فایل خام (minimal) سقوط نمی‌کند.
+ */
 object InvoiceExport {
 
-    /**
-     * خروجی XLSX از روی قالب assets
-     * C7 شماره فاکتور | E7 کارفرمای محترم
-     * E10+ شرح | D10+ مبلغ | C10+ توضیحات
-     * C24 جمع | C25 دریافتی | C26 مانده
-     */
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
-        val bytes = try {
-            buildFromTemplate(context, data)
-        } catch (e: Exception) {
-            // فقط اگر قالب واقعاً نبود
-            try {
-                buildMinimalXlsx(data)
-            } catch (_: Exception) {
-                return null
-            }
-        }
-        if (bytes.size < 500) return null
-        return save(context, data, bytes)
-    }
-
-    private fun save(context: Context, data: InvoiceData, bytes: ByteArray): Uri? {
+        val templateBytes = loadTemplateBytes(context) ?: return null
+        val updates = buildUpdates(data)
+        val outputBytes = rewriteXlsx(templateBytes, updates)
+        // خروجی باید نزدیک به اندازه قالب باشد (نه فایل ۱–۲ کیلوبایتی خام)
+        if (outputBytes.size < templateBytes.size / 2) return null
         val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
             .replace(" ", "_")
         return FileExport.exportBytesToDocuments(
-            context, name, bytes,
+            context,
+            name,
+            outputBytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     }
@@ -87,59 +77,53 @@ object InvoiceExport {
         return uri
     }
 
-    private fun loadTemplateBytes(context: Context): ByteArray {
+    private fun loadTemplateBytes(context: Context): ByteArray? {
         val names = listOf("invoice_template.xlsx", "1فاکتور.xlsx", "invoice.xlsx")
         for (n in names) {
             try {
                 val b = context.assets.open(n).use { it.readBytes() }
-                if (b.size > 500 && zipHasEntry(b, "[Content_Types].xml")) return b
+                if (b.size > 5000) return b
             } catch (_: Exception) {
             }
         }
         val local = File(context.filesDir, "invoice_template.xlsx")
-        if (local.exists()) {
-            val b = local.readBytes()
-            if (b.size > 500) return b
-        }
-        throw IllegalStateException("قالب فاکتور در assets پیدا نشد")
+        if (local.exists() && local.length() > 5000) return local.readBytes()
+        return null
     }
 
-    private fun buildFromTemplate(context: Context, data: InvoiceData): ByteArray {
-        // نگاشت مطابق قالب واقعی:
-        // C7 شماره | E7 کارفرما (ادغام E7:G7)
-        // ردیف ۱۰–۲۳: C توضیحات | D مبلغ | E شرح (ادغام E:G)
-        // C24 جمع | C25 دریافتی | C26 مانده
-        // F25 کارت | F26 شبا
-        val updates = linkedMapOf<String, Pair<String, Boolean>>() // value to isText
-        updates["C7"] = (data.letterNo.ifBlank { "—" }) to true
+    /**
+     * نگاشت سلول‌ها مطابق قالب invoice_template.xlsx:
+     * C7 شماره | E7 کارفرما
+     * ردیف ۱۰+ : C توضیح | D مبلغ | E شرح
+     * C24 جمع | C25 دریافتی | C26 مانده
+     * F25 کارت | F26 شبا
+     */
+    private fun buildUpdates(data: InvoiceData): Map<String, Pair<String, Boolean>> {
+        val updates = linkedMapOf<String, Pair<String, Boolean>>()
+        updates["C7"] = data.letterNo.ifBlank { "—" } to true
         updates["E7"] = data.employerTitle to true
-
-        val maxRows = 14 // ردیف ۱۰ تا ۲۳
-        data.lines.take(maxRows).forEachIndexed { idx, line ->
+        data.lines.take(14).forEachIndexed { idx, line ->
             val row = 10 + idx
-            updates["C$row"] = line.note to true
-            updates["D$row"] = formatAmountPlain(line.amount) to false
-            updates["E$row"] = line.service to true
+            if (line.note.isNotBlank()) updates["C$row"] = line.note to true
+            updates["D$row"] = plainAmount(line.amount) to false
+            if (line.service.isNotBlank()) updates["E$row"] = line.service to true
         }
-        updates["C24"] = formatAmountPlain(data.total) to false
-        updates["C25"] = formatAmountPlain(data.received) to false
-        updates["C26"] = formatAmountPlain(data.remaining) to false
+        updates["C24"] = plainAmount(data.total) to false
+        updates["C25"] = plainAmount(data.received) to false
+        updates["C26"] = plainAmount(data.remaining) to false
         if (data.cardNo.isNotBlank()) updates["F25"] = data.cardNo to true
         if (data.iban.isNotBlank()) updates["F26"] = data.iban to true
-
-        return rewriteXlsxLikeReport(loadTemplateBytes(context), updates)
+        return updates
     }
 
-    /** مبلغ بدون جداکننده برای سلول عددی */
-    private fun formatAmountPlain(v: Double): String {
+    private fun plainAmount(v: Double): String {
         val longVal = kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9
         return if (longVal) v.toLong().toString()
         else String.format(java.util.Locale.US, "%.0f", v)
     }
 
     private fun formatAmount(v: Double): String {
-        val longVal = kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9
-        val raw = if (longVal) v.toLong().toString() else String.format(java.util.Locale.US, "%.0f", v)
+        val raw = plainAmount(v)
         val neg = raw.startsWith("-")
         val digits = raw.removePrefix("-")
         val sb = StringBuilder()
@@ -153,28 +137,22 @@ object InvoiceExport {
         return if (neg) "-$sb" else sb.toString()
     }
 
-    /**
-     * همان روش موفق XlsxReportWriter:
-     * همهٔ فایل‌های ZIP قالب (تصاویر، استایل، drawing) کپی می‌شوند
-     * فقط sheet1.xml ویرایش می‌شود و ویژگی s="…" حفظ می‌گردد.
-     */
-    private fun rewriteXlsxLikeReport(
+    /** کپی ۱:۱ منطق XlsxReportWriter.rewriteXlsx */
+    private fun rewriteXlsx(
         templateBytes: ByteArray,
         updates: Map<String, Pair<String, Boolean>>
     ): ByteArray {
         val outBuffer = ByteArrayOutputStream()
         ZipOutputStream(outBuffer).use { zos ->
-            ZipInputStream(ByteArrayInputStream(templateBytes)).use { zis ->
-                var entry = zis.nextEntry
+            ZipInputStream(templateBytes.inputStream()).use { zis ->
+                var entry: ZipEntry? = zis.nextEntry
                 while (entry != null) {
-                    val name = entry.name
                     val bytes = zis.readBytes()
+                    val name = entry.name
                     zos.putNextEntry(ZipEntry(name))
-                    if (name == "xl/worksheets/sheet1.xml" ||
-                        (name.contains("worksheets/sheet") && name.endsWith(".xml") && !name.contains("_rels"))
-                    ) {
+                    if (name == "xl/worksheets/sheet1.xml") {
                         val xml = bytes.toString(Charsets.UTF_8)
-                        zos.write(applyCellUpdatesReportStyle(xml, updates).toByteArray(Charsets.UTF_8))
+                        zos.write(applyCellUpdates(xml, updates).toByteArray(Charsets.UTF_8))
                     } else {
                         zos.write(bytes)
                     }
@@ -186,68 +164,11 @@ object InvoiceExport {
         return outBuffer.toByteArray()
     }
 
-    private fun writeZip(entries: Map<String, ByteArray>): ByteArray {
-        val out = ByteArrayOutputStream()
-        ZipOutputStream(out).use { zos ->
-            for ((name, data) in entries) {
-                zos.putNextEntry(ZipEntry(name))
-                zos.write(data)
-                zos.closeEntry()
-            }
-        }
-        return out.toByteArray()
-    }
-
-    private fun zipHasEntry(bytes: ByteArray, entryName: String): Boolean {
-        return try {
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
-                var e = zis.nextEntry
-                while (e != null) {
-                    if (e.name == entryName || e.name.endsWith(entryName)) return true
-                    e = zis.nextEntry
-                }
-            }
-            false
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun ensureValidPackage(bytes: ByteArray, data: InvoiceData): ByteArray {
-        // اگر خروجی ناقص بود، حداقل فایل معتبر بساز
-        return try {
-            val entries = linkedMapOf<String, ByteArray>()
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
-                var e = zis.nextEntry
-                while (e != null) {
-                    if (!e.isDirectory) entries[e.name] = zis.readBytes()
-                    e = zis.nextEntry
-                }
-            }
-            if (!entries.containsKey("[Content_Types].xml")) {
-                entries["[Content_Types].xml"] = DEFAULT_CONTENT_TYPES.toByteArray(Charsets.UTF_8)
-            }
-            if (!entries.containsKey("_rels/.rels")) {
-                entries["_rels/.rels"] = DEFAULT_RELS.toByteArray(Charsets.UTF_8)
-            }
-            if (!entries.containsKey("xl/_rels/workbook.xml.rels")) {
-                entries["xl/_rels/workbook.xml.rels"] = DEFAULT_WB_RELS.toByteArray(Charsets.UTF_8)
-            }
-            if (!entries.containsKey("xl/workbook.xml")) {
-                entries["xl/workbook.xml"] = DEFAULT_WB.toByteArray(Charsets.UTF_8)
-            }
-            writeZip(entries)
-        } catch (_: Exception) {
-            buildMinimalXlsx(data)
-        }
-    }
-
     /**
-     * استایل s="…" حفظ می‌شود.
-     * مهم: سلول‌های خالی قالب به‌صورت <c r="D10" s="26"/> هستند؛
-     * باید اول فرم self-closing مچ شود وگرنه DOT_MATCHES تا </c> بعدی می‌بلعد.
+     * مثل گزارش روزانه استایل s را نگه می‌دارد.
+     * سلول‌های خالی قالب self-closing هستند: <c r="D10" s="26"/>
      */
-    private fun applyCellUpdatesReportStyle(
+    private fun applyCellUpdates(
         xml: String,
         updates: Map<String, Pair<String, Boolean>>
     ): String {
@@ -255,11 +176,10 @@ object InvoiceExport {
         updates.forEach { (ref, pair) ->
             val (value, isText) = pair
             if (value.isEmpty()) return@forEach
-            // اول self-closing، بعد سلول معمولی
             val selfClose = Regex("""<c r="$ref"([^>]*?)/>""")
             val fullCell = Regex("""<c r="$ref"([^>]*?)>.*?</c>""", RegexOption.DOT_MATCHES_ALL)
-            val match = selfClose.find(result) ?: fullCell.find(result)
-            val attrs = match?.groupValues?.getOrNull(1).orEmpty()
+            val match = selfClose.find(result) ?: fullCell.find(result) ?: return@forEach
+            val attrs = match.groupValues.getOrNull(1).orEmpty()
             val styleAttr = Regex("""\bs="\d+\"""").find(attrs)?.value?.let { " $it" } ?: ""
             val newCell = if (isText) {
                 val escaped = value
@@ -271,52 +191,9 @@ object InvoiceExport {
                 val num = value.replace(",", "").replace("/", "").replace(" ", "")
                 """<c r="$ref"$styleAttr><v>$num</v></c>"""
             }
-            result = if (match != null) {
-                result.replaceRange(match.range, newCell)
-            } else {
-                result
-            }
+            result = result.replaceRange(match.range, newCell)
         }
         return result
-    }
-
-    private fun buildMinimalXlsx(data: InvoiceData): ByteArray {
-        val sheet = buildString {
-            append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
-            append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>""")
-            fun row(r: Int, cells: List<Pair<String, String>>) {
-                append("""<row r="$r">""")
-                cells.forEach { (ref, v) ->
-                    val e = v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    append("""<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$e</t></is></c>""")
-                }
-                append("</row>")
-            }
-            row(1, listOf("A1" to "فاکتور نقشه برداری"))
-            row(7, listOf("C7" to "شماره فاکتور ${data.letterNo}", "E7" to data.employerTitle))
-            data.lines.forEachIndexed { i, line ->
-                val r = 10 + i
-                row(
-                    r, listOf(
-                        "C$r" to line.note,
-                        "D$r" to formatAmount(line.amount),
-                        "E$r" to line.service
-                    )
-                )
-            }
-            row(24, listOf("C24" to formatAmount(data.total)))
-            row(25, listOf("C25" to formatAmount(data.received)))
-            row(26, listOf("C26" to formatAmount(data.remaining)))
-            append("</sheetData></worksheet>")
-        }
-        val entries = linkedMapOf(
-            "[Content_Types].xml" to DEFAULT_CONTENT_TYPES.toByteArray(Charsets.UTF_8),
-            "_rels/.rels" to DEFAULT_RELS.toByteArray(Charsets.UTF_8),
-            "xl/workbook.xml" to DEFAULT_WB.toByteArray(Charsets.UTF_8),
-            "xl/_rels/workbook.xml.rels" to DEFAULT_WB_RELS.toByteArray(Charsets.UTF_8),
-            "xl/worksheets/sheet1.xml" to sheet.toByteArray(Charsets.UTF_8)
-        )
-        return writeZip(entries)
     }
 
     private fun buildPdf(data: InvoiceData): ByteArray {
@@ -362,27 +239,4 @@ object InvoiceExport {
         doc.close()
         return bos.toByteArray()
     }
-
-    private const val DEFAULT_CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-</Types>"""
-
-    private const val DEFAULT_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>"""
-
-    private const val DEFAULT_WB = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Invoice" sheetId="1" r:id="rId1"/></sheets>
-</workbook>"""
-
-    private const val DEFAULT_WB_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-</Relationships>"""
 }
