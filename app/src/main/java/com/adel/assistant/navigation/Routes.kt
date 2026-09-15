@@ -28,6 +28,7 @@ object Routes {
     const val TOOL_LOCATION = "tool/location"
     const val TOOL_INTERPOLATE = "tool/interpolate"
     const val TOOL_AREA = "tool/area"
+    const val TOOL_ALIGN = "tool/align"
     const val TOOL_VOLUME = "tool/volume"
     const val TOOL_BACKUP = "tool/backup"
     const val TOOL_DXF_PREVIEW = "tool/dxf_preview"
