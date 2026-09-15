@@ -69,12 +69,14 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 
         Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryRow("جمع کل درآمدها", formatMoney(summary.sumPayable))
-                SummaryRow("حسن‌انجام بلوکه‌شده (از آخرین اردیبهشت)", formatMoney(summary.blockedRetention))
-                SummaryRow("جمع کل دریافتی‌ها", formatMoney(summary.sumReceived))
+                SummaryRow("کل صورت‌وضعیت‌ها", formatMoney(summary.sumPayable))
+                SummaryRow("کل حسن انجام", formatMoney(summary.sumRetention))
+                SummaryRow("حسن آزاد‌شده", formatMoney(summary.sumHasanAzad))
+                SummaryRow("حسن بلوکه (از آخرین اردیبهشت)", formatMoney(summary.blockedRetention))
+                SummaryRow("جمع دریافتی‌ها", formatMoney(summary.sumReceived))
                 HorizontalDivider(color = Color(0xFF3A4530))
                 Text(
-                    "مانده دریافتی",
+                    "مطالبات آزاد",
                     style = MaterialTheme.typography.titleSmall,
                     color = TextSecondary
                 )
@@ -85,7 +87,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "صورت‌وضعیت − حسن‌انجام بلوکه − دریافتی",
+                    "صورت + حسن آزاد − دریافتی",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )

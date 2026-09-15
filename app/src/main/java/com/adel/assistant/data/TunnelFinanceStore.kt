@@ -4,53 +4,63 @@ import android.content.Context
 import kotlin.math.round
 
 /**
- * یک جدول واحد مطابق Tunel-financial.csv
- * هر سطر = یک ماه کاری
+ * یک جدول واحد مطابق tunnel_financial.csv
+ * هر سطر = یک ماه کاری (+ اختیاری یک دریافتی در همان سطر)
+ *
+ * منطق محاسبات (مطابق دفتر اکسل):
+ *  D مبلغ کل        = روز × مبلغ واحد
+ *  E حسن انجام      = معمولاً ۱۰٪ مبلغ کل (قابل ذخیرهٔ دستی برای سوابق)
+ *  L کل کسورات      = حسن + کسر نهاری + کسر تایم‌شیت + کسر دوربین + کسر تایم دوربین
+ *  M صورت پرداختی   = مبلغ کل − کل کسورات + اضافه تایم‌شیت
+ *  Q درآمد          = صورت پرداختی + حسن − نقشه بردار
+ *
+ * خلاصه:
+ *  کل صورت          = Σ M
+ *  کل حسن           = Σ E
+ *  حسن بلوکه        = Σ E از آخرین اردیبهشت (ماه ۲) تا الان
+ *  حسن آزاد         = کل حسن − حسن بلوکه
+ *  جمع دریافتی      = Σ مبلغ دریافت
+ *  مطالبات آزاد     = کل صورت + حسن آزاد − جمع دریافتی
  */
 data class TunnelMonthRow(
-    val dateCode: Int,          // A
-    val days: Double,           // B
-    val unitPrice: Double,      // C
-    val lunchCount: Double = 0.0, // F
-    val lunchDeduction: Double = 0.0, // G
-    val overtimeAdd: Double = 0.0,    // H
-    val timesheetDeduction: Double = 0.0, // I
-    val cameraDeduction: Double = 0.0,    // J
-    val cameraTimeDeduction: Double = 0.0, // K
-    val dayOp: Double = 0.0,    // N روز ع
-    val dayLeave: Double = 0.0, // O روز م
-    val surveyorPay: Double = 0.0, // P
-    val receiveDate: String = "",  // R YYYYMMDD
-    val receiveAmount: Double? = null, // S null = خالی
-    val note: String = ""       // T
+    val dateCode: Int,
+    val days: Double,
+    val unitPrice: Double,
+    val lunchCount: Double = 0.0,
+    val lunchDeduction: Double = 0.0,
+    val overtimeAdd: Double = 0.0,
+    val timesheetDeduction: Double = 0.0,
+    val cameraDeduction: Double = 0.0,
+    val cameraTimeDeduction: Double = 0.0,
+    val dayOp: Double = 0.0,
+    val dayLeave: Double = 0.0,
+    val surveyorPay: Double = 0.0,
+    val receiveDate: String = "",
+    val receiveAmount: Double? = null,
+    val note: String = "",
+    /** اگر از CSV/اکسل آمده باشد، همان عدد ذخیره می‌شود؛ وگرنه محاسبه می‌شود */
+    val totalAmount: Double = 0.0,
+    val retention: Double = 0.0,
+    val totalDeductions: Double = 0.0,
+    val payable: Double = 0.0,
+    val income: Double = 0.0
 ) {
     val year: Int
     val month: Int
+
     init {
         val (y, m) = parseDateCode(dateCode)
         year = y
         month = m
     }
 
-    // محاسبات
-    val totalAmount: Double get() = days * unitPrice                          // D
-    val retention: Double get() = round(totalAmount * 0.10)                  // E
-    val totalDeductions: Double get() =                                      // L
-        retention + lunchDeduction + timesheetDeduction + cameraDeduction + cameraTimeDeduction
-    val payable: Double get() = totalAmount - totalDeductions + overtimeAdd  // M
-    val income: Double get() = payable + retention - surveyorPay             // Q
-
-    fun withRecalculated(): TunnelMonthRow = this // computed on the fly
-
     companion object {
         fun parseDateCode(code: Int): Pair<Int, Int> {
             return if (code < 10000) {
-                // 4 digit: 9802 -> 1398, 02
                 val y = 1300 + code / 100
                 val m = code % 100
                 y to m
             } else {
-                // 5 digit: 40504 -> 1405, 04
                 val y = 1000 + code / 100
                 val m = code % 100
                 y to m
@@ -64,14 +74,88 @@ data class TunnelMonthRow(
                 (year - 1000) * 100 + month
             }
         }
+
+        /**
+         * ساخت سطر با محاسبهٔ خودکار (برای ثبت ماه جدید در UI)
+         * @param retentionOverride اگر null باشد ۱۰٪ مبلغ کل
+         */
+        fun compute(
+            dateCode: Int,
+            days: Double,
+            unitPrice: Double,
+            lunchCount: Double = 0.0,
+            lunchDeduction: Double = 0.0,
+            overtimeAdd: Double = 0.0,
+            timesheetDeduction: Double = 0.0,
+            cameraDeduction: Double = 0.0,
+            cameraTimeDeduction: Double = 0.0,
+            dayOp: Double = 0.0,
+            dayLeave: Double = 0.0,
+            surveyorPay: Double = 0.0,
+            receiveDate: String = "",
+            receiveAmount: Double? = null,
+            note: String = "",
+            retentionOverride: Double? = null
+        ): TunnelMonthRow {
+            val total = days * unitPrice
+            val hasan = retentionOverride ?: round(total * 0.10)
+            val kasr = hasan + lunchDeduction + timesheetDeduction + cameraDeduction + cameraTimeDeduction
+            val soorat = total - kasr + overtimeAdd
+            val daramad = soorat + hasan - surveyorPay
+            return TunnelMonthRow(
+                dateCode = dateCode,
+                days = days,
+                unitPrice = unitPrice,
+                lunchCount = lunchCount,
+                lunchDeduction = lunchDeduction,
+                overtimeAdd = overtimeAdd,
+                timesheetDeduction = timesheetDeduction,
+                cameraDeduction = cameraDeduction,
+                cameraTimeDeduction = cameraTimeDeduction,
+                dayOp = dayOp,
+                dayLeave = dayLeave,
+                surveyorPay = surveyorPay,
+                receiveDate = receiveDate,
+                receiveAmount = receiveAmount,
+                note = note,
+                totalAmount = total,
+                retention = hasan,
+                totalDeductions = kasr,
+                payable = soorat,
+                income = daramad
+            )
+        }
     }
+
+    /** پس از ویرایش فیلدهای ورودی، محاسبات را تازه می‌کند (حسن دستی حفظ می‌شود اگر keepRetention) */
+    fun recalculate(keepRetention: Boolean = true): TunnelMonthRow =
+        compute(
+            dateCode = dateCode,
+            days = days,
+            unitPrice = unitPrice,
+            lunchCount = lunchCount,
+            lunchDeduction = lunchDeduction,
+            overtimeAdd = overtimeAdd,
+            timesheetDeduction = timesheetDeduction,
+            cameraDeduction = cameraDeduction,
+            cameraTimeDeduction = cameraTimeDeduction,
+            dayOp = dayOp,
+            dayLeave = dayLeave,
+            surveyorPay = surveyorPay,
+            receiveDate = receiveDate,
+            receiveAmount = receiveAmount,
+            note = note,
+            retentionOverride = if (keepRetention) retention else null
+        )
 }
 
 data class TunnelFinanceSummary(
-    val sumPayable: Double,           // جمع صورت وضعیت‌ها M
-    val sumReceived: Double,          // جمع همه دریافتی‌ها S
-    val blockedRetention: Double,     // حسن‌انجام بلوکه‌شده از آخرین اردیبهشت
-    val remaining: Double             // مانده = صورت‌وضعیت − بلوکه − دریافتی
+    val sumPayable: Double,          // کل صورت وضعیت‌ها (Σ M)
+    val sumRetention: Double,        // کل حسن انجام (Σ E)
+    val sumHasanAzad: Double,        // حسن آزاد = کل حسن − بلوکه
+    val sumReceived: Double,         // جمع دریافتی‌ها
+    val blockedRetention: Double,    // حسن بلوکه از آخرین اردیبهشت
+    val remaining: Double            // مطالبات آزاد = صورت + حسن آزاد − دریافتی
 )
 
 object TunnelFinanceStore {
@@ -100,10 +184,20 @@ object TunnelFinanceStore {
         fun s(i: Int): String = r.getOrNull(i)?.trim().orEmpty()
         val recvRaw = s(18).toEnglishDigits().trim()
         val recvAmt = if (recvRaw.isBlank()) null else recvRaw.toDoubleOrNull()
-        return TunnelMonthRow(
+
+        val days = d(1)
+        val unit = d(2)
+        // مقادیر محاسبه‌شده از CSV (اگر خالی بود از نو حساب می‌شود)
+        val totalCsv = d(3)
+        val hasanCsv = d(4)
+        val kasrCsv = d(11)
+        val payableCsv = d(12)
+        val incomeCsv = d(16)
+
+        val base = TunnelMonthRow.compute(
             dateCode = code,
-            days = d(1),
-            unitPrice = d(2),
+            days = days,
+            unitPrice = unit,
             lunchCount = d(5),
             lunchDeduction = d(6),
             overtimeAdd = d(7),
@@ -115,13 +209,23 @@ object TunnelFinanceStore {
             surveyorPay = d(15),
             receiveDate = s(17).toEnglishDigits(),
             receiveAmount = recvAmt,
-            note = s(19)
+            note = s(19),
+            retentionOverride = if (hasanCsv != 0.0 || totalCsv != 0.0) hasanCsv else null
+        )
+        // اگر CSV عدد صریح داشت، همان را نگه دار (سوابق اکسل)
+        return base.copy(
+            totalAmount = if (totalCsv != 0.0) totalCsv else base.totalAmount,
+            retention = if (hasanCsv != 0.0 || totalCsv != 0.0) hasanCsv else base.retention,
+            totalDeductions = if (kasrCsv != 0.0) kasrCsv else base.totalDeductions,
+            payable = if (payableCsv != 0.0 || totalCsv != 0.0) payableCsv else base.payable,
+            income = if (incomeCsv != 0.0 || totalCsv != 0.0) incomeCsv else base.income
         )
     }
 
     private fun toCsvRow(row: TunnelMonthRow): List<String> {
         fun n(v: Double): String =
-            if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
+            if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9) v.toLong().toString()
+            else v.toString()
         return listOf(
             row.dateCode.toString(),
             n(row.days),
@@ -164,7 +268,6 @@ object TunnelFinanceStore {
         return all(context).lastOrNull { it.unitPrice > 0 }?.unitPrice ?: 0.0
     }
 
-    /** اولین سطر با مبلغ دریافت خالی — برای ثبت دریافتی */
     fun firstEmptyReceiveIndex(context: Context): TunnelMonthRow? {
         return all(context).firstOrNull { it.receiveAmount == null }
     }
@@ -173,14 +276,20 @@ object TunnelFinanceStore {
         val list = all(context).toMutableList()
         val idx = list.indexOfFirst { it.receiveAmount == null }
         if (idx < 0) return false
-        list[idx] = list[idx].copy(receiveAmount = amount, receiveDate = receiveDate, note = if (note.isNotBlank()) note else list[idx].note)
+        list[idx] = list[idx].copy(
+            receiveAmount = amount,
+            receiveDate = receiveDate,
+            note = if (note.isNotBlank()) note else list[idx].note
+        )
         writeAll(context, list)
         return true
     }
 
     fun updateReceipt(context: Context, dateCode: Int, amount: Double, receiveDate: String, note: String) {
         val list = all(context).map {
-            if (it.dateCode == dateCode) it.copy(receiveAmount = amount, receiveDate = receiveDate, note = note) else it
+            if (it.dateCode == dateCode)
+                it.copy(receiveAmount = amount, receiveDate = receiveDate, note = note)
+            else it
         }
         writeAll(context, list)
     }
@@ -193,24 +302,30 @@ object TunnelFinanceStore {
     }
 
     /**
-     * حسن‌انجام بلوکه = جمع E از آخرین ماه اردیبهشت (ماه ۲) تا الان.
-     * اگر اردیبهشت در سوابق نباشد، صفر.
-     * مانده دریافتی = جمع صورت‌وضعیت − حسن‌انجام بلوکه − جمع دریافتی‌ها
+     * حسن بلوکه = جمع حسن از آخرین اردیبهشت (ماه ۲) تا امروز.
+     * مطالبات آزاد = کل صورت + (کل حسن − حسن بلوکه) − جمع دریافتی
      */
     fun summary(context: Context): TunnelFinanceSummary {
         val rows = all(context)
-        // جمع درآمدها (Q) نه صورت‌وضعیت
-        val sumIncome = rows.sumOf { it.income }
-        val sumS = rows.mapNotNull { it.receiveAmount }.sum()
+        val sumPayable = rows.sumOf { it.payable }
+        val sumRetention = rows.sumOf { it.retention }
+        val sumReceived = rows.mapNotNull { it.receiveAmount }.sum()
         val lastOrdibehesht = rows.filter { it.month == 2 }.maxByOrNull { it.dateCode }
         val blocked = if (lastOrdibehesht != null) {
             rows.filter { it.dateCode >= lastOrdibehesht.dateCode }.sumOf { it.retention }
         } else {
             0.0
         }
-        // مانده = جمع درآمدها − حسن‌انجام بلوکه − جمع دریافتی‌ها
-        val remaining = sumIncome - blocked - sumS
-        return TunnelFinanceSummary(sumIncome, sumS, blocked, remaining)
+        val hasanAzad = (sumRetention - blocked).coerceAtLeast(0.0)
+        val remaining = sumPayable + hasanAzad - sumReceived
+        return TunnelFinanceSummary(
+            sumPayable = sumPayable,
+            sumRetention = sumRetention,
+            sumHasanAzad = hasanAzad,
+            sumReceived = sumReceived,
+            blockedRetention = blocked,
+            remaining = remaining
+        )
     }
 
     fun exportCsvText(context: Context): String {

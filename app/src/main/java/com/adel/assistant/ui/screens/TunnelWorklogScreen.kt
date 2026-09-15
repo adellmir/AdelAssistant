@@ -90,7 +90,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         if (d < 0 || d > 31) { statusMsg = "روز باید بین ۰ تا ۳۱ باشد"; return }
         val code = editingCode ?: TunnelMonthRow.makeDateCode(y, m)
         val existing = TunnelFinanceStore.all(context).firstOrNull { it.dateCode == code }
-        val row = TunnelMonthRow(
+        val row = TunnelMonthRow.compute(
             dateCode = code,
             days = d,
             unitPrice = c,
@@ -112,7 +112,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     val dPrev = days.toDoubleOrNullFa()
     val cPrev = unitPrice.toDoubleOrNullFa()
     val preview = if (dPrev != null && cPrev != null) {
-        TunnelMonthRow(
+        TunnelMonthRow.compute(
             dateCode = 0, days = dPrev, unitPrice = cPrev,
             lunchDeduction = lunchDed.toDoubleOrNullFa() ?: 0.0,
             overtimeAdd = overtime.toDoubleOrNullFa() ?: 0.0,
