@@ -71,47 +71,17 @@ object GsiParser {
         return points
     }
 
-    /**
-     * خواندن TXT/DAT/CSV
-     * برای DAT مثل ترسیم نقشه: name, Y, X, Z [,code] → e=X ، n=Y
-     */
     fun parseTxt(text: String): List<GsiPoint> {
         val out = mutableListOf<GsiPoint>()
-        val looksDat = text.lineSequence().take(8).any { line ->
-            val p = line.trim().split(Regex("""[\s,;\t]+""")).filter { it.isNotEmpty() }
-            p.size >= 5 && p[0].toDoubleOrNull() == null &&
-                p[1].toDoubleOrNull() != null && p[2].toDoubleOrNull() != null
-        }
         text.lineSequence().forEach { raw ->
             val line = raw.trim()
             if (line.isEmpty() || line.startsWith("#")) return@forEach
-            if (line.lowercase().contains("id") && line.lowercase().contains("x")) return@forEach
             val p = line.split(Regex("""[\s,;\t]+""")).filter { it.isNotEmpty() }
             if (p.size < 3) return@forEach
             try {
                 when {
-                    looksDat && p.size >= 4 && p[0].toDoubleOrNull() == null &&
-                        p[1].toDoubleOrNull() != null && p[2].toDoubleOrNull() != null -> {
-                        out.add(
-                            GsiPoint(
-                                name = p[0],
-                                e = p[2].replace(',', '.').toDouble(),
-                                n = p[1].replace(',', '.').toDouble(),
-                                z = p[3].replace(',', '.').toDouble(),
-                                code = p.getOrNull(4).orEmpty()
-                            )
-                        )
-                    }
                     p.size >= 4 && p[1].toDoubleOrNull() != null && p[0].toDoubleOrNull() == null -> {
-                        out.add(
-                            GsiPoint(
-                                name = p[0],
-                                e = p[1].replace(',', '.').toDouble(),
-                                n = p[2].replace(',', '.').toDouble(),
-                                z = p[3].replace(',', '.').toDouble(),
-                                code = p.getOrNull(4).orEmpty()
-                            )
-                        )
+                        out.add(GsiPoint(name = p[0], e = p[1].toDouble(), n = p[2].toDouble(), z = p[3].toDouble()))
                     }
                     p.size >= 4 && p[0].toDoubleOrNull() != null -> {
                         out.add(GsiPoint(name = p[3], e = p[0].toDouble(), n = p[1].toDouble(), z = p[2].toDouble()))
@@ -195,20 +165,34 @@ object GsiParser {
         appendLine("""</Document></kml>""")
     }
 
+    /** DXF R12 (AC1009) — سازگار با AutoCAD */
     fun toDxf(points: List<GsiPoint>): String = buildString {
-        append("0\nSECTION\n2\nHEADER\n0\nENDSEC\n")
-        append("0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n")
-        append("0\nLAYER\n2\nPOINTS\n70\n0\n62\n7\n6\nCONTINUOUS\n")
-        append("0\nENDTAB\n0\nENDSEC\n")
-        append("0\nSECTION\n2\nENTITIES\n")
+        append("0\r\nSECTION\r\n2\r\nHEADER\r\n")
+        append("9\r\n\$ACADVER\r\n1\r\nAC1009\r\n")
+        append("0\r\nENDSEC\r\n")
+        append("0\r\nSECTION\r\n2\r\nTABLES\r\n")
+        append("0\r\nTABLE\r\n2\r\nLTYPE\r\n70\r\n1\r\n")
+        append("0\r\nLTYPE\r\n2\r\nCONTINUOUS\r\n70\r\n0\r\n3\r\nSolid line\r\n72\r\n65\r\n73\r\n0\r\n40\r\n0.0\r\n")
+        append("0\r\nENDTAB\r\n")
+        append("0\r\nTABLE\r\n2\r\nLAYER\r\n70\r\n1\r\n")
+        append("0\r\nLAYER\r\n2\r\nPOINTS\r\n70\r\n0\r\n62\r\n7\r\n6\r\nCONTINUOUS\r\n")
+        append("0\r\nENDTAB\r\n")
+        append("0\r\nENDSEC\r\n")
+        append("0\r\nSECTION\r\n2\r\nENTITIES\r\n")
         points.forEach { p ->
-            append("0\nPOINT\n8\nPOINTS\n")
-            append("10\n${fmt(p.e)}\n20\n${fmt(p.n)}\n30\n${fmt(p.z)}\n")
-            append("0\nTEXT\n8\nPOINTS\n")
-            append("10\n${fmt(p.e)}\n20\n${fmt(p.n)}\n30\n${fmt(p.z)}\n")
-            append("40\n0.5\n1\n${p.name}\n62\n0\n")
+            // صلیب به‌جای POINT (استایل POINT در اتوکد متغیر است)
+            val s = 0.15
+            append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
+            append("10\r\n${fmt(p.e - s)}\r\n20\r\n${fmt(p.n - s)}\r\n30\r\n${fmt(p.z)}\r\n")
+            append("11\r\n${fmt(p.e + s)}\r\n21\r\n${fmt(p.n + s)}\r\n31\r\n${fmt(p.z)}\r\n")
+            append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
+            append("10\r\n${fmt(p.e - s)}\r\n20\r\n${fmt(p.n + s)}\r\n30\r\n${fmt(p.z)}\r\n")
+            append("11\r\n${fmt(p.e + s)}\r\n21\r\n${fmt(p.n - s)}\r\n31\r\n${fmt(p.z)}\r\n")
+            append("0\r\nTEXT\r\n8\r\nPOINTS\r\n62\r\n7\r\n")
+            append("10\r\n${fmt(p.e + 0.3)}\r\n20\r\n${fmt(p.n + 0.3)}\r\n30\r\n${fmt(p.z)}\r\n")
+            append("40\r\n0.5\r\n1\r\n${p.name.replace("\n", " ")}\r\n50\r\n0\r\n")
         }
-        append("0\nENDSEC\n0\nEOF\n")
+        append("0\r\nENDSEC\r\n0\r\nEOF\r\n")
     }
 
     private fun encodeName16(name: String): String = name.trim().take(16).padStart(16, '0')

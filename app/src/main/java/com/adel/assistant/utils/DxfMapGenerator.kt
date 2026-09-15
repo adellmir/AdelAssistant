@@ -8,11 +8,11 @@ import com.adel.assistant.data.isEndOfLine
 import java.util.Locale
 
 /**
- * تولید DXF سازگار با AutoCAD
- * - جداول LTYPE / LAYER / STYLE / APPID
- * - بخش BLOCKS
- * - پایان خط CRLF
- * - خطوط با LINE به‌جای LWPOLYLINE
+ * تولید DXF معتبر برای AutoCAD / Civil / اپ‌های موبایل.
+ *
+ * فرمت: AutoCAD R12 (AC1009) — بدون نیاز به handle و AcDbSymbolTable
+ * که در AC1014 ناقص باعث خطای:
+ * "Class separator for class AcDbSymbolTable expected" می‌شد.
  */
 object DxfMapGenerator {
 
@@ -24,16 +24,16 @@ object DxfMapGenerator {
     ): String {
         val sb = StringBuilder()
 
-        // HEADER
+        // ---------- HEADER ----------
         pair(sb, 0, "SECTION")
         pair(sb, 2, "HEADER")
         pair(sb, 9, "\$ACADVER")
-        pair(sb, 1, "AC1014")
+        pair(sb, 1, "AC1009")
         pair(sb, 9, "\$INSUNITS")
-        pair(sb, 70, "6")
+        pair(sb, 70, "6") // meters
         pair(sb, 0, "ENDSEC")
 
-        // TABLES
+        // ---------- TABLES ----------
         pair(sb, 0, "SECTION")
         pair(sb, 2, "TABLES")
 
@@ -51,12 +51,8 @@ object DxfMapGenerator {
         pair(sb, 0, "ENDTAB")
 
         // LAYER
-        pair(sb, 0, "TABLE")
-        pair(sb, 2, "LAYER")
-        pair(sb, 70, "256")
-        writeLayer(sb, "0", 7)
-
         val usedLayers = linkedMapOf<String, Int>()
+        usedLayers["0"] = 7
         settings.values
             .filter { it.category != CodeCategory.IGNORE }
             .forEach { s ->
@@ -68,55 +64,24 @@ object DxfMapGenerator {
                 val color = DxfColors.aci.getOrElse(s.colorIndex) { 7 }
                 usedLayers.putIfAbsent(layer, color)
             }
+        pair(sb, 0, "TABLE")
+        pair(sb, 2, "LAYER")
+        pair(sb, 70, usedLayers.size.toString())
         usedLayers.forEach { (name, color) -> writeLayer(sb, name, color) }
         pair(sb, 0, "ENDTAB")
 
-        // STYLE
-        pair(sb, 0, "TABLE")
-        pair(sb, 2, "STYLE")
-        pair(sb, 70, "1")
-        pair(sb, 0, "STYLE")
-        pair(sb, 2, "STANDARD")
-        pair(sb, 70, "0")
-        pair(sb, 40, "0.0")
-        pair(sb, 41, "1.0")
-        pair(sb, 50, "0.0")
-        pair(sb, 71, "0")
-        pair(sb, 42, "1.0")
-        pair(sb, 3, "txt")
-        pair(sb, 4, "")
-        pair(sb, 0, "ENDTAB")
-
-        // APPID
-        pair(sb, 0, "TABLE")
-        pair(sb, 2, "APPID")
-        pair(sb, 70, "1")
-        pair(sb, 0, "APPID")
-        pair(sb, 2, "ACAD")
-        pair(sb, 70, "0")
-        pair(sb, 0, "ENDTAB")
-
         pair(sb, 0, "ENDSEC")
 
-        // BLOCKS
-        pair(sb, 0, "SECTION")
-        pair(sb, 2, "BLOCKS")
-        pair(sb, 0, "ENDSEC")
-
-        // ENTITIES
+        // ---------- ENTITIES ----------
         pair(sb, 0, "SECTION")
         pair(sb, 2, "ENTITIES")
 
-        // خطوط: به‌ترتیب فایل (نه groupBy که ترتیب را برای کدهای پراکنده خراب کند)
         writeAllLinesInOrder(sb, points, settings)
 
-        // نقاط
         points.forEach { p ->
             val setting = resolveSetting(settings, p.code) ?: return@forEach
             if (setting.category != CodeCategory.POINT) return@forEach
-            val layer = sanitizeLayer(
-                setting.layerName.ifBlank { "P-${p.code}" }
-            )
+            val layer = sanitizeLayer(setting.layerName.ifBlank { "P-${p.code}" })
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
             writePointSymbol(sb, p, layer, color)
             writePointLabel(sb, p, layer, color, setting)
@@ -143,10 +108,9 @@ object DxfMapGenerator {
         pair(sb, 0, "LAYER")
         pair(sb, 2, name)
         pair(sb, 70, "0")
-        pair(sb, 62, color.toString())
+        pair(sb, 62, color.coerceIn(1, 255).toString())
         pair(sb, 6, "CONTINUOUS")
     }
-
 
     private fun resolveSetting(settings: Map<String, CodeSetting>, code: String): CodeSetting? {
         settings[code]?.let { return it }
@@ -154,7 +118,6 @@ object DxfMapGenerator {
         settings[base]?.let { return it }
         settings[code.lowercase()]?.let { return it }
         settings[base.lowercase()]?.let { return it }
-        // تطبیق بدون توجه به نقطه انتهایی .E
         val stripped = code.replace(Regex("""\.E$""", RegexOption.IGNORE_CASE), "")
         return settings[stripped] ?: settings.entries.firstOrNull {
             it.key.equals(code, true) || it.key.equals(base, true)
@@ -192,41 +155,10 @@ object DxfMapGenerator {
                 setting.layerName.ifBlank { "L-${p.code.substringBefore(".")}" }
             )
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
-            // اگر لایه عوض شد، خط قبلی بسته شود
-            if (current.isNotEmpty() && (layer != currentLayer)) {
-                flush()
-            }
+            if (current.isNotEmpty() && layer != currentLayer) flush()
             currentLayer = layer
             currentColor = color
             closeOnE = setting.closeOnE
-            current.add(p)
-            if (closeOnE && p.isEndOfLine()) flush()
-        }
-        flush()
-    }
-
-    private fun writePolylinesAsLines(
-        sb: StringBuilder,
-        points: List<SurveyPoint>,
-        layer: String,
-        color: Int,
-        closeOnE: Boolean
-    ) {
-        if (points.isEmpty()) return
-        var current = mutableListOf<SurveyPoint>()
-
-        fun flush() {
-            if (current.size >= 2) {
-                for (i in 0 until current.size - 1) {
-                    writeLine(sb, current[i], current[i + 1], layer, color)
-                }
-            } else if (current.size == 1) {
-                writePointSymbol(sb, current[0], layer, color)
-            }
-            current = mutableListOf()
-        }
-
-        points.forEach { p ->
             current.add(p)
             if (closeOnE && p.isEndOfLine()) flush()
         }
@@ -303,7 +235,7 @@ object DxfMapGenerator {
 
         pair(sb, 0, "TEXT")
         pair(sb, 8, layer)
-        pair(sb, 62, "250")  // مشکی ثابت برای نوشته
+        pair(sb, 62, "7")
         pair(sb, 10, fmt(p.x + 0.3))
         pair(sb, 20, fmt(p.y + 0.3))
         pair(sb, 30, fmt(p.z))

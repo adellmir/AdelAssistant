@@ -135,24 +135,42 @@ object PointConverter {
         return out
     }
 
+    /** DXF R12 (AC1009) معتبر برای اتوکد */
     private fun dxf(points: List<SurveyPoint>) = buildString {
-        append("0\nSECTION\n2\nENTITIES\n")
+        fun layerOf(p: SurveyPoint) =
+            p.code.ifBlank { "POINTS" }.replace(Regex("[^A-Za-z0-9_-]"), "_").take(31).ifBlank { "POINTS" }
+        val layers = points.map { layerOf(it) }.distinct()
+        append("0\r\nSECTION\r\n2\r\nHEADER\r\n9\r\n\$ACADVER\r\n1\r\nAC1009\r\n0\r\nENDSEC\r\n")
+        append("0\r\nSECTION\r\n2\r\nTABLES\r\n")
+        append("0\r\nTABLE\r\n2\r\nLTYPE\r\n70\r\n1\r\n")
+        append("0\r\nLTYPE\r\n2\r\nCONTINUOUS\r\n70\r\n0\r\n3\r\nSolid line\r\n72\r\n65\r\n73\r\n0\r\n40\r\n0.0\r\n0\r\nENDTAB\r\n")
+        append("0\r\nTABLE\r\n2\r\nLAYER\r\n70\r\n${layers.size}\r\n")
+        layers.forEach { layer ->
+            append("0\r\nLAYER\r\n2\r\n$layer\r\n70\r\n0\r\n62\r\n7\r\n6\r\nCONTINUOUS\r\n")
+        }
+        append("0\r\nENDTAB\r\n0\r\nENDSEC\r\n")
+        append("0\r\nSECTION\r\n2\r\nENTITIES\r\n")
         points.forEach { p ->
-            val layer = p.code.ifBlank { "POINTS" }
-            val s = 0.10 // 10 cm when drawing units are meters
+            val layer = layerOf(p)
+            val s = 0.10
             val gap = 0.15
-            // Cross marker built from two LINE entities so its appearance is independent of AutoCAD POINT style.
-            append("0\nLINE\n8\n$layer\n10\n${f(p.x - s / 2)}\n20\n${f(p.y - s / 2)}\n30\n${f(p.z)}\n11\n${f(p.x + s / 2)}\n21\n${f(p.y + s / 2)}\n31\n${f(p.z)}\n")
-            append("0\nLINE\n8\n$layer\n10\n${f(p.x - s / 2)}\n20\n${f(p.y + s / 2)}\n30\n${f(p.z)}\n11\n${f(p.x + s / 2)}\n21\n${f(p.y - s / 2)}\n31\n${f(p.z)}\n")
+            append("0\r\nLINE\r\n8\r\n$layer\r\n")
+            append("10\r\n${f(p.x - s)}\r\n20\r\n${f(p.y - s)}\r\n30\r\n${f(p.z)}\r\n")
+            append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y + s)}\r\n31\r\n${f(p.z)}\r\n")
+            append("0\r\nLINE\r\n8\r\n$layer\r\n")
+            append("10\r\n${f(p.x - s)}\r\n20\r\n${f(p.y + s)}\r\n30\r\n${f(p.z)}\r\n")
+            append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y - s)}\r\n31\r\n${f(p.z)}\r\n")
             textEntity(layer, p.x + gap, p.y + 0.10, p.z, p.id, 0.10)
             textEntity(layer, p.x + gap, p.y, p.z, "Z=${f(p.z)}", 0.10)
             if (p.code.isNotBlank()) textEntity(layer, p.x + gap, p.y - 0.10, p.z, p.code, 0.10)
         }
-        append("0\nENDSEC\n0\nEOF\n")
+        append("0\r\nENDSEC\r\n0\r\nEOF\r\n")
     }
 
     private fun StringBuilder.textEntity(layer: String, x: Double, y: Double, z: Double, value: String, height: Double) {
-        append("0\nTEXT\n8\n$layer\n10\n${f(x)}\n20\n${f(y)}\n30\n${f(z)}\n40\n${f(height)}\n1\n${value.replace("\n", " ")}\n")
+        append("0\r\nTEXT\r\n8\r\n$layer\r\n62\r\n7\r\n")
+        append("10\r\n${f(x)}\r\n20\r\n${f(y)}\r\n30\r\n${f(z)}\r\n")
+        append("40\r\n${f(height)}\r\n1\r\n${value.replace("\n", " ")}\r\n50\r\n0\r\n")
     }
 
     private fun gsi(points: List<SurveyPoint>) = points.joinToString("\n") { p ->
