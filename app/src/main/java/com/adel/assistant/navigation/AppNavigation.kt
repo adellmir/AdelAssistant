@@ -23,6 +23,7 @@ import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
 import com.adel.assistant.ui.screens.InvoiceScreen
+import com.adel.assistant.ui.screens.LetterScreen
 import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
 import com.adel.assistant.ui.screens.ProjectRegisterScreen
@@ -212,6 +213,9 @@ fun AppNavigation() {
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_LETTER) {
+            LetterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
     }
 }
