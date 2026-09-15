@@ -70,6 +70,17 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
 
+    // با تغییر شفت: آخرین سمت ثبت‌شده همان شفت را پیش‌فرض کن
+    LaunchedEffect(shaft) {
+        if (shaft.isNotBlank() && editingIndex < 0) {
+            val last = TunnelReportStore.allEntries(context)
+                .filter { it.shaft == shaft }
+                .maxByOrNull { it.dateSortKey }
+            if (last != null && side.isBlank()) {
+                side = last.side
+            }
+        }
+    }
     LaunchedEffect(shaft, side) {
         if (shaft.isNotBlank() && side.isNotBlank() && editingIndex < 0) {
             val suggested = TunnelReportStore.suggestedNextPointNo(context, shaft, side)

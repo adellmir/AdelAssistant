@@ -112,4 +112,96 @@ object ProjectStore {
             .mapNotNull { it.day.toIntOrNullFa() }
             .toSet()
     }
+
+    fun isFullySettled(p: ProjectEntry): Boolean =
+        p.remaining <= 1e-9 || (p.amount > 0 && p.settled >= p.amount - 1e-9)
+
+    /** آخرین ثبت هم‌نام پروژه — برای پر کردن پیش‌فرض کارفرما/تلفن/مبلغ */
+    fun lastByProjectName(context: Context, projectName: String): ProjectEntry? {
+        val key = projectName.trim()
+        if (key.isBlank()) return null
+        return all(context)
+            .filter { it.name.trim().equals(key, ignoreCase = true) }
+            .maxByOrNull { it.dateSortKey }
+    }
+
+    /** به‌روزرسانی نام و تلفن کارفرما در همه پروژه‌های مشترک */
+    fun updateEmployerInfo(
+        context: Context,
+        oldEmployer: String,
+        newEmployer: String,
+        newPhone: String
+    ) {
+        val old = oldEmployer.trim()
+        if (old.isBlank()) return
+        val list = all(context).map { p ->
+            if (p.employer.trim().equals(old, ignoreCase = true)) {
+                p.copy(
+                    employer = newEmployer.trim().ifBlank { p.employer },
+                    phone = newPhone.trim().ifBlank { p.phone }
+                )
+            } else p
+        }
+        writeAll(context, list)
+    }
+
+    data class EmployerProfile(
+        val employer: String,
+        val phone: String,
+        val projectCount: Int,
+        val totalReceived: Double,
+        val totalClaims: Double,
+        val sessions: List<ProjectEntry>
+    )
+
+    data class ProjectProfile(
+        val name: String,
+        val employer: String,
+        val phone: String,
+        val sessionCount: Int,
+        val totalReceived: Double,
+        val totalClaims: Double,
+        val sessions: List<ProjectEntry>
+    )
+
+    fun employerProfiles(context: Context, query: String = ""): List<EmployerProfile> {
+        val q = query.trim()
+        val grouped = all(context)
+            .filter { it.employer.isNotBlank() }
+            .filter { q.isBlank() || it.employer.contains(q, true) }
+            .groupBy { it.employer.trim() }
+        return grouped.map { (emp, rows) ->
+            val sorted = rows.sortedByDescending { it.dateSortKey }
+            EmployerProfile(
+                employer = emp,
+                phone = sorted.firstOrNull { it.phone.isNotBlank() }?.phone
+                    ?: sorted.first().phone,
+                projectCount = rows.map { it.name.trim() }.filter { it.isNotBlank() }.distinct().size,
+                totalReceived = rows.sumOf { it.settled },
+                totalClaims = rows.sumOf { it.remaining.coerceAtLeast(0.0) },
+                sessions = sorted
+            )
+        }.sortedByDescending { it.sessions.firstOrNull()?.dateSortKey.orEmpty() }
+    }
+
+    fun projectProfiles(context: Context, query: String = ""): List<ProjectProfile> {
+        val q = query.trim()
+        val grouped = all(context)
+            .filter { it.name.isNotBlank() && it.name != "پروژه" }
+            .filter { q.isBlank() || it.name.contains(q, true) }
+            .groupBy { it.name.trim() }
+        return grouped.map { (nm, rows) ->
+            val sorted = rows.sortedByDescending { it.dateSortKey }
+            ProjectProfile(
+                name = nm,
+                employer = sorted.first().employer,
+                phone = sorted.firstOrNull { it.phone.isNotBlank() }?.phone
+                    ?: sorted.first().phone,
+                sessionCount = rows.size,
+                totalReceived = rows.sumOf { it.settled },
+                totalClaims = rows.sumOf { it.remaining.coerceAtLeast(0.0) },
+                sessions = sorted
+            )
+        }.sortedByDescending { it.sessions.firstOrNull()?.dateSortKey.orEmpty() }
+    }
 }

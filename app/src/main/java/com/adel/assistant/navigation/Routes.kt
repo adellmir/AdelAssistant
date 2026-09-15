@@ -14,6 +14,7 @@ object Routes {
     const val SURVEY_PROJECT_EVENTS = "survey/project/events"
     const val SURVEY_PROJECT_CALENDAR = "survey/project/calendar"
     const val SURVEY_PROJECT_TASKS = "survey/project/tasks"
+    const val SURVEY_PROJECT_CLIENTS = "survey/project/clients"
 
     const val FIN_TUNNEL_WORKLOG = "finance/tunnel/worklog"
     const val FIN_TUNNEL_RECEIPTS = "finance/tunnel/receipts"

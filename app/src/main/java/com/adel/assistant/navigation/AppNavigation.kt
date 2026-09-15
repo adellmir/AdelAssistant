@@ -15,6 +15,7 @@ import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.ChainageScreen
+import com.adel.assistant.ui.screens.ClientsProjectsScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.ExcavationPointsScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
@@ -126,7 +127,10 @@ fun AppNavigation() {
                 }
             )
         }
-        composable(Routes.SURVEY_PROJECT_EVENTS) {
+                composable(Routes.SURVEY_PROJECT_CLIENTS) {
+            ClientsProjectsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+        }
+composable(Routes.SURVEY_PROJECT_EVENTS) {
             ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_PROJECT_CALENDAR) {

@@ -45,6 +45,7 @@ object AppMenu {
             )),
             MenuTab("پروژه‌ها", listOf(
                 MenuItem("ثبت پروژه", Icons.Filled.AddLocationAlt, Routes.SURVEY_PROJECT_REGISTER),
+                MenuItem("کارفرمایان و پروژه‌ها", Icons.Filled.People, Routes.SURVEY_PROJECT_CLIENTS),
                 MenuItem("ثبت وقایع پروژه", Icons.Filled.EventNote, Routes.SURVEY_PROJECT_EVENTS),
                 MenuItem("تقویم کاری", Icons.Filled.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_PROJECT_TASKS)

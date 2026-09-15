@@ -244,7 +244,24 @@ fun ProjectRegisterScreen(
                 keyboardOptions = numKb)
         }
 
-        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(
+            value = name,
+            onValueChange = {
+                name = it
+                // اگر هم‌نام قبلی وجود داشت، کارفرما/تلفن/مبلغ را پیش‌فرض کن
+                val last = ProjectStore.lastByProjectName(context, it)
+                if (last != null && editingRow == null) {
+                    if (employer.isBlank()) employer = last.employer
+                    if (phone.isBlank()) phone = last.phone
+                    if (amount.isBlank()) {
+                        amount = if (last.amount == last.amount.toLong().toDouble())
+                            last.amount.toLong().toString() else last.amount.toString()
+                    }
+                }
+            },
+            label = { Text("نام پروژه") },
+            modifier = Modifier.fillMaxWidth()
+        )
         OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
@@ -317,12 +334,19 @@ fun ProjectRegisterScreen(
                             IconButton(onClick = { confirmCallFor = p }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
                             }
-                            IconButton(onClick = {
-                                ProjectStore.markSettled(context, p.row)
-                                search()
-                                statusMsg = "تسویه شد"
-                            }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.CheckCircle, contentDescription = "تسویه", tint = Color(0xFF7FA35A))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = ProjectStore.isFullySettled(p),
+                                    onCheckedChange = { checked ->
+                                        if (checked) ProjectStore.markSettled(context, p.row)
+                                        else ProjectStore.markUnsettled(context, p.row)
+                                        search()
+                                        statusMsg = if (checked) "تسویه شد" else "تسویه برداشته شد"
+                                    },
+                                    colors = CheckboxDefaults.colors(checkedColor = color),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Text("تسویه", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7FA35A))
                             }
                             IconButton(onClick = {
                                 day = p.day

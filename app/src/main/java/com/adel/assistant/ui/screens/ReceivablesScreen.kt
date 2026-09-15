@@ -57,7 +57,7 @@ fun ReceivablesScreen(
         val isPaid = p.remaining <= 1e-9 || (p.amount > 0 && p.settled >= p.amount - 1e-9)
         val okTab = if (tab == 0) !isPaid else isPaid
         okName && okEmp && okTab
-    }
+    }.sortedByDescending { it.dateSortKey }
 
     val totalWork = filtered.sumOf { it.amount }
     val totalReceived = filtered.sumOf { it.settled }
