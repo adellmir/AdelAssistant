@@ -12,11 +12,11 @@ import com.adel.assistant.data.DeepLinkHolder
 import com.adel.assistant.data.InvoiceLaunch
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.dxf.DxfConverterScreen
-import com.adel.assistant.ui.screens.AlignScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.ChainageScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
+import com.adel.assistant.ui.screens.ExcavationPointsScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.DxfPreviewScreen
 import com.adel.assistant.ui.screens.FinanceStatusScreen
@@ -79,6 +79,9 @@ fun AppNavigation() {
         }
         composable(Routes.SURVEY_TUNNEL_EVENTS) {
             TunnelPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.SURVEY_TUNNEL_EXCAVATION) {
+            ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_STATUS) {
             TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
@@ -190,11 +193,7 @@ fun AppNavigation() {
             DxfPreviewScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_TOTAL_STATION) {
-            TotalStationDumpScreen(
-                color = ToolPrimary,
-                onBack = { navController.popBackStack() },
-                onOpenConverter = { navController.navigate(Routes.TOOL_GSI) }
-            )
+            TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_GSI) {
             GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
@@ -207,9 +206,6 @@ fun AppNavigation() {
         }
         composable(Routes.TOOL_AREA) {
             AreaScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.TOOL_ALIGN) {
-            AlignScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_VOLUME) {
             VolumeScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

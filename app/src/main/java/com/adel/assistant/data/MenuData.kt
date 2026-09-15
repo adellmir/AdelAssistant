@@ -38,6 +38,7 @@ object AppMenu {
         tabs = listOf(
             MenuTab("تونل", listOf(
                 MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
+                MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
                 MenuItem("ثبت وقایع تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
                 MenuItem("وضعیت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
@@ -76,14 +77,13 @@ object AppMenu {
         color = ToolPrimary,
         tabs = listOf(
             MenuTab("", listOf(
-                MenuItem("ترسیم نقشه", Icons.Filled.Architecture, Routes.TOOL_DXF),
+                MenuItem("تبدیل به DXF", Icons.Filled.Architecture, Routes.TOOL_DXF),
                 MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
                 MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
-                MenuItem("مبدل", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
+                MenuItem("مبدل GSI", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
                 MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
                 MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
-                MenuItem("الاین مختصات", Icons.Filled.CompareArrows, Routes.TOOL_ALIGN),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
                 MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))

@@ -8,10 +8,23 @@ data class ReportEntry(
     val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
     val deviation: String = "", val collapse: String = "",
     val km: Double = 0.0, val dailyProgress: Double = 0.0,
-    val shaftProgress: Double = 0.0, val remaining: Double = 0.0
+    val shaftProgress: Double = 0.0, val remaining: Double = 0.0,
+    /** مختصات درون‌یابی‌شده روی محور تونل — ذخیره می‌شود، در UI گزارش نمایش داده نمی‌شود */
+    val x: Double = 0.0,
+    val y: Double = 0.0,
+    val z: Double = 0.0
 ) {
     val key: String get() = "$shaft-${normalizeSide(side)}"
     val dateSortKey: String get() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
+    /** برچسب تاریخ به فرم YYMMDD مثل 050624 */
+    val dateLabel: String
+        get() {
+            val y = (year.toIntOrNullFa() ?: 0) % 100
+            val m = month.toIntOrNullFa() ?: 0
+            val d = day.toIntOrNullFa() ?: 0
+            return "%02d%02d%02d".format(y, m, d)
+        }
+    val hasCoords: Boolean get() = !(x == 0.0 && y == 0.0 && z == 0.0)
 }
 
 data class ShaftEntry(val name: String, val fixedKm: Double, val type: String)
@@ -43,26 +56,34 @@ object TunnelReportStore {
     )
 
     fun saveEntry(context: Context, e: ReportEntry) {
-        CsvStore.appendRow(context, REPORT_CSV, listOf(
-            e.day, e.month, e.year, e.shaft, e.side, e.pointNo, e.lengthCm.toString(),
-            e.deviation, e.collapse, e.km.toString(), e.dailyProgress.toString(),
-            e.shaftProgress.toString(), e.remaining.toString()
-        ))
+        CsvStore.appendRow(context, REPORT_CSV, entryToRow(e))
     }
+
+    private fun entryToRow(e: ReportEntry): List<String> = listOf(
+        e.day, e.month, e.year, e.shaft, e.side, e.pointNo, e.lengthCm.toString(),
+        e.deviation, e.collapse, e.km.toString(), e.dailyProgress.toString(),
+        e.shaftProgress.toString(), e.remaining.toString(),
+        e.x.toString(), e.y.toString(), e.z.toString()
+    )
 
     fun allEntries(context: Context): List<ReportEntry> {
         return CsvStore.readAll(context, REPORT_CSV).mapNotNull { row ->
             if (row.size < 7) return@mapNotNull null
+            // رد کردن هدر در صورت وجود
+            if (row[0].contains("روز") || row[0].contains("تاریخ")) return@mapNotNull null
             try {
                 ReportEntry(
                     year = row[2], month = row[1], day = row[0],
                     shaft = row[3], side = row[4], pointNo = row[5],
-                    lengthCm = row[6].toEnglishDigits().toDouble(),
+                    lengthCm = row[6].toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     deviation = row.getOrElse(7) { "" }, collapse = row.getOrElse(8) { "" },
                     km = row.getOrElse(9) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     dailyProgress = row.getOrElse(10) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     shaftProgress = row.getOrElse(11) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
-                    remaining = row.getOrElse(12) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
+                    remaining = row.getOrElse(12) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    x = row.getOrElse(13) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    y = row.getOrElse(14) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    z = row.getOrElse(15) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
                 )
             } catch (e: Exception) { null }
         }
@@ -80,12 +101,64 @@ object TunnelReportStore {
 
     fun replaceEntriesForDate(context: Context, year: String, month: String, day: String, newEntries: List<ReportEntry>) {
         val dateKey = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
+        // مختصات را برای هر ردیف از روی کیلومتراژ درون‌یابی کن اگر خالی بود
+        val filled = newEntries.map { e ->
+            if (e.hasCoords) e else {
+                val xyz = interpolateAtKm(context, e.km)
+                if (xyz != null) e.copy(x = xyz.first, y = xyz.second, z = xyz.third) else e
+            }
+        }
         val kept = allEntries(context).filter { it.dateSortKey != dateKey }
-        val all = kept + newEntries
-        val rows = all.map { listOf(it.day, it.month, it.year, it.shaft, it.side, it.pointNo,
-            it.lengthCm.toString(), it.deviation, it.collapse, it.km.toString(), it.dailyProgress.toString(),
-            it.shaftProgress.toString(), it.remaining.toString()) }
-        CsvStore.overwriteAll(context, REPORT_CSV, rows)
+        val all = kept + filled
+        CsvStore.overwriteAll(context, REPORT_CSV, all.map { entryToRow(it) })
+    }
+
+    /**
+     * درون‌یابی خطی X,Y,Z روی کیلومتراژ بین دو نقطهٔ متوالی محور تونل (فاصلهٔ حدود ۱٫۲ m).
+     */
+    fun interpolateAtKm(context: Context, km: Double): Triple<Double, Double, Double>? {
+        val points = allPoints(context).sortedBy { it.km }
+        if (points.isEmpty()) return null
+        if (km <= points.first().km) {
+            val p = points.first(); return Triple(p.x, p.y, p.z)
+        }
+        if (km >= points.last().km) {
+            val p = points.last(); return Triple(p.x, p.y, p.z)
+        }
+        for (i in 0 until points.size - 1) {
+            val a = points[i]; val b = points[i + 1]
+            if (km >= a.km && km <= b.km) {
+                val den = b.km - a.km
+                val t = if (abs(den) < 1e-12) 0.0 else (km - a.km) / den
+                return Triple(
+                    a.x + (b.x - a.x) * t,
+                    a.y + (b.y - a.y) * t,
+                    a.z + (b.z - a.z) * t
+                )
+            }
+        }
+        return null
+    }
+
+    /** اگر مختصات ذخیره نشده باشد از روی km حساب می‌کند */
+    fun ensureCoords(context: Context, e: ReportEntry): ReportEntry {
+        if (e.hasCoords) return e
+        val xyz = interpolateAtKm(context, e.km) ?: return e
+        return e.copy(x = xyz.first, y = xyz.second, z = xyz.third)
+    }
+
+    /** فیلتر بازهٔ تاریخ (از–تا) بر اساس dateSortKey YYYYMMDD */
+    fun entriesInRange(
+        context: Context,
+        fromYear: String, fromMonth: String, fromDay: String,
+        toYear: String, toMonth: String, toDay: String
+    ): List<ReportEntry> {
+        val from = "%s%02d%02d".format(fromYear, fromMonth.toIntOrNullFa() ?: 0, fromDay.toIntOrNullFa() ?: 0)
+        val to = "%s%02d%02d".format(toYear, toMonth.toIntOrNullFa() ?: 0, toDay.toIntOrNullFa() ?: 0)
+        return allEntries(context)
+            .filter { it.dateSortKey >= from && it.dateSortKey <= to }
+            .map { ensureCoords(context, it) }
+            .sortedByDescending { it.dateSortKey }
     }
 
     fun shaftFixedKm(context: Context, shaft: String): Double? = allShafts(context).firstOrNull { it.name == shaft }?.fixedKm
@@ -221,8 +294,9 @@ object TunnelReportStore {
         val ratio = (km - before.km) / (after.km - before.km)
         val x = before.x + (after.x - before.x) * ratio
         val y = before.y + (after.y - before.y) * ratio
+        val z = before.z + (after.z - before.z) * ratio
         val nearest = if (abs(km - before.km) <= abs(after.km - km)) before else after
-        return TunnelPoint(nearest.pointNo, x, y, nearest.z, km, nearest.elevDiff, nearest.slope, nearest.type)
+        return TunnelPoint(nearest.pointNo, x, y, z, km, nearest.elevDiff, nearest.slope, nearest.type)
     }
 
     fun findByPointNo(context: Context, pointNo: String): TunnelPoint? =
