@@ -7,13 +7,20 @@ import com.adel.assistant.data.TaskStore
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.formatMoney
+import com.adel.assistant.data.AppMenu
 import com.adel.assistant.navigation.Routes
 import java.util.Locale
+
+data class AgentChoice(
+    val label: String,
+    val value: String
+)
 
 data class AgentReply(
     val text: String,
     val navigateTo: String? = null,
-    val action: String? = null
+    val action: String? = null,
+    val choices: List<AgentChoice> = emptyList()
 )
 
 /**
@@ -21,12 +28,13 @@ data class AgentReply(
  * بدون API خارجی؛ درخواست محاوره‌ای را به Action واقعی برنامه تبدیل می‌کند.
  */
 object AssistantAgent {
-    private enum class PendingType { TASK_CATEGORY, TASK_DELETE_CONFIRM }
+    private enum class PendingType { TASK_CATEGORY, TASK_DELETE_CONFIRM, MENU_CHOICE }
     private data class Pending(
         val type: PendingType,
         val title: String = "",
         val store: String? = null,
-        val index: Int = -1
+        val index: Int = -1,
+        val choices: List<AgentChoice> = emptyList()
     )
     private var pending: Pending? = null
 
@@ -51,12 +59,18 @@ object AssistantAgent {
         resolvePending(context, msg)?.let { return it }
         if (isHelp(msg)) return AgentReply(helpText())
         fileIntent(msg)?.let { return it }
-        navIntent(msg)?.let { return it }
+
+        // «برو» یک فرمان صریح برای ناوبری است؛ در غیر این صورت کار را داخل چت انجام می‌دهیم.
+        if (hasNavigationVerb(msg)) {
+            navIntent(msg)?.let { return it }
+        }
+
         taskIntent(context, msg)?.let { return it }
         statsIntent(context, msg)?.let { return it }
         if (hasAny(msg, listOf("امروز", "برنامه امروز", "کارهای امروز"))) return AgentReply(todayPlan(context))
 
-        return AgentReply("منظورت را کامل متوجه نشدم. می‌توانی محاوره‌ای بنویسی؛ مثلاً «برو درون‌یابی»، «کارهای باز تونل چیه؟»، «فردا برای پروژه تسک کنترل نقاط ثبت کن» یا «وضعیت مالی پروژه‌ها رو خلاصه کن». ")
+        menuIntent(msg)?.let { return it }
+        return AgentReply("منظورت را کامل متوجه نشدم. اسم بخش یا کاری که می‌خواهی را بگو؛ اگر چند معنی داشته باشد گزینه‌های قابل انتخاب نشان می‌دهم.")
     }
 
     /** درخواست‌های مربوط به فایل انتخاب‌شده در چت */
@@ -81,13 +95,32 @@ object AssistantAgent {
         val p = pending ?: return null
         when (p.type) {
             PendingType.TASK_CATEGORY -> {
-                val store = categoryStore(msg)
+                val store = when (msg) {
+                    "__task_tunnel" -> "tunnel_tasks"
+                    "__task_project" -> "project_tasks"
+                    else -> categoryStore(msg)
+                }
                 if (store != null) {
                     pending = null
                     return addTask(context, store, p.title)
                 }
+                if (isBoth(msg) || msg == "__task_both") {
+                    pending = null
+                    addTask(context, "tunnel_tasks", p.title)
+                    addTask(context, "project_tasks", p.title)
+                    return AgentReply("تسک «${p.title}» در هر دو بخش تونل و پروژه ثبت شد ✅")
+                }
+                val numeric = msg.toIntOrNull()
+                if (numeric == 1) { pending = null; return addTask(context, "tunnel_tasks", p.title) }
+                if (numeric == 2) { pending = null; return addTask(context, "project_tasks", p.title) }
+                if (numeric == 3) {
+                    pending = null
+                    addTask(context, "tunnel_tasks", p.title)
+                    addTask(context, "project_tasks", p.title)
+                    return AgentReply("تسک «${p.title}» در هر دو بخش تونل و پروژه ثبت شد ✅")
+                }
                 if (isCancel(msg)) { pending = null; return AgentReply("عملیات لغو شد.") }
-                return AgentReply("برای بخش «تونل» یا «پروژه» ثبت شود؟")
+                return choiceReply("تسک «${p.title}» برای کدام بخش ثبت شود؟", taskCategoryChoices())
             }
             PendingType.TASK_DELETE_CONFIRM -> {
                 if (isConfirm(msg)) {
@@ -102,74 +135,177 @@ object AssistantAgent {
                     return AgentReply("تسک دیگر پیدا نشد.")
                 }
                 if (isCancel(msg)) { pending = null; return AgentReply("حذف لغو شد.") }
-                return AgentReply("برای حذف «${p.title}» فقط «بله» یا «لغو» بنویس.")
+                return AgentReply("برای حذف «${p.title}» تأیید یا لغو کن.", choices = listOf(AgentChoice("بله", "بله"), AgentChoice("لغو", "لغو")))
+            }
+            PendingType.MENU_CHOICE -> {
+                val exact = p.choices.firstOrNull { normalize(it.value) == msg || normalize(it.label) == msg }
+                if (exact != null) {
+                    pending = null
+                    return executeChoice(context, msg, exact)
+                }
+                val numeric = msg.toIntOrNull()?.let { it - 1 }
+                if (numeric != null && numeric in p.choices.indices) {
+                    val c = p.choices[numeric]
+                    pending = null
+                    return executeChoice(context, c.value, c)
+                }
+                if (isCancel(msg)) { pending = null; return AgentReply("عملیات لغو شد.") }
+                return choiceReply("یکی از گزینه‌ها را انتخاب کن:", p.choices)
             }
         }
     }
 
-    private fun normalize(s: String): String = s.trim().replace('ي','ی').replace('ك','ک')
-        .replace(Regex("\\s+"), " ").lowercase(Locale.US)
-    private fun hasAny(msg: String, keys: List<String>) = keys.any { msg.contains(it) }
-    private fun isConfirm(msg: String) = msg in setOf("بله","اره","آره","تایید","تأیید","ok","باشه")
-    private fun isCancel(msg: String) = msg in setOf("نه","لغو","بیخیال","کنسل")
+    private fun executeChoice(context: Context, value: String, choice: AgentChoice): AgentReply {
+        return when {
+            value == "__task_tunnel" -> {
+                pending = null
+                AgentReply(taskStats(context, "tunnel_tasks"))
+            }
+            value == "__task_project" -> {
+                pending = null
+                AgentReply(taskStats(context, "project_tasks"))
+            }
+            value == "__task_both" -> {
+                pending = null
+                AgentReply(taskStats(context, null))
+            }
+            value.startsWith("route:") -> AgentReply("باشه، «${choice.label}» را باز می‌کنم.", value.removePrefix("route:"), "navigate")
+            else -> AgentReply("گزینه «${choice.label}» انتخاب شد.")
+        }
+    }
+
+    private fun choiceReply(text: String, choices: List<AgentChoice>): AgentReply = AgentReply(text, choices = choices)
+
+    private fun taskCategoryChoices() = listOf(
+        AgentChoice("تونل", "__task_tunnel"),
+        AgentChoice("پروژه", "__task_project"),
+        AgentChoice("هردو", "__task_both")
+    )
+
+    private fun normalize(s: String): String = s.trim()
+        .replace('ي','ی').replace('ى','ی').replace('ك','ک').replace('ۀ','ه')
+        .replace('ة','ه').replace('ؤ','و').replace('إ','ا').replace('أ','ا')
+        .replace('ـ',' ')
+        .replace(Regex("[\u064B-\u065F\u0670]"), "")
+        .replace('‌',' ')
+        .replace(Regex("[،؛؟!,.:/\\|()\\[\\]{}\"'`~]"), " ")
+        .replace(Regex("\\s+"), " ").lowercase(Locale.ROOT).trim()
+
+    private fun tokens(msg: String): Set<String> = normalize(msg).split(' ').filter { it.isNotBlank() }.toSet()
+    private fun hasAny(msg: String, keys: List<String>) = keys.any { normalize(msg).contains(normalize(it)) }
+    private fun isConfirm(msg: String) = normalize(msg) in setOf("بله","اره","آره","تایید","تأیید","ok","باشه","حتما")
+    private fun isCancel(msg: String) = normalize(msg) in setOf("نه","لغو","بیخیال","کنسل","انصراف")
+    private fun isBoth(msg: String) = normalize(msg) in setOf("هردو","هر دو","هر دو بخش","همه")
     private fun isHelp(msg: String) = hasAny(msg, listOf("کمک","راهنما","چی میتونی","چه کار میتونی","سلام","درود"))
+    private fun hasNavigationVerb(msg: String) = hasAny(msg, listOf("برو","باز کن","وارد شو","ببر به","برو به","بازش کن"))
 
     private fun helpText() = """
 🤖 دستیار AdelAssistant
-می‌توانی محاوره‌ای درخواست بدهی:
-• «برو بخش درون‌یابی»
-• «کارهای باز تونل چیه؟»
-• «فردا برای تونل تسک برداشت مقطع ثبت کن»
-• «تسک کنترل نقاط رو انجام‌شده بزن»
-• «تسک برداشت مقطع رو حذف کن»
-• «آمار کلی / وضعیت مالی پروژه‌ها»
-• «بیشترین مطالبات پروژه‌ها رو بگو»
-• «امروز چه کارهایی دارم؟»
+می‌توانی محاوره‌ای درخواست بدهی. برای ناوبری صریح بگو «برو ...».
+اگر یک واژه چند معنی داشته باشد، گزینه‌های قابل کلیک می‌دهم و عدد هم به‌عنوان راه دوم پذیرفته می‌شود.
+مثلاً: «تسک»، «پروژه»، «برو پروژه»، «برو درون‌یابی»، «کارهای باز تونل».
 """.trimIndent()
 
-    private fun navIntent(msg: String): AgentReply? {
-        if (!hasAny(msg, listOf("برو","باز کن","صفحه","قسمت","بخش","نمایش بده"))) return null
-        val map = listOf(
-            listOf("گزارش روزانه","گزارش تونل") to Routes.SURVEY_TUNNEL_REPORT,
-            listOf("چینیج","کیلومتر") to Routes.SURVEY_TUNNEL_CHAINAGE,
-            listOf("وضعیت تونل") to Routes.SURVEY_TUNNEL_STATUS,
-            listOf("وقایع تونل","رویداد تونل") to Routes.SURVEY_TUNNEL_EVENTS,
-            listOf("تسک تونل","کارهای تونل") to Routes.SURVEY_TUNNEL_TASKS,
-            listOf("ثبت پروژه") to Routes.SURVEY_PROJECT_REGISTER,
-            listOf("وقایع پروژه","رویداد پروژه") to Routes.SURVEY_PROJECT_EVENTS,
-            listOf("تقویم") to Routes.SURVEY_PROJECT_CALENDAR,
-            listOf("تسک پروژه","کارهای پروژه") to Routes.SURVEY_PROJECT_TASKS,
-            listOf("کارکرد") to Routes.FIN_TUNNEL_WORKLOG,
-            listOf("دریافتی تونل") to Routes.FIN_TUNNEL_RECEIPTS,
-            listOf("خلاصه تونل","مطالبات تونل") to Routes.FIN_TUNNEL_SUMMARY,
-            listOf("فاکتور") to Routes.FIN_PROJECT_INVOICE,
-            listOf("ثبت دریافتی","دریافتی پروژه") to Routes.FIN_PROJECT_RECEIPT,
-            listOf("مطالبات") to Routes.FIN_PROJECT_RECEIVABLES,
-            listOf("وضعیت مالی") to Routes.FIN_PROJECT_STATUS,
-            listOf("مکان","مختصات فعلی") to Routes.TOOL_LOCATION,
-            listOf("درون","فاصله دو نقطه") to Routes.TOOL_INTERPOLATE,
-            listOf("مساحت","محیط") to Routes.TOOL_AREA,
-            listOf("حجم","احجام") to Routes.TOOL_VOLUME,
-            listOf("نمایش نقشه","پیش نمایش") to Routes.TOOL_DXF_PREVIEW,
-            listOf("ترسیم","dxf") to Routes.TOOL_DXF,
-            listOf("مبدل","gsi","تبدیل فایل") to Routes.TOOL_GSI,
-            listOf("تخلیه","دوربین") to Routes.TOOL_TOTAL_STATION,
-            listOf("پشتیبان","بکاپ") to Routes.TOOL_BACKUP
-        )
-        map.firstOrNull { (keys, _) -> keys.any { msg.contains(it) } }?.let {
-            return AgentReply("باشه، صفحه مربوط را باز می‌کنم.", it.second, "navigate")
+    private data class MenuCandidate(val title: String, val route: String, val section: String, val tab: String)
+
+    private fun menuCandidates(): List<MenuCandidate> {
+        val result = mutableListOf<MenuCandidate>()
+        AppMenu.sections.forEach { section ->
+            section.tabs.forEach { tab ->
+                tab.items.forEach { item ->
+                    result += MenuCandidate(item.title, item.route, section.title, tab.title)
+                }
+            }
         }
-        return null
+        // مسیرهای موجود که در منوی فعلی عنوان مستقل ندارند.
+        result += listOf(
+            MenuCandidate("چینیج تونل", Routes.SURVEY_TUNNEL_CHAINAGE, "نقشه‌برداری", "تونل"),
+            MenuCandidate("الاین مختصات", Routes.TOOL_ALIGN, "ابزار", ""),
+            MenuCandidate("محاسبه احجام", Routes.TOOL_VOLUME, "ابزار", ""),
+            MenuCandidate("نمایش نقشه", Routes.TOOL_DXF_PREVIEW, "ابزار", "")
+        )
+        return result.distinctBy { it.route }
+    }
+
+    private fun aliases(title: String): Set<String> {
+        val base = tokens(title).toMutableSet()
+        val map = mapOf(
+            "تسک" to setOf("تسک","تسکها","تسک‌ها","کار","وظیفه","کارها"),
+            "پروژه" to setOf("پروژه","پروژ","پروژهها","پروژه‌ها"),
+            "تونل" to setOf("تونل","tunnel"),
+            "گزارش" to setOf("گزارش","ریپورت","report"),
+            "وقایع" to setOf("وقایع","رویداد","رویدادها","رخداد"),
+            "تقویم" to setOf("تقویم","calendar"),
+            "کارکرد" to setOf("کارکرد","صورت وضعیت","کردکرد"),
+            "دریافتی" to setOf("دریافتی","دریافت","وصول"),
+            "مطالبات" to setOf("مطالبات","طلب","مانده","بدهی"),
+            "فاکتور" to setOf("فاکتور","صورتحساب","صورت حساب"),
+            "ترسیم" to setOf("ترسیم","dxf","رسم"),
+            "مبدل" to setOf("مبدل","تبدیل","کنورت","converter"),
+            "تخلیه" to setOf("تخلیه","دوربین","total station","سندینگ","sanding"),
+            "درون‌یابی" to setOf("درون‌یابی","درونیابی","درون یابی","interpolate"),
+            "مساحت" to setOf("مساحت","محیط","area"),
+            "حجم" to setOf("حجم","احجام","volume"),
+            "مکان" to setOf("مکان","مختصات","لوکیشن","location"),
+            "پشتیبان" to setOf("پشتیبان","بکاپ","backup")
+        )
+        base.toList().forEach { word -> map[word]?.let { base.addAll(it.map(::normalize)) } }
+        return base
+    }
+
+    private fun scoreCandidate(msgTokens: Set<String>, c: MenuCandidate): Int {
+        val titleTokens = aliases(c.title)
+        var score = 0
+        msgTokens.forEach { token ->
+            if (token in titleTokens) score += 6
+            else if (titleTokens.any { it.startsWith(token) || token.startsWith(it) }) score += 2
+        }
+        if (msgTokens.contains(normalize(c.tab)) && c.tab.isNotBlank()) score += 4
+        if (msgTokens.contains(normalize(c.section))) score += 2
+        return score
+    }
+
+    private fun menuIntent(msg: String): AgentReply? {
+        val ts = tokens(msg)
+        if (ts.isEmpty()) return null
+        val candidates = menuCandidates().map { it to scoreCandidate(ts, it) }.filter { it.second >= 4 }.sortedByDescending { it.second }
+        if (candidates.isEmpty()) return null
+        val top = candidates.first().second
+        val best = candidates.filter { it.second >= top - 2 }.take(6)
+        if (best.size == 1 && top >= 6) return AgentReply("«${best.first().first.title}» را در نظر گرفتم. اگر می‌خواهی بازش کنم بگو «برو ${best.first().first.title}».")
+        val choices = best.map { AgentChoice(it.first.title, "route:${it.first.route}") }.distinctBy { it.label }
+        pending = Pending(PendingType.MENU_CHOICE, choices = choices)
+        return choiceReply("چند گزینه نزدیک پیدا کردم؛ کدام را می‌خواهی؟", choices)
+    }
+
+    private fun navIntent(msg: String): AgentReply? {
+        val ts = tokens(msg)
+        val candidates = menuCandidates().map { it to scoreCandidate(ts, it) }.filter { it.second >= 4 }.sortedByDescending { it.second }
+        if (candidates.isEmpty()) return null
+        val top = candidates.first().second
+        val best = candidates.filter { it.second >= top - 2 }.take(6)
+        if (best.size == 1) {
+            val c = best.first().first
+            return AgentReply("باشه، «${c.title}» را باز می‌کنم.", c.route, "navigate")
+        }
+        val choices = best.map { AgentChoice(it.first.title, "route:${it.first.route}") }.distinctBy { it.label }
+        pending = Pending(PendingType.MENU_CHOICE, choices = choices)
+        return choiceReply("برای «${ts.joinToString(" ")}» چند مقصد پیدا کردم؛ کدام را باز کنم؟", choices)
     }
 
     private fun categoryStore(msg: String): String? = when {
-        hasAny(msg, listOf("تونل","tunnel")) && !msg.contains("پروژه") -> "tunnel_tasks"
-        hasAny(msg, listOf("پروژه","project")) && !msg.contains("تونل") -> "project_tasks"
+        hasAny(msg, listOf("تونل","tunnel")) && !hasAny(msg, listOf("پروژه","project")) -> "tunnel_tasks"
+        hasAny(msg, listOf("پروژه","project")) && !hasAny(msg, listOf("تونل","tunnel")) -> "project_tasks"
         else -> null
     }
 
     private fun taskIntent(context: Context, msg: String): AgentReply? {
         val store = categoryStore(msg)
+        val onlyTaskWord = normalize(msg) in setOf("تسک", "تسکها", "تسک ها", "کار", "وظیفه", "کارها")
+        if (onlyTaskWord) {
+            pending = Pending(PendingType.MENU_CHOICE, choices = taskCategoryChoices())
+            return choiceReply("تسک‌های کدام بخش را می‌خواهی؟", taskCategoryChoices())
+        }
         val mentionsTask = hasAny(msg, listOf("تسک","وظیفه","کار باقی","کار باز","یادآور"))
         val create = hasAny(msg, listOf("ثبت کن","اضافه کن","بساز","ایجاد کن","تسک جدید"))
         val complete = hasAny(msg, listOf("انجام شده","انجام شده است","انجام شد","تیک بزن","تکمیل کن","تمام شد"))
