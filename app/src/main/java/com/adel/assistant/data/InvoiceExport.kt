@@ -13,8 +13,9 @@ import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.CRC32
 import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
+import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
 data class InvoiceLine(
@@ -40,8 +41,12 @@ data class InvoiceData(
 }
 
 /**
- * صدور فاکتور XLSX روی قالب — منطق ZIP مثل [XlsxReportWriter]
- * (ذخیره مستقیم MediaStore بدون شرط اندازهٔ سخت‌گیرانه)
+ * صدور فاکتور XLSX.
+ *
+ * علت خرابی قبلی: ZipInputStream روی قالبِ دارای تصویر STORED
+ * فقط چند entry اول را کپی می‌کرد → فایل ~3KB بدون Content_Types.
+ *
+ * روش درست: فایل موقت + ZipFile و کپی تمام entryها با حفظ STORED برای PNG.
  */
 object InvoiceExport {
 
@@ -49,16 +54,13 @@ object InvoiceExport {
         return try {
             val templateBytes = loadTemplateBytes(context) ?: return null
             val updates = buildUpdates(data)
-            val outputBytes = rewriteXlsx(templateBytes, updates)
-            if (outputBytes.isEmpty()) return null
+            val outputBytes = rewriteXlsx(context, templateBytes, updates)
+            if (outputBytes.size < 10_000) return null
             val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
                 .replace(" ", "_")
-            // اول مسیر گزارش روزانه (پایدارتر)، بعد FileExport
             saveToDocuments(context, name, outputBytes)
                 ?: FileExport.exportBytesToDocuments(
-                    context,
-                    name,
-                    outputBytes,
+                    context, name, outputBytes,
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
         } catch (_: Exception) {
@@ -74,12 +76,16 @@ object InvoiceExport {
             val cache = File(context.cacheDir, name)
             cache.writeBytes(bytes)
             val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cache)
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
-                putExtra(Intent.EXTRA_STREAM, shareUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(Intent.createChooser(intent, "اشتراک فاکتور"))
+            context.startActivity(
+                Intent.createChooser(
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, shareUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    },
+                    "اشتراک فاکتور"
+                )
+            )
         } catch (_: Exception) {
         }
         return uri
@@ -90,21 +96,12 @@ object InvoiceExport {
         for (n in names) {
             try {
                 val b = context.assets.open(n).use { it.readBytes() }
-                if (b.size > 2000) return b
+                if (b.size > 10_000) return b
             } catch (_: Exception) {
             }
         }
         val local = File(context.filesDir, "invoice_template.xlsx")
-        if (local.exists() && local.length() > 2000) return local.readBytes()
-        // fallback: Documents copy if user imported
-        try {
-            val docs = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                "AdelAssistant/invoice_template.xlsx"
-            )
-            if (docs.exists() && docs.length() > 2000) return docs.readBytes()
-        } catch (_: Exception) {
-        }
+        if (local.exists() && local.length() > 10_000) return local.readBytes()
         return null
     }
 
@@ -148,34 +145,51 @@ object InvoiceExport {
     }
 
     private fun rewriteXlsx(
+        context: Context,
         templateBytes: ByteArray,
         updates: Map<String, Pair<String, Boolean>>
     ): ByteArray {
-        val outBuffer = ByteArrayOutputStream()
-        ZipOutputStream(outBuffer).use { zos ->
-            ZipInputStream(templateBytes.inputStream()).use { zis ->
-                var entry: ZipEntry? = zis.nextEntry
-                while (entry != null) {
-                    val bytes = zis.readBytes()
-                    val name = entry.name
-                    zos.putNextEntry(ZipEntry(name))
-                    if (name == "xl/worksheets/sheet1.xml") {
-                        val xml = bytes.toString(Charsets.UTF_8)
-                        zos.write(applyCellUpdates(xml, updates).toByteArray(Charsets.UTF_8))
-                    } else {
-                        zos.write(bytes)
+        val tmpIn = File(context.cacheDir, "invoice_tpl_${System.currentTimeMillis()}.xlsx")
+        try {
+            tmpIn.writeBytes(templateBytes)
+            val outBuffer = ByteArrayOutputStream(templateBytes.size + 4096)
+            ZipFile(tmpIn).use { zipFile ->
+                ZipOutputStream(outBuffer).use { zos ->
+                    val enumEntries = zipFile.entries()
+                    while (enumEntries.hasMoreElements()) {
+                        val entry = enumEntries.nextElement()
+                        if (entry.isDirectory) continue
+                        val name = entry.name
+                        val raw = zipFile.getInputStream(entry).use { it.readBytes() }
+                        val data = if (name == "xl/worksheets/sheet1.xml") {
+                            applyCellUpdates(raw.toString(Charsets.UTF_8), updates)
+                                .toByteArray(Charsets.UTF_8)
+                        } else {
+                            raw
+                        }
+                        val outEntry = ZipEntry(name)
+                        if (entry.method == ZipEntry.STORED) {
+                            outEntry.method = ZipEntry.STORED
+                            outEntry.size = data.size.toLong()
+                            outEntry.compressedSize = data.size.toLong()
+                            val crc = CRC32()
+                            crc.update(data)
+                            outEntry.crc = crc.value
+                        } else {
+                            outEntry.method = ZipEntry.DEFLATED
+                        }
+                        zos.putNextEntry(outEntry)
+                        zos.write(data)
+                        zos.closeEntry()
                     }
-                    zos.closeEntry()
-                    entry = zis.nextEntry
                 }
             }
+            return outBuffer.toByteArray()
+        } finally {
+            tmpIn.delete()
         }
-        return outBuffer.toByteArray()
     }
 
-    /**
-     * سلول‌های self-closing و کامل؛ حفظ استایل s
-     */
     private fun applyCellUpdates(
         xml: String,
         updates: Map<String, Pair<String, Boolean>>
@@ -203,15 +217,12 @@ object InvoiceExport {
             result = if (match != null) {
                 result.replaceRange(match.range, newCell)
             } else {
-                // سلول نبود — قبل از </sheetData> درج کن
-                val insert = newCell
-                result.replace("</sheetData>", "$insert</sheetData>")
+                result.replace("</sheetData>", "$newCell</sheetData>")
             }
         }
         return result
     }
 
-    /** همان ذخیرهٔ موفق گزارش روزانه */
     private fun saveToDocuments(context: Context, fileName: String, bytes: ByteArray): Uri? {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -249,8 +260,7 @@ object InvoiceExport {
         val doc = PdfDocument()
         val pageWidth = 595
         val pageHeight = 842
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
-        val page = doc.startPage(pageInfo)
+        val page = doc.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
         val c: Canvas = page.canvas
         val title = Paint().apply {
             textSize = 16f; isFakeBoldText = true; textAlign = Paint.Align.RIGHT; color = 0xFF000000.toInt()
