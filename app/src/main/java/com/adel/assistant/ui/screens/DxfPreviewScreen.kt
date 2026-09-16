@@ -2,12 +2,13 @@ package com.adel.assistant.ui.screens
 
 import android.Manifest
 import android.content.Context
-import android.content.ClipData
-import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
+import android.os.CancellationSignal
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -19,9 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -64,14 +65,11 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
     var zoneText by remember { mutableStateOf("40") }
-    var baseMap by remember { mutableStateOf(BaseMapType.NONE) }
-    var showSatelliteDialog by remember { mutableStateOf(false) }
+    var baseMap by remember { mutableStateOf(BaseMap.SATELLITE) }
+    var showBaseMapDialog by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
-    var coordinateMode by remember { mutableStateOf(false) }
-    var selectedCoordinate by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var showBaseMapMenu by remember { mutableStateOf(false) }
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var distanceMsg by remember { mutableStateOf<String?>(null) }
@@ -81,6 +79,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var canvasSize by remember { mutableStateOf(Offset.Zero) }
     var tiles by remember { mutableStateOf<List<TileBmp>>(emptyList()) }
     var fitTrigger by remember { mutableStateOf(0) }
+    var mapInitialized by remember { mutableStateOf(false) }
+    var pickCoordinateMode by remember { mutableStateOf(false) }
+    var pickedPoint by remember { mutableStateOf<PickedPoint?>(null) }
+    val clipboard = LocalClipboardManager.current
 
     val zone = zoneText.toIntOrNull()?.coerceIn(1, 60) ?: 40
     val activeDrawings = drawings.filter { it.visible }
@@ -119,6 +121,28 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
     }
+    fun centerOnUtm(easting: Double, northing: Double, zoom: Int = 16) {
+        if (canvasSize.x <= 0f || canvasSize.y <= 0f) return
+        val latLon = UtmGeo.toLatLon(easting, northing, zone)
+        val latRad = Math.toRadians(latLon.first.coerceIn(-85.0, 85.0))
+        val metersPerPixel = (2.0 * Math.PI * 6378137.0 * cos(latRad)) / (256.0 * (1 shl zoom))
+        scale = (1.0 / metersPerPixel).toFloat().coerceIn(0.000001f, 5000f)
+        offset = Offset(canvasSize.x / 2f - (easting * scale).toFloat(), canvasSize.y / 2f + (northing * scale).toFloat())
+    }
+
+    fun centerOnLatLon(lat: Double, lon: Double, zoom: Int = 12) {
+        val (e, n) = UtmGeo.fromLatLon(lat, lon, zone)
+        centerOnUtm(e, n, zoom)
+    }
+
+    fun applyGpsLocation(location: Location) {
+        val (e, n) = UtmGeo.fromLatLon(location.latitude, location.longitude, zone)
+        myLoc = e to n
+        centerOnUtm(e, n, 17)
+        if (baseMap == BaseMap.NONE) baseMap = BaseMap.STREET
+        message = "موقعیت فعلی روی نقشه"
+    }
+
     fun readGps() {
         try {
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -127,13 +151,27 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 val loc = lm.getLastKnownLocation(provider) ?: continue
                 if (best == null || loc.accuracy < best!!.accuracy) best = loc
             }
-            if (best == null) message = "موقعیت GPS دریافت نشد"
-            else {
-                val (e, n) = UtmGeo.fromLatLon(best.latitude, best.longitude, zone)
-                myLoc = e to n
-                message = "موقعیت فعلی روی نقشه"
+            best?.let { applyGpsLocation(it) }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                val provider = when {
+                    lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                    lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                    else -> null
+                }
+                if (provider != null) {
+                    message = "در حال دریافت موقعیت دقیق..."
+                    lm.getCurrentLocation(provider, CancellationSignal(), context.mainExecutor) { location ->
+                        if (location != null) applyGpsLocation(location)
+                        else if (best == null) message = "موقعیت GPS دریافت نشد"
+                    }
+                } else if (best == null) {
+                    message = "موقعیت‌یابی دستگاه خاموش است"
+                }
+            } else if (best == null) {
+                message = "موقعیت GPS دریافت نشد"
             }
         } catch (_: SecurityException) { message = "دسترسی موقعیت داده نشده" }
+        catch (e: Exception) { message = "خطا در دریافت موقعیت: ${e.message ?: "نامشخص"}" }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasPermission = granted
@@ -158,8 +196,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
-    LaunchedEffect(baseMap, scale, offset, canvasSize, zone, drawings) {
-        if (baseMap == BaseMapType.NONE || allModels.isEmpty() || canvasSize.x <= 0f) {
+    LaunchedEffect(baseMap, scale, offset, canvasSize, zone) {
+        if (baseMap == BaseMap.NONE || canvasSize.x <= 0f) {
             tiles = emptyList()
             return@LaunchedEffect
         }
@@ -172,17 +210,25 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         val minLat = latLon.minOf { it.first }; val maxLat = latLon.maxOf { it.first }
         val minLon = latLon.minOf { it.second }; val maxLon = latLon.maxOf { it.second }
         val z = estimateZoom(minLat, maxLat, minLon, maxLon, canvasSize.x)
-        tiles = withContext(Dispatchers.IO) { loadBaseTilesCached(baseMap, minLat, maxLat, minLon, maxLon, z) }
+        val loaded = withContext(Dispatchers.IO) { loadEsriTilesCached(minLat, maxLat, minLon, maxLon, z, baseMap) }
+        tiles = loaded
+        if (loaded.isEmpty()) message = "پس‌زمینه نقشه دریافت نشد؛ اتصال اینترنت یا سرویس نقشه را بررسی کن"
     }
 
     LaunchedEffect(fitTrigger, canvasSize) {
-        if (allModels.isNotEmpty() && canvasSize.x > 0f) fitAll(canvasSize.x, canvasSize.y)
+        if (canvasSize.x > 0f) {
+            if (allModels.isNotEmpty()) fitAll(canvasSize.x, canvasSize.y)
+            else if (!mapInitialized) {
+                centerOnLatLon(35.70, 51.40, 12)
+                mapInitialized = true
+            }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Background)) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = if (baseMap == BaseMapType.SATELLITE) Color(0xFF111111) else Color(0xFF202124)
+            color = if (baseMap == BaseMap.SATELLITE) Color(0xFF111111) else Color(0xFF202124)
         ) {
             Canvas(
                 modifier = Modifier
@@ -202,7 +248,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             } else offset += pan
                         }
                     }
-                    .pointerInput(measureMode, coordinateMode, scale, offset) {
+                    .pointerInput(measureMode, scale, offset) {
                         detectTapGestures(
                             onDoubleTap = { tap ->
                                 val factor = 1.7f
@@ -211,13 +257,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 scale = ns
                             },
                             onTap = { tap ->
-                                val p = screenToWorld(tap.x, tap.y)
-                                if (coordinateMode) {
-                                    selectedCoordinate = p
-                                    message = "مختصات نقطه انتخاب شد"
+                                if (pickCoordinateMode) {
+                                    val p = screenToWorld(tap.x, tap.y)
+                                    val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
+                                    pickedPoint = PickedPoint(p.first, p.second, lat, lon)
+                                    pickCoordinateMode = false
+                                    message = "نقطه انتخاب شد"
                                     return@detectTapGestures
                                 }
                                 if (!measureMode) return@detectTapGestures
+                                val p = screenToWorld(tap.x, tap.y)
                                 if (measureA == null || measureB != null) {
                                     measureA = p; measureB = null
                                     distanceMsg = "نقطه اول انتخاب شد؛ نقطه دوم را لمس کن"
@@ -233,7 +282,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             ) {
                 canvasSize = Offset(size.width, size.height)
 
-                if (baseMap != BaseMapType.NONE) {
+                if (baseMap != BaseMap.NONE) {
                     tiles.forEach { t ->
                         val (e0, n0) = UtmGeo.fromLatLon(t.latNorth, t.lonWest, zone)
                         val (e1, n1) = UtmGeo.fromLatLon(t.latSouth, t.lonEast, zone)
@@ -285,6 +334,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         drawLine(Color(0xFFFFEB3B), pa, pb, 3f)
                     }
                 }
+                pickedPoint?.let { p ->
+                    val s = worldToScreen(p.easting, p.northing)
+                    drawCircle(Color(0xFFFFC107), 14f, s, style = Stroke(width = 3f))
+                    drawLine(Color(0xFFFFC107), Offset(s.x - 10f, s.y), Offset(s.x + 10f, s.y), 2f)
+                    drawLine(Color(0xFFFFC107), Offset(s.x, s.y - 10f), Offset(s.x, s.y + 10f), 2f)
+                }
                 myLoc?.let { p ->
                     val s = worldToScreen(p.first, p.second)
                     drawCircle(Color(0xFF2196F3), 12f, s)
@@ -308,61 +363,26 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }
         }
 
-        selectedCoordinate?.let { p ->
-            val coordText = "X = ${"%.3f".format(java.util.Locale.US, p.first)}\nY = ${"%.3f".format(java.util.Locale.US, p.second)}"
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                tonalElevation = 6.dp,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = if (distanceMsg != null) 92.dp else 50.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
-                    Text(coordText, fontWeight = FontWeight.SemiBold, color = TextPrimary, modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("مختصات", coordText.replace("\n", " ")))
-                        message = "مختصات کپی شد"
-                    }) { Icon(Icons.Outlined.ContentCopy, "کپی مختصات") }
-                }
-            }
-        }
-
         NavigationBar(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             NavigationBarItem(selected = false, onClick = { openFile.launch(arrayOf("*/*")) },
-                icon = { Icon(Icons.Outlined.FolderOpen, null) }, label = { Text("فایل") })
+                icon = { Icon(Icons.Filled.FolderOpen, null) }, label = { Text("فایل") })
             NavigationBarItem(selected = showDrawings, onClick = { showDrawings = true },
-                icon = { Icon(Icons.Outlined.Map, null) }, label = { Text("نقشه‌ها") })
+                icon = { Icon(Icons.Filled.Map, null) }, label = { Text("نقشه‌ها") })
             NavigationBarItem(selected = showLayers, onClick = { showLayers = true },
-                icon = { Icon(Icons.Outlined.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
-            NavigationBarItem(selected = baseMap != BaseMapType.NONE, onClick = { showBaseMapMenu = true },
-                icon = { Icon(Icons.Outlined.Layers, null) }, label = { Text("پس‌زمینه") })
-            NavigationBarItem(selected = coordinateMode, onClick = {
-                coordinateMode = !coordinateMode
-                if (coordinateMode) { measureMode = false; message = "حالت مختصات: روی یک نقطه از نقشه لمس کن" }
-                else message = "حالت مختصات خاموش شد"
-            }, icon = { Icon(Icons.Outlined.LocationOn, null) }, label = { Text("مختصات") })
+                icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
+            NavigationBarItem(selected = baseMap != BaseMap.NONE, onClick = { showBaseMapDialog = true },
+                icon = { Icon(Icons.Filled.Map, null) }, label = { Text("پس‌زمینه") })
+            NavigationBarItem(selected = pickCoordinateMode, onClick = {
+                pickCoordinateMode = !pickCoordinateMode
+                if (pickCoordinateMode) message = "روی نقشه روی نقطه موردنظر بزن"
+            }, icon = { Icon(Icons.Filled.LocationOn, null) }, label = { Text("انتخاب نقطه") })
             NavigationBarItem(selected = false, onClick = { fitAll(canvasSize.x, canvasSize.y) },
-                icon = { Icon(Icons.Outlined.ZoomOutMap, null) }, label = { Text("Fit") })
+                icon = { Icon(Icons.Filled.ZoomOutMap, null) }, label = { Text("Fit") })
             NavigationBarItem(selected = measureMode, onClick = {
                 measureMode = !measureMode
                 measureA = null; measureB = null
                 distanceMsg = if (measureMode) "حالت اندازه‌گیری: نقطه اول را لمس کن" else null
-            }, icon = { Icon(Icons.Outlined.Straighten, null) }, label = { Text("اندازه") })
-        }
-
-        if (showBaseMapMenu) {
-            AlertDialog(
-                onDismissRequest = { showBaseMapMenu = false },
-                title = { Text("نوع نقشه") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BaseMapChoice("بدون پس‌زمینه", baseMap == BaseMapType.NONE) { baseMap = BaseMapType.NONE; showBaseMapMenu = false; tiles = emptyList() }
-                        BaseMapChoice("تصاویر ماهواره‌ای", baseMap == BaseMapType.SATELLITE) { showSatelliteDialog = true; showBaseMapMenu = false }
-                        BaseMapChoice("نقشه خیابان‌ها", baseMap == BaseMapType.STREET) { baseMap = BaseMapType.STREET; showBaseMapMenu = false }
-                        BaseMapChoice("نقشه توپوگرافی", baseMap == BaseMapType.TOPO) { baseMap = BaseMapType.TOPO; showBaseMapMenu = false }
-                    }
-                },
-                confirmButton = { TextButton(onClick = { showBaseMapMenu = false }) { Text("بستن") } }
-            )
+            }, icon = { Icon(Icons.Filled.Straighten, null) }, label = { Text("اندازه") })
         }
 
         FloatingActionButton(
@@ -371,30 +391,69 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             },
             containerColor = color,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp)
-        ) { Icon(Icons.Outlined.MyLocation, "موقعیت من", tint = Color.White) }
+        ) { Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White) }
 
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
-            Icon(Icons.Outlined.ArrowBack, "بازگشت", tint = Color.White)
+            Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
         }
     }
 
-    if (showSatelliteDialog) {
+    if (showBaseMapDialog) {
         AlertDialog(
-            onDismissRequest = { showSatelliteDialog = false },
-            title = { Text("پس‌زمینه ماهواره‌ای") },
+            onDismissRequest = { showBaseMapDialog = false },
+            title = { Text("پس‌زمینه نقشه") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("زون UTM نقشه را وارد کن. موقعیت و بزرگنمایی فعلی حفظ می‌شود.")
+                    Text("نوع پس‌زمینه را انتخاب کن. برای تصاویر ماهواره‌ای/خیابانی/توپوگرافی از سرویس ArcGIS استفاده می‌شود.")
+                    BaseMap.values().filter { it != BaseMap.NONE }.forEach { item ->
+                        OutlinedButton(onClick = { baseMap = item; showBaseMapDialog = false }, modifier = Modifier.fillMaxWidth()) {
+                            Text(item.title)
+                        }
+                    }
+                    OutlinedButton(onClick = { baseMap = BaseMap.NONE; showBaseMapDialog = false }, modifier = Modifier.fillMaxWidth()) {
+                        Text("بدون پس‌زمینه")
+                    }
                     OutlinedTextField(
                         value = zoneText,
                         onValueChange = { zoneText = it.filter(Char::isDigit).take(2) },
                         label = { Text("UTM Zone") },
-                        singleLine = true
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { baseMap = BaseMapType.SATELLITE; showSatelliteDialog = false }) { Text("نمایش") } },
-            dismissButton = { TextButton(onClick = { showSatelliteDialog = false }) { Text("لغو") } }
+            confirmButton = { TextButton(onClick = { showBaseMapDialog = false }) { Text("بستن") } }
+        )
+    }
+
+    pickedPoint?.let { p ->
+        val coordTxt = formatEn("X=%.3f  Y=%.3f", p.easting, p.northing)
+        val neshanUrl = "https://nshn.ir/?lat=${p.lat}&lng=${p.lon}"
+        AlertDialog(
+            onDismissRequest = { pickedPoint = null },
+            title = { Text("مختصات نقطه") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(coordTxt)
+                    Text(formatEn("Lat=%.6f  Lon=%.6f", p.lat, p.lon), style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(coordTxt)); message = "مختصات کپی شد" }, modifier = Modifier.fillMaxWidth()) {
+                        Text("کپی مختصات")
+                    }
+                    OutlinedButton(onClick = {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UtmGeo.neshanIntentUri(p.lat, p.lon))))
+                        } catch (_: Exception) {
+                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(neshanUrl))) } catch (_: Exception) {}
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text("نمایش در مسیریاب نشان")
+                    }
+                    OutlinedButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(neshanUrl)); message = "لینک نشان کپی شد" }, modifier = Modifier.fillMaxWidth()) {
+                        Text("کپی لینک نشان")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { pickedPoint = null }) { Text("بستن") } }
         )
     }
 
@@ -417,7 +476,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 drawings = drawings.filterIndexed { i, _ -> i != index }
                                 if (drawings.isEmpty()) { tiles = emptyList(); message = "نقشه‌ها بسته شدند" }
-                            }) { Icon(Icons.Outlined.Close, "بستن") }
+                            }) { Icon(Icons.Filled.Close, "بستن") }
                         }
                     }
                 }
@@ -459,16 +518,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     }
 }
 
-private enum class BaseMapType { NONE, SATELLITE, STREET, TOPO }
-
-@Composable
-private fun BaseMapChoice(title: String, selected: Boolean, onClick: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(title, modifier = Modifier.weight(1f))
-    }
-}
-
 @Composable
 private fun LayerColorButton(current: Color, onColor: (Color) -> Unit) {
     var open by remember { mutableStateOf(false) }
@@ -488,6 +537,20 @@ private fun LayerColorButton(current: Color, onColor: (Color) -> Unit) {
     }
 }
 
+private enum class BaseMap(val title: String, val service: String) {
+    SATELLITE("ماهواره‌ای", "World_Imagery"),
+    STREET("خیابانی / ترافیکی", "World_Street_Map"),
+    TOPO("توپوگرافی", "World_Topo_Map"),
+    NONE("بدون پس‌زمینه", "")
+}
+
+private data class PickedPoint(
+    val easting: Double,
+    val northing: Double,
+    val lat: Double,
+    val lon: Double
+)
+
 private data class TileBmp(
     val image: androidx.compose.ui.graphics.ImageBitmap,
     val latNorth: Double, val latSouth: Double,
@@ -495,7 +558,7 @@ private data class TileBmp(
 )
 
 private object SatelliteTileCache {
-    private const val MAX = 96
+    private const val MAX = 120
     private val cache = object : LinkedHashMap<String, TileBmp>(MAX, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TileBmp>?): Boolean = size > MAX
     }
@@ -506,7 +569,7 @@ private object SatelliteTileCache {
 private fun estimateZoom(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, screenW: Float): Int {
     val lonDiff = (maxLon - minLon).absoluteValue.coerceAtLeast(1e-7)
     val raw = ln((360.0 * screenW / 256.0) / lonDiff) / ln(2.0)
-    return raw.roundToInt().coerceIn(14, 19)
+    return raw.roundToInt().coerceIn(10, 19)
 }
 
 private fun latLonToTile(lat: Double, lon: Double, zoom: Int): Pair<Int, Int> {
@@ -524,63 +587,50 @@ private fun tileToLatLon(x: Int, y: Int, zoom: Int): Pair<Double, Double> {
     return lat to lon
 }
 
-private suspend fun loadBaseTilesCached(
-    type: BaseMapType,
-    minLat: Double,
-    maxLat: Double,
-    minLon: Double,
-    maxLon: Double,
-    zoom: Int
+private suspend fun fetchTile(url: String, x: Int, y: Int, zoom: Int, key: String): TileBmp? = withContext(Dispatchers.IO) {
+    SatelliteTileCache.get(key)?.let { return@withContext it }
+    try {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5000
+            readTimeout = 7000
+            useCaches = true
+            setRequestProperty("User-Agent", "AdelAssistant/1.0 (Android)")
+            setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        }
+        val tile = conn.inputStream.use { input ->
+            val bmp = BitmapFactory.decodeStream(input) ?: return@withContext null
+            val (latN, lonW) = tileToLatLon(x, y, zoom)
+            val (latS, lonE) = tileToLatLon(x + 1, y + 1, zoom)
+            TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
+        }
+        conn.disconnect()
+        SatelliteTileCache.put(key, tile)
+        tile
+    } catch (_: Exception) { null }
+}
+
+private suspend fun loadEsriTilesCached(
+    minLat: Double, maxLat: Double, minLon: Double, maxLon: Double,
+    zoom: Int, baseMap: BaseMap
 ): List<TileBmp> = coroutineScope {
+    if (baseMap == BaseMap.NONE) return@coroutineScope emptyList()
     val (aX, aY) = latLonToTile(minLat, minLon, zoom)
     val (bX, bY) = latLonToTile(maxLat, maxLon, zoom)
-    val minX = min(aX, bX)
-    val maxX = max(aX, bX)
-    val minY = min(aY, bY)
-    val maxY = max(aY, bY)
-
-    val keys = mutableListOf<Triple<Int, Int, Int>>()
-    outer@ for (x in minX..maxX) {
-        for (y in minY..maxY) {
-            keys += Triple(x, y, zoom)
-            if (keys.size >= 30) break@outer
+    val minX = min(aX, bX); val maxX = max(aX, bX)
+    val minY = min(aY, bY); val maxY = max(aY, bY)
+    val coords = buildList {
+        outer@ for (x in minX..maxX) for (y in minY..maxY) {
+            if (size >= 36) break@outer
+            add(x to y)
         }
     }
-
-    val deferred = keys.map { (x, y, z) ->
+    val jobs = coords.map { (x, y) ->
         async(Dispatchers.IO) {
-            val key = "${type.name}/$z/$x/$y"
-            SatelliteTileCache.get(key)?.let { return@async it }
-
-            val service = when (type) {
-                BaseMapType.SATELLITE -> "World_Imagery"
-                BaseMapType.STREET -> "World_Street_Map"
-                BaseMapType.TOPO -> "World_Topo_Map"
-                BaseMapType.NONE -> return@async null
-            }
-
-            try {
-                val url = "https://server.arcgisonline.com/ArcGIS/rest/services/$service/MapServer/tile/$z/$y/$x"
-                val conn = URL(url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 2200
-                conn.readTimeout = 3500
-                try {
-                    conn.inputStream.use { input ->
-                        val bmp = BitmapFactory.decodeStream(input) ?: return@async null
-                        val (latN, lonW) = tileToLatLon(x, y, z)
-                        val (latS, lonE) = tileToLatLon(x + 1, y + 1, z)
-                        val tile = TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
-                        SatelliteTileCache.put(key, tile)
-                        tile
-                    }
-                } finally {
-                    conn.disconnect()
-                }
-            } catch (_: Exception) {
-                null
-            }
+            val key = "${baseMap.service}/$zoom/$x/$y"
+            val host = if (baseMap == BaseMap.SATELLITE) "server.arcgisonline.com" else "services.arcgisonline.com"
+            val url = "https://$host/ArcGIS/rest/services/${baseMap.service}/MapServer/tile/$zoom/$y/$x.jpg"
+            fetchTile(url, x, y, zoom, key)
         }
     }
-
-    deferred.awaitAll().filterNotNull()
+    jobs.awaitAll().filterNotNull()
 }
