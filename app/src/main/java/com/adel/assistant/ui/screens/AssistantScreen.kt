@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Send
@@ -248,7 +249,7 @@ fun AssistantScreen(
                             if (!line.fromUser) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Icons.Outlined.AutoAwesome,
+                                        Icons.Outlined.SmartToy,
                                         contentDescription = null,
                                         tint = color,
                                         modifier = Modifier.size(16.dp)

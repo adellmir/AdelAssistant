@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -271,7 +272,7 @@ private fun CodeCard(
                 )
 
                 Icon(
-                    Icons.Default.ExpandMore,
+                    Icons.Outlined.ExpandMore,
                     contentDescription = null,
                     tint = Color.Gray
                 )

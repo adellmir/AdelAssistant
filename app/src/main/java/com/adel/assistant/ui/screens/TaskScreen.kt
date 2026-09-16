@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -85,7 +86,7 @@ fun TaskScreen(
             }
             Box {
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Outlined.Tune, contentDescription = "تنظیمات", tint = color)
+                    Icon(Icons.Outlined.Settings, contentDescription = "تنظیمات", tint = color)
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     DropdownMenuItem(

@@ -151,10 +151,10 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ToolbarIcon(Icons.Outlined.Notes, "خروجی TXT", color, onClick = { exportTxt() })
-            ToolbarIcon(Icons.Outlined.Polyline, "خروجی DXF", color, onClick = { exportDxf() })
+            ToolbarIcon(Icons.Outlined.Description, "خروجی TXT", color, onClick = { exportTxt() })
+            ToolbarIcon(Icons.Outlined.Architecture, "خروجی DXF", color, onClick = { exportDxf() })
             ToolbarIcon(
-                if (selectMode) Icons.Outlined.LibraryAddCheck else Icons.Outlined.Checklist,
+                if (selectMode) Icons.Outlined.CheckCircle else Icons.Outlined.CheckCircle,
                 if (selectMode) "همه" else "گزینش",
                 color,
                 onClick = {

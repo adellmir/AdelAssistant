@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -105,7 +106,7 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ToolbarIcon(
-                    Icons.Outlined.TableChart, "خروجی XLSX", color,
+                    Icons.Outlined.GridOn, "خروجی XLSX", color,
                     onClick = {
                         val uri = LetterExport.exportXlsx(context, buildData())
                         status = if (uri != null) "XLSX در Documents/AdelAssistant ذخیره شد"

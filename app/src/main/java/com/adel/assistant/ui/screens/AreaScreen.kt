@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Delete
@@ -122,13 +123,13 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = color),
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("افزودن")
+                Icon(Icons.Outlined.Add, null); Spacer(Modifier.width(4.dp)); Text("افزودن")
             }
             OutlinedButton(
                 onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/octet-stream", "*/*")) },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(4.dp)); Text("خواندن فایل")
+                Icon(Icons.Outlined.FolderOpen, null); Spacer(Modifier.width(4.dp)); Text("خواندن فایل")
             }
         }
 
@@ -157,7 +158,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.ContentPaste, null); Spacer(Modifier.width(4.dp)); Text("افزودن لیست")
+                Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(4.dp)); Text("افزودن لیست")
             }
             OutlinedButton(
                 onClick = {
@@ -243,7 +244,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 editingKey = if (isEditing) null else point.key
                             }) {
-                                Icon(Icons.Default.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
                             }
                             IconButton(onClick = {
                                 points = points.filter { it.key != point.key }
@@ -251,7 +252,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                                 if (editingKey == point.key) editingKey = null
                                 result = null
                             }) {
-                                Icon(Icons.Default.Delete, contentDescription = "حذف")
+                                Icon(Icons.Outlined.Delete, contentDescription = "حذف")
                             }
                         }
                         if (isEditing) {

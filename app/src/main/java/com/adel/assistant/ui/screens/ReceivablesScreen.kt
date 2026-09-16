@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ReceiptLong
@@ -100,8 +101,8 @@ fun ReceivablesScreen(
             OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-            ToolbarIcon(Icons.Outlined.ManageSearch, "جستجو", color, onClick = { refresh() })
-            ToolbarIcon(Icons.Outlined.Sync, "رفرش", color, onClick = { name = ""; employer = ""; refresh() })
+            ToolbarIcon(Icons.Outlined.Search, "جستجو", color, onClick = { refresh() })
+            ToolbarIcon(Icons.Outlined.Refresh, "رفرش", color, onClick = { name = ""; employer = ""; refresh() })
         }
 
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {

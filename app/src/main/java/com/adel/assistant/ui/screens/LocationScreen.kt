@@ -143,7 +143,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             OutlinedButton(
                 onClick = { status = "ذخیره شد: " + exportTxt().absolutePath },
                 modifier = Modifier.weight(1f)
-            ) { Icon(Icons.Outlined.Notes, null); Spacer(Modifier.width(4.dp)); Text("TXT") }
+            ) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(4.dp)); Text("TXT") }
             OutlinedButton(
                 onClick = { status = "ذخیره شد: " + exportKml().absolutePath },
                 modifier = Modifier.weight(1f)

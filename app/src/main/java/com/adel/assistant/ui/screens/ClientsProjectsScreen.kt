@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.*
@@ -98,7 +99,12 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(6.dp))
         Row(Modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            ToolbarIcon(Icons.Outlined.ManageSearch, "جستجو", color, onClick = { doSearch() })
+            ToolbarIcon(
+            icon = Icons.Outlined.Search,
+            contentDescription = "جستجو",
+            tint = color,
+            onClick = { doSearch() }
+        )
         }
 
         Spacer(Modifier.height(8.dp))

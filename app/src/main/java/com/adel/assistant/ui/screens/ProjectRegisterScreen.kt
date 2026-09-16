@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
@@ -216,7 +217,7 @@ fun ProjectRegisterScreen(
                 onClick = { showMenu = true },
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
-                Icon(Icons.Outlined.Tune, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
@@ -296,7 +297,7 @@ fun ProjectRegisterScreen(
             ) {
                 Text(if (editingRow != null) "ثبت ویرایش" else "ثبت")
             }
-            ToolbarIcon(Icons.Outlined.ManageSearch, "جستجو", color, onClick = { search() })
+            ToolbarIcon(Icons.Outlined.Search, "جستجو", color, onClick = { search() })
         }
 
         if (statusMsg.isNotBlank()) {

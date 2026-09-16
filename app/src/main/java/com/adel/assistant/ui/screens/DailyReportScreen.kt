@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -180,7 +181,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Box {
             ScreenTopBar(title = "گزارش روزانه", color = color, onBack = onBack)
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Outlined.Tune, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
@@ -210,7 +211,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { loadDay() }) {
-                Icon(Icons.Outlined.ManageSearch, contentDescription = "نمایش گزارش این روز", tint = color)
+                Icon(Icons.Outlined.Search, contentDescription = "نمایش گزارش این روز", tint = color)
             }
         }
         if (weekday != null) {
@@ -246,7 +247,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { addOrUpdateRow() }) {
-                Icon(Icons.Outlined.AddCircleOutline, contentDescription = "افزودن", tint = color)
+                Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

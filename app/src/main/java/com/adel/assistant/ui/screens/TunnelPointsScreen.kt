@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
@@ -201,10 +202,10 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
             ScreenTopBar(title = "نقاط تونل", color = color, onBack = onBack)
             Row(modifier = Modifier.align(Alignment.CenterEnd)) {
                 IconButton(onClick = { clearForm() }) {
-                    Icon(Icons.Outlined.Sync, contentDescription = "رفرش", tint = Color(0xFFAAB697))
+                    Icon(Icons.Outlined.Refresh, contentDescription = "رفرش", tint = Color(0xFFAAB697))
                 }
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Outlined.Tune, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                    Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
                 }
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {

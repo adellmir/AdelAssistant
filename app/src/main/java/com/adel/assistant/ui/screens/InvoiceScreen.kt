@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -282,7 +283,7 @@ fun InvoiceScreen(
                             TextButton(onClick = {
                                 lines = lines.toMutableList().also { it.removeAt(index) }
                             }) {
-                                Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text("حذف ردیف")
                             }
@@ -347,7 +348,7 @@ fun InvoiceScreen(
                         status = if (uri != null) "XLSX در Documents/AdelAssistant ذخیره شد" else "خطا در XLSX"
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Icon(Icons.Outlined.TableChart, contentDescription = "خروجی XLSX"); Spacer(Modifier.width(6.dp)); Text("XLSX") }
+                ) { Icon(Icons.Outlined.GridOn, contentDescription = "خروجی XLSX"); Spacer(Modifier.width(6.dp)); Text("XLSX") }
             }
             } // end if (mode == 0)
 

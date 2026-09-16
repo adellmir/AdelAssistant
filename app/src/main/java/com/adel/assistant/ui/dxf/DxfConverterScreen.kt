@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.*
@@ -142,7 +143,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(modifier = Modifier.height(40.dp))
-                    Icon(Icons.Default.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
+                    Icon(Icons.Outlined.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "فایل نقاط را انتخاب کنید",
@@ -191,7 +192,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Icon(Icons.Default.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
+                    Icon(Icons.Outlined.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "DXF ساخته شد",

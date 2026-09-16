@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,7 +63,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
                 val text = TunnelFinanceStore.exportCsvText(context)
                 val uri = FileExport.exportTextToDocuments(context, "tunnel_financial.csv", text, "text/csv")
                 statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا"
-            }) { Icon(Icons.Outlined.Tune, null, tint = Color(0xFFAAB697)) }
+            }) { Icon(Icons.Outlined.Settings, null, tint = Color(0xFFAAB697)) }
             TextButton(onClick = {
                 importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/csv", "*/*"))
             }) { Text("ورود CSV", color = color) }
