@@ -25,7 +25,6 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.ui.ScreenTopBar
-import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -97,17 +96,22 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                 modifier = Modifier.weight(1f)
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            ToolbarIcon(
-            icon = Icons.Outlined.Search,
-            contentDescription = "جستجو",
-            tint = color,
-            onClick = { doSearch() }
-        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { doSearch() }) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = "جستجو",
+                    tint = color
+                )
+            }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             listOf("پروژه", "کارفرمایان").forEachIndexed { i, label ->
                 val selected = tab == i
@@ -134,7 +138,7 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         if (!showList) {
             Text(
                 "سربرگ را بزن یا جستجو کن تا لیست نمایش داده شود",
