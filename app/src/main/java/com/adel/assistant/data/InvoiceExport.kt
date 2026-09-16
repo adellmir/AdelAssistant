@@ -1,11 +1,15 @@
 package com.adel.assistant.data
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -36,26 +40,30 @@ data class InvoiceData(
 }
 
 /**
- * صدور فاکتور XLSX — همان روش موفق [XlsxReportWriter]:
- * کل ZIP قالب (استایل، تصویر، drawing) کپی می‌شود و فقط sheet1 پر می‌شود.
- * دیگر به فایل خام (minimal) سقوط نمی‌کند.
+ * صدور فاکتور XLSX روی قالب — منطق ZIP مثل [XlsxReportWriter]
+ * (ذخیره مستقیم MediaStore بدون شرط اندازهٔ سخت‌گیرانه)
  */
 object InvoiceExport {
 
     fun exportXlsx(context: Context, data: InvoiceData): Uri? {
-        val templateBytes = loadTemplateBytes(context) ?: return null
-        val updates = buildUpdates(data)
-        val outputBytes = rewriteXlsx(templateBytes, updates)
-        // خروجی باید نزدیک به اندازه قالب باشد (نه فایل ۱–۲ کیلوبایتی خام)
-        if (outputBytes.size < templateBytes.size / 2) return null
-        val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
-            .replace(" ", "_")
-        return FileExport.exportBytesToDocuments(
-            context,
-            name,
-            outputBytes,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        return try {
+            val templateBytes = loadTemplateBytes(context) ?: return null
+            val updates = buildUpdates(data)
+            val outputBytes = rewriteXlsx(templateBytes, updates)
+            if (outputBytes.isEmpty()) return null
+            val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
+                .replace(" ", "_")
+            // اول مسیر گزارش روزانه (پایدارتر)، بعد FileExport
+            saveToDocuments(context, name, outputBytes)
+                ?: FileExport.exportBytesToDocuments(
+                    context,
+                    name,
+                    outputBytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun exportPdfAndShare(context: Context, data: InvoiceData): Uri? {
@@ -82,22 +90,24 @@ object InvoiceExport {
         for (n in names) {
             try {
                 val b = context.assets.open(n).use { it.readBytes() }
-                if (b.size > 5000) return b
+                if (b.size > 2000) return b
             } catch (_: Exception) {
             }
         }
         val local = File(context.filesDir, "invoice_template.xlsx")
-        if (local.exists() && local.length() > 5000) return local.readBytes()
+        if (local.exists() && local.length() > 2000) return local.readBytes()
+        // fallback: Documents copy if user imported
+        try {
+            val docs = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                "AdelAssistant/invoice_template.xlsx"
+            )
+            if (docs.exists() && docs.length() > 2000) return docs.readBytes()
+        } catch (_: Exception) {
+        }
         return null
     }
 
-    /**
-     * نگاشت سلول‌ها مطابق قالب invoice_template.xlsx:
-     * C7 شماره | E7 کارفرما
-     * ردیف ۱۰+ : C توضیح | D مبلغ | E شرح
-     * C24 جمع | C25 دریافتی | C26 مانده
-     * F25 کارت | F26 شبا
-     */
     private fun buildUpdates(data: InvoiceData): Map<String, Pair<String, Boolean>> {
         val updates = linkedMapOf<String, Pair<String, Boolean>>()
         updates["C7"] = data.letterNo.ifBlank { "—" } to true
@@ -137,7 +147,6 @@ object InvoiceExport {
         return if (neg) "-$sb" else sb.toString()
     }
 
-    /** کپی ۱:۱ منطق XlsxReportWriter.rewriteXlsx */
     private fun rewriteXlsx(
         templateBytes: ByteArray,
         updates: Map<String, Pair<String, Boolean>>
@@ -165,8 +174,7 @@ object InvoiceExport {
     }
 
     /**
-     * مثل گزارش روزانه استایل s را نگه می‌دارد.
-     * سلول‌های خالی قالب self-closing هستند: <c r="D10" s="26"/>
+     * سلول‌های self-closing و کامل؛ حفظ استایل s
      */
     private fun applyCellUpdates(
         xml: String,
@@ -178,22 +186,63 @@ object InvoiceExport {
             if (value.isEmpty()) return@forEach
             val selfClose = Regex("""<c r="$ref"([^>]*?)/>""")
             val fullCell = Regex("""<c r="$ref"([^>]*?)>.*?</c>""", RegexOption.DOT_MATCHES_ALL)
-            val match = selfClose.find(result) ?: fullCell.find(result) ?: return@forEach
-            val attrs = match.groupValues.getOrNull(1).orEmpty()
-            val styleAttr = Regex("""\bs="\d+\"""").find(attrs)?.value?.let { " $it" } ?: ""
+            val match = selfClose.find(result) ?: fullCell.find(result)
+            val styleAttr = match?.groupValues?.getOrNull(1).orEmpty().let { attrs ->
+                Regex("""\bs="\d+\"""").find(attrs)?.value?.let { " $it" }.orEmpty()
+            }
+            val escaped = value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
             val newCell = if (isText) {
-                val escaped = value
-                    .replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                """<c r="$ref"$styleAttr t="inlineStr"><is><t>$escaped</t></is></c>"""
+                """<c r="$ref"$styleAttr t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
             } else {
                 val num = value.replace(",", "").replace("/", "").replace(" ", "")
                 """<c r="$ref"$styleAttr><v>$num</v></c>"""
             }
-            result = result.replaceRange(match.range, newCell)
+            result = if (match != null) {
+                result.replaceRange(match.range, newCell)
+            } else {
+                // سلول نبود — قبل از </sheetData> درج کن
+                val insert = newCell
+                result.replace("</sheetData>", "$insert</sheetData>")
+            }
         }
         return result
+    }
+
+    /** همان ذخیرهٔ موفق گزارش روزانه */
+    private fun saveToDocuments(context: Context, fileName: String, bytes: ByteArray): Uri? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(
+                        MediaStore.MediaColumns.MIME_TYPE,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant"
+                    )
+                }
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Files.getContentUri("external"), values)
+                uri?.let { resolver.openOutputStream(it)?.use { out -> out.write(bytes) } }
+                uri
+            } else {
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "AdelAssistant"
+                )
+                if (!dir.exists()) dir.mkdirs()
+                val f = File(dir, fileName)
+                f.writeBytes(bytes)
+                Uri.fromFile(f)
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun buildPdf(data: InvoiceData): ByteArray {

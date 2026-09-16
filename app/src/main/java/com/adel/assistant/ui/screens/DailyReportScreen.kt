@@ -88,6 +88,15 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 // Store خودش برای کمتر last-1 و برای بیشتر last+1 می‌دهد
                 pointNo = suggested.toString()
             }
+            // آخرین طول ثبت‌شده برای همین شفت-سمت
+            val last = TunnelReportStore.allEntries(context)
+                .filter { it.key == "$shaft-${com.adel.assistant.data.normalizeSide(side)}" }
+                .maxByOrNull { it.dateSortKey }
+            if (last != null && length.isBlank()) {
+                val lastLen = last.lengthCm
+                length = if (kotlin.math.abs(lastLen - lastLen.toLong()) < 1e-9)
+                    lastLen.toLong().toString() else lastLen.toString()
+            }
         }
     }
 
@@ -232,8 +241,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = side, onValueChange = { side = it }, label = { Text("سمت") },
-                modifier = Modifier.weight(1f)
+                value = side, onValueChange = { side = filterNumericInput(it) }, label = { Text("سمت") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

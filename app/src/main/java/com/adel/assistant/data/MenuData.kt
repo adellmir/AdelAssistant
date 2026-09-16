@@ -78,7 +78,7 @@ object AppMenu {
         color = ToolPrimary,
         tabs = listOf(
             MenuTab("", listOf(
-                MenuItem("تبدیل به DXF", Icons.Filled.Architecture, Routes.TOOL_DXF),
+                MenuItem("ترسیم نقشه", Icons.Filled.Architecture, Routes.TOOL_DXF),
                 MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
                 MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
                 MenuItem("مبدل GSI", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
