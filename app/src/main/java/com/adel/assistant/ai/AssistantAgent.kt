@@ -5,6 +5,7 @@ import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.ai.tools.TaskTools
+import com.adel.assistant.ai.tools.SurveyTools
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.formatMoney
@@ -68,6 +69,7 @@ object AssistantAgent {
             navIntent(msg)?.let { return it }
         }
 
+        surveyIntent(context, msg)?.let { return it }
         taskIntent(context, msg)?.let { return it }
         statsIntent(context, msg)?.let { return it }
         if (hasAny(msg, listOf("امروز", "برنامه امروز", "کارهای امروز"))) return AgentReply(todayPlan(context))
@@ -291,6 +293,50 @@ object AssistantAgent {
         val choices = best.map { AgentChoice(it.first.title, "route:${it.first.route}") }.distinctBy { it.label }
         pending = Pending(PendingType.MENU_CHOICE, choices = choices)
         return choiceReply("برای «${ts.joinToString(" ")}» چند مقصد پیدا کردم؛ کدام را باز کنم؟", choices)
+    }
+
+
+    /** درخواست‌های داده‌برداری/نقاط تونل را مستقیماً از Store واقعی پاسخ می‌دهد. */
+    private fun surveyIntent(context: Context, msg: String): AgentReply? {
+        val hasSurveyWord = hasAny(msg, listOf("نقطه", "پوینت", "کیلومتر", "کیلومتراژ", "چینج", "chainage", "برداشت"))
+        if (!hasSurveyWord) return null
+
+        val range = Regex("(?:از\\s*)?(\\d+(?:\\.\\d+)?)\\s*(?:تا|الی|-|\\.\\.)\\s*(\\d+(?:\\.\\d+)?)").find(msg)
+        if (range != null && hasAny(msg, listOf("بازه", "بین", "از", "تا", "الی"))) {
+            val a = range.groupValues[1].toDoubleOrNull()
+            val b = range.groupValues[2].toDoubleOrNull()
+            if (a != null && b != null) {
+                val r = SurveyTools.findByRange(context, a, b)
+                return AgentReply(r.message)
+            }
+        }
+
+        val kmMatch = Regex("(?:کیلومتر|کیلومتراژ|چینج|chainage|km)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)").find(msg)
+            ?: Regex("نقطه\\s+(\\d+(?:\\.\\d+)?)").find(msg)?.takeIf { hasAny(msg, listOf("کیلومتر", "کیلومتراژ", "چینج")) }
+        if (kmMatch != null) {
+            val km = kmMatch.groupValues[1].toDoubleOrNull()
+            if (km != null) {
+                val r = SurveyTools.findByChainage(context, km)
+                return AgentReply(r.message)
+            }
+        }
+
+        val noMatch = Regex("(?:نقطه|پوینت)\\s*(?:شماره\\s*)?([A-Za-zآ-ی0-9._-]+)").find(msg)
+        if (noMatch != null) {
+            val q = noMatch.groupValues[1]
+            if (q.any { it.isDigit() || it.isLetter() || it in 'آ'..'ی' }) {
+                val r = SurveyTools.findByName(context, q)
+                return AgentReply(r.message)
+            }
+        }
+
+        val keyword = msg.replace(Regex("\\b(نقطه|پوینت|برداشت|جستجو|پیدا|کن|رو|را)\\b"), " ")
+            .replace(Regex("\\s+"), " ").trim()
+        if (hasAny(msg, listOf("جستجو", "پیدا کن", "نوع", "شرح")) && keyword.isNotBlank()) {
+            val r = SurveyTools.search(context, keyword)
+            return AgentReply(r.message)
+        }
+        return null
     }
 
     private fun categoryStore(msg: String): String? = when {
