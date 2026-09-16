@@ -1,5 +1,8 @@
 package com.adel.assistant.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +25,7 @@ import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -142,29 +146,27 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         ) { Text("نمایش") }
 
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = { exportTxt() }, modifier = Modifier.weight(1f)) {
-                Text("خروجی TXT", fontSize = 13.sp)
-            }
-            OutlinedButton(onClick = { exportDxf() }, modifier = Modifier.weight(1f)) {
-                Text("خروجی DXF", fontSize = 13.sp)
-            }
-            Button(
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ToolbarIcon(Icons.Outlined.Notes, "خروجی TXT", color, onClick = { exportTxt() })
+            ToolbarIcon(Icons.Outlined.Polyline, "خروجی DXF", color, onClick = { exportDxf() })
+            ToolbarIcon(
+                if (selectMode) Icons.Outlined.LibraryAddCheck else Icons.Outlined.Checklist,
+                if (selectMode) "همه" else "گزینش",
+                color,
                 onClick = {
                     if (!selectMode) {
                         selectMode = true
                         selected = emptySet()
                     } else {
-                        // همه
                         selected = if (selected.size == points.size) emptySet()
                         else points.map { rowKey(it) }.toSet()
                     }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(if (selectMode) "همه" else "گزینش", fontSize = 13.sp)
-            }
+                }
+            )
         }
         if (selectMode) {
             TextButton(onClick = { selectMode = false; selected = emptySet() }) {

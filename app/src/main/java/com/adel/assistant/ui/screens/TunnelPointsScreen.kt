@@ -15,9 +15,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -201,10 +201,10 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
             ScreenTopBar(title = "نقاط تونل", color = color, onBack = onBack)
             Row(modifier = Modifier.align(Alignment.CenterEnd)) {
                 IconButton(onClick = { clearForm() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "رفرش", tint = Color(0xFFAAB697))
+                    Icon(Icons.Outlined.Sync, contentDescription = "رفرش", tint = Color(0xFFAAB697))
                 }
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                    Icon(Icons.Outlined.Tune, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
                 }
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -295,7 +295,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                                 isEditMode = true
                                 editingOriginalNo = p.pointNo
                             }) {
-                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
                             }
                         }
                         Surface(

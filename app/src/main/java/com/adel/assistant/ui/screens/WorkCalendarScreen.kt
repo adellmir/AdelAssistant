@@ -10,9 +10,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
@@ -70,14 +70,14 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = { goNext() }) { Icon(Icons.Filled.ChevronRight, contentDescription = "ماه بعد", tint = color) }
+            IconButton(onClick = { goNext() }) { Icon(Icons.Outlined.ChevronRight, contentDescription = "ماه بعد", tint = color) }
             Text(
                 "${PERSIAN_MONTHS.getOrElse(month - 1) { "" }} $year",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center
             )
-            IconButton(onClick = { goPrev() }) { Icon(Icons.Filled.ChevronLeft, contentDescription = "ماه قبل", tint = color) }
+            IconButton(onClick = { goPrev() }) { Icon(Icons.Outlined.ChevronLeft, contentDescription = "ماه قبل", tint = color) }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -139,7 +139,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                                 Text(formatEn("مبلغ: %.0f", p.amount), style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
                             }
                             IconButton(onClick = { editingRow = p.row; editDescription = p.description }) {
-                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
                             }
                         }
                         if (editingRow == p.row) {

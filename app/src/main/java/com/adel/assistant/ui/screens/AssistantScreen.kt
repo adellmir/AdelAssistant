@@ -10,10 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddComment
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.outlined.AddComment
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -192,7 +192,7 @@ fun AssistantScreen(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Icon(
-                    Icons.Filled.AddComment,
+                    Icons.Outlined.AddComment,
                     contentDescription = "چت جدید",
                     modifier = Modifier.size(18.dp)
                 )
@@ -248,7 +248,7 @@ fun AssistantScreen(
                             if (!line.fromUser) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Icons.Filled.SmartToy,
+                                        Icons.Outlined.AutoAwesome,
                                         contentDescription = null,
                                         tint = color,
                                         modifier = Modifier.size(16.dp)
@@ -311,7 +311,7 @@ fun AssistantScreen(
                 enabled = !sending
             ) {
                 Icon(
-                    Icons.Filled.AttachFile,
+                    Icons.Outlined.AttachFile,
                     contentDescription = "انتخاب فایل",
                     tint = color
                 )
@@ -339,7 +339,7 @@ fun AssistantScreen(
                 )
             ) {
                 Icon(
-                    Icons.Filled.Send,
+                    Icons.Outlined.Send,
                     contentDescription = "ارسال",
                     tint = Color.White
                 )

@@ -1,5 +1,8 @@
 package com.adel.assistant.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +18,7 @@ import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.LetterData
 import com.adel.assistant.data.LetterExport
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -95,24 +99,27 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ToolbarIcon(
+                    Icons.Outlined.TableChart, "خروجی XLSX", color,
                     onClick = {
                         val uri = LetterExport.exportXlsx(context, buildData())
                         status = if (uri != null) "XLSX در Documents/AdelAssistant ذخیره شد"
                         else "خطا در صدور XLSX — قالب را بررسی کن"
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = color),
-                    modifier = Modifier.weight(1f)
-                ) { Text("خروجی XLSX") }
-                OutlinedButton(
+                    }
+                )
+                ToolbarIcon(
+                    Icons.Outlined.PictureAsPdf, "خروجی PDF", color,
                     onClick = {
                         val uri = LetterExport.exportPdfAndShare(context, buildData())
                         status = if (uri != null) "PDF ذخیره شد"
                         else "خطا در صدور PDF"
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("خروجی PDF") }
+                    }
+                )
             }
 
             Text(status, color = TextPrimary, style = MaterialTheme.typography.bodySmall)

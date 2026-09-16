@@ -13,12 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
@@ -41,6 +41,7 @@ import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -215,7 +216,7 @@ fun ProjectRegisterScreen(
                 onClick = { showMenu = true },
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
-                Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                Icon(Icons.Outlined.Tune, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
@@ -295,9 +296,7 @@ fun ProjectRegisterScreen(
             ) {
                 Text(if (editingRow != null) "ثبت ویرایش" else "ثبت")
             }
-            OutlinedButton(onClick = { search() }, modifier = Modifier.weight(1f)) {
-                Text("جستجو")
-            }
+            ToolbarIcon(Icons.Outlined.ManageSearch, "جستجو", color, onClick = { search() })
         }
 
         if (statusMsg.isNotBlank()) {
@@ -335,7 +334,7 @@ fun ProjectRegisterScreen(
                             modifier = Modifier.padding(top = 6.dp)
                         ) {
                             IconButton(onClick = { confirmCallFor = p }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
+                                Icon(Icons.Outlined.Call, contentDescription = "تماس", tint = color)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
@@ -364,13 +363,13 @@ fun ProjectRegisterScreen(
                                 phone = p.phone
                                 editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
+                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
                             }
                             IconButton(onClick = { onInvoice(listOf(p)) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
+                                Icon(Icons.Outlined.ReceiptLong, contentDescription = "فاکتور", tint = color)
                             }
                             IconButton(onClick = { confirmDeleteFor = p }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFC2685E))
+                                Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = Color(0xFFC2685E))
                             }
                         }
                     }

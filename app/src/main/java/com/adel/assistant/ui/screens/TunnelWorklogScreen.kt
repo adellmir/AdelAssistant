@@ -9,9 +9,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
@@ -130,7 +130,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         Box {
             ScreenTopBar(title = "کارکرد ماهانه تونل", color = color, onBack = { if (editingCode != null) clearForm() else onBack() })
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Filled.Settings, null, tint = Color(0xFFAAB697))
+                Icon(Icons.Outlined.Tune, null, tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن CSV") }, onClick = {
@@ -215,9 +215,9 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
                                 cameraTimeDed = item.cameraTimeDeduction.toLong().toString()
                                 surveyor = item.surveyorPay.toLong().toString()
                                 note = item.note; editingCode = item.dateCode
-                            }, modifier = Modifier.size(28.dp)) { Icon(Icons.Filled.Edit, null, tint = TextMuted) }
+                            }, modifier = Modifier.size(28.dp)) { Icon(Icons.Outlined.Edit, null, tint = TextMuted) }
                             IconButton(onClick = { confirmDelete = item }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Delete, null, tint = Color(0xFFC2685E))
+                                Icon(Icons.Outlined.Delete, null, tint = Color(0xFFC2685E))
                             }
                         }
                     }

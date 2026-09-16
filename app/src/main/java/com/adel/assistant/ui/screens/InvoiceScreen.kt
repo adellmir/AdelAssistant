@@ -10,8 +10,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +34,7 @@ import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -278,7 +282,7 @@ fun InvoiceScreen(
                             TextButton(onClick = {
                                 lines = lines.toMutableList().also { it.removeAt(index) }
                             }) {
-                                Icon(Icons.Filled.Delete, null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text("حذف ردیف")
                             }
@@ -291,7 +295,7 @@ fun InvoiceScreen(
                     onClick = { lines = lines + LineDraft() },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Filled.Add, null)
+                    Icon(Icons.Outlined.Add, null)
                     Spacer(Modifier.width(6.dp))
                     Text("ردیف جدید")
                 }
@@ -333,7 +337,7 @@ fun InvoiceScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = color),
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("ثبت / PDF + اشتراک") }
+                ) { Icon(Icons.Outlined.PictureAsPdf, contentDescription = "PDF"); Spacer(Modifier.width(6.dp)); Text("PDF") }
             }
             item {
                 OutlinedButton(
@@ -343,7 +347,7 @@ fun InvoiceScreen(
                         status = if (uri != null) "XLSX در Documents/AdelAssistant ذخیره شد" else "خطا در XLSX"
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("خروجی XLSX") }
+                ) { Icon(Icons.Outlined.TableChart, contentDescription = "خروجی XLSX"); Spacer(Modifier.width(6.dp)); Text("XLSX") }
             }
             } // end if (mode == 0)
 

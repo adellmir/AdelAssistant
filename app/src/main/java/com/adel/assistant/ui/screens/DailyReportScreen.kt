@@ -10,11 +10,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -180,7 +180,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Box {
             ScreenTopBar(title = "گزارش روزانه", color = color, onBack = onBack)
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                Icon(Icons.Outlined.Tune, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
@@ -210,7 +210,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { loadDay() }) {
-                Icon(Icons.Filled.Search, contentDescription = "نمایش گزارش این روز", tint = color)
+                Icon(Icons.Outlined.ManageSearch, contentDescription = "نمایش گزارش این روز", tint = color)
             }
         }
         if (weekday != null) {
@@ -246,7 +246,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { addOrUpdateRow() }) {
-                Icon(Icons.Filled.Add, contentDescription = "افزودن", tint = color)
+                Icon(Icons.Outlined.AddCircleOutline, contentDescription = "افزودن", tint = color)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -284,13 +284,13 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                             )
                             IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
                                 Icon(
-                                    Icons.Filled.Edit, contentDescription = "ویرایش",
+                                    Icons.Outlined.Edit, contentDescription = "ویرایش",
                                     tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp)
                                 )
                             }
                             IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(24.dp)) {
                                 Icon(
-                                    Icons.Filled.Delete, contentDescription = "پاک کردن",
+                                    Icons.Outlined.Delete, contentDescription = "پاک کردن",
                                     tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp)
                                 )
                             }

@@ -10,10 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +27,7 @@ import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -99,8 +100,8 @@ fun ReceivablesScreen(
             OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-            Button(onClick = { refresh() }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.weight(1f)) { Text("جستجو") }
-            OutlinedButton(onClick = { name = ""; employer = ""; refresh() }, modifier = Modifier.weight(1f)) { Text("رفرش") }
+            ToolbarIcon(Icons.Outlined.ManageSearch, "جستجو", color, onClick = { refresh() })
+            ToolbarIcon(Icons.Outlined.Sync, "رفرش", color, onClick = { name = ""; employer = ""; refresh() })
         }
 
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -119,7 +120,7 @@ fun ReceivablesScreen(
                             IconButton(onClick = {
                                 context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phone}")))
                             }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
+                                Icon(Icons.Outlined.Call, contentDescription = "تماس", tint = color)
                             }
                             IconButton(onClick = {
                                 val msg = "سلام، مانده مطالبه پروژه «${p.name}» برابر ${formatMoney(p.remaining)} می‌باشد. با سپاس"
@@ -131,14 +132,14 @@ fun ReceivablesScreen(
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Sms, contentDescription = "پیامک", tint = color)
+                                Icon(Icons.Outlined.Sms, contentDescription = "پیامک", tint = color)
                             }
                         }
                         IconButton(onClick = { onInvoice(p) }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
+                            Icon(Icons.Outlined.ReceiptLong, contentDescription = "فاکتور", tint = color)
                         }
                         IconButton(onClick = { editing = p }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                            Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
                         }
                         if (tab == 0) {
                             // تیک = علامت پرداخت‌شده

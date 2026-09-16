@@ -54,7 +54,7 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Locale
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.outlined.SmartToy
 import com.adel.assistant.navigation.Routes
 import com.adel.assistant.ui.theme.ToolPrimary
 
@@ -435,7 +435,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        Icons.Filled.SmartToy,
+                        Icons.Outlined.AutoAwesome,
                         contentDescription = "دستیار",
                         tint = ToolPrimary
                     )

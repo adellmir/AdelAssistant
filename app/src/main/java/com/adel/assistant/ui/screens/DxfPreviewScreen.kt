@@ -19,7 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
@@ -321,32 +321,32 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.setPrimaryClip(ClipData.newPlainText("مختصات", coordText.replace("\n", " ")))
                         message = "مختصات کپی شد"
-                    }) { Icon(Icons.Filled.ContentCopy, "کپی مختصات") }
+                    }) { Icon(Icons.Outlined.ContentCopy, "کپی مختصات") }
                 }
             }
         }
 
         NavigationBar(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             NavigationBarItem(selected = false, onClick = { openFile.launch(arrayOf("*/*")) },
-                icon = { Icon(Icons.Filled.FolderOpen, null) }, label = { Text("فایل") })
+                icon = { Icon(Icons.Outlined.FolderOpen, null) }, label = { Text("فایل") })
             NavigationBarItem(selected = showDrawings, onClick = { showDrawings = true },
-                icon = { Icon(Icons.Filled.Map, null) }, label = { Text("نقشه‌ها") })
+                icon = { Icon(Icons.Outlined.Map, null) }, label = { Text("نقشه‌ها") })
             NavigationBarItem(selected = showLayers, onClick = { showLayers = true },
-                icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
+                icon = { Icon(Icons.Outlined.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
             NavigationBarItem(selected = baseMap != BaseMapType.NONE, onClick = { showBaseMapMenu = true },
-                icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("پس‌زمینه") })
+                icon = { Icon(Icons.Outlined.Layers, null) }, label = { Text("پس‌زمینه") })
             NavigationBarItem(selected = coordinateMode, onClick = {
                 coordinateMode = !coordinateMode
                 if (coordinateMode) { measureMode = false; message = "حالت مختصات: روی یک نقطه از نقشه لمس کن" }
                 else message = "حالت مختصات خاموش شد"
-            }, icon = { Icon(Icons.Filled.LocationOn, null) }, label = { Text("مختصات") })
+            }, icon = { Icon(Icons.Outlined.LocationOn, null) }, label = { Text("مختصات") })
             NavigationBarItem(selected = false, onClick = { fitAll(canvasSize.x, canvasSize.y) },
-                icon = { Icon(Icons.Filled.ZoomOutMap, null) }, label = { Text("Fit") })
+                icon = { Icon(Icons.Outlined.ZoomOutMap, null) }, label = { Text("Fit") })
             NavigationBarItem(selected = measureMode, onClick = {
                 measureMode = !measureMode
                 measureA = null; measureB = null
                 distanceMsg = if (measureMode) "حالت اندازه‌گیری: نقطه اول را لمس کن" else null
-            }, icon = { Icon(Icons.Filled.Straighten, null) }, label = { Text("اندازه") })
+            }, icon = { Icon(Icons.Outlined.Straighten, null) }, label = { Text("اندازه") })
         }
 
         if (showBaseMapMenu) {
@@ -371,10 +371,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             },
             containerColor = color,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp)
-        ) { Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White) }
+        ) { Icon(Icons.Outlined.MyLocation, "موقعیت من", tint = Color.White) }
 
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
-            Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
+            Icon(Icons.Outlined.ArrowBack, "بازگشت", tint = Color.White)
         }
     }
 
@@ -417,7 +417,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 drawings = drawings.filterIndexed { i, _ -> i != index }
                                 if (drawings.isEmpty()) { tiles = emptyList(); message = "نقشه‌ها بسته شدند" }
-                            }) { Icon(Icons.Filled.Close, "بستن") }
+                            }) { Icon(Icons.Outlined.Close, "بستن") }
                         }
                     }
                 }

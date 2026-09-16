@@ -9,8 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBackIosNew
-import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.outlined.ArrowBackIosNew
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -61,7 +62,7 @@ fun MainSectionCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
-            Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = color)
+            Icon(Icons.Outlined.ChevronLeft, contentDescription = null, tint = color)
         }
     }
 }
@@ -100,7 +101,7 @@ fun SubMenuRow(
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
-            Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = Color(0xFFAAAAAA))
+            Icon(Icons.Outlined.ChevronLeft, contentDescription = null, tint = Color(0xFFAAAAAA))
         }
     }
 }
@@ -117,7 +118,7 @@ fun ScreenTopBar(title: String, color: Color, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "بازگشت", tint = color)
+            Icon(Icons.Outlined.ArrowBackIosNew, contentDescription = "بازگشت", tint = color)
         }
         Spacer(modifier = Modifier.width(4.dp))
         Text(title, style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
@@ -148,5 +149,26 @@ fun PlaceholderScreen(title: String, color: Color, onBack: () -> Unit) {
                 color = TextSecondary
             )
         }
+    }
+}
+
+
+/**
+ * دکمهٔ آیکونی فشرده برای نوار ابزار (جایگزین دکمهٔ متنی پرتکرار)
+ */
+@Composable
+fun ToolbarIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) tint else tint.copy(alpha = 0.38f)
+        )
     }
 }
