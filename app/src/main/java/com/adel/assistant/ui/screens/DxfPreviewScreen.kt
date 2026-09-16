@@ -2,6 +2,8 @@ package com.adel.assistant.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Location
@@ -19,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +40,9 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -58,11 +64,14 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
     var zoneText by remember { mutableStateOf("40") }
-    var satellite by remember { mutableStateOf(false) }
+    var baseMap by remember { mutableStateOf(BaseMapType.NONE) }
     var showSatelliteDialog by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
+    var coordinateMode by remember { mutableStateOf(false) }
+    var selectedCoordinate by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var showBaseMapMenu by remember { mutableStateOf(false) }
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var distanceMsg by remember { mutableStateOf<String?>(null) }
@@ -149,8 +158,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
-    LaunchedEffect(satellite, scale, offset, canvasSize, zone, drawings) {
-        if (!satellite || allModels.isEmpty() || canvasSize.x <= 0f) {
+    LaunchedEffect(baseMap, scale, offset, canvasSize, zone, drawings) {
+        if (baseMap == BaseMapType.NONE || allModels.isEmpty() || canvasSize.x <= 0f) {
             tiles = emptyList()
             return@LaunchedEffect
         }
@@ -163,7 +172,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         val minLat = latLon.minOf { it.first }; val maxLat = latLon.maxOf { it.first }
         val minLon = latLon.minOf { it.second }; val maxLon = latLon.maxOf { it.second }
         val z = estimateZoom(minLat, maxLat, minLon, maxLon, canvasSize.x)
-        tiles = withContext(Dispatchers.IO) { loadEsriTilesCached(minLat, maxLat, minLon, maxLon, z) }
+        tiles = withContext(Dispatchers.IO) { loadBaseTilesCached(baseMap, minLat, maxLat, minLon, maxLon, z) }
     }
 
     LaunchedEffect(fitTrigger, canvasSize) {
@@ -173,7 +182,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Background)) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = if (satellite) Color(0xFF111111) else Color(0xFF202124)
+            color = if (baseMap == BaseMapType.SATELLITE) Color(0xFF111111) else Color(0xFF202124)
         ) {
             Canvas(
                 modifier = Modifier
@@ -193,7 +202,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             } else offset += pan
                         }
                     }
-                    .pointerInput(measureMode, scale, offset) {
+                    .pointerInput(measureMode, coordinateMode, scale, offset) {
                         detectTapGestures(
                             onDoubleTap = { tap ->
                                 val factor = 1.7f
@@ -202,8 +211,13 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 scale = ns
                             },
                             onTap = { tap ->
-                                if (!measureMode) return@detectTapGestures
                                 val p = screenToWorld(tap.x, tap.y)
+                                if (coordinateMode) {
+                                    selectedCoordinate = p
+                                    message = "مختصات نقطه انتخاب شد"
+                                    return@detectTapGestures
+                                }
+                                if (!measureMode) return@detectTapGestures
                                 if (measureA == null || measureB != null) {
                                     measureA = p; measureB = null
                                     distanceMsg = "نقطه اول انتخاب شد؛ نقطه دوم را لمس کن"
@@ -219,7 +233,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             ) {
                 canvasSize = Offset(size.width, size.height)
 
-                if (satellite) {
+                if (baseMap != BaseMapType.NONE) {
                     tiles.forEach { t ->
                         val (e0, n0) = UtmGeo.fromLatLon(t.latNorth, t.lonWest, zone)
                         val (e1, n1) = UtmGeo.fromLatLon(t.latSouth, t.lonEast, zone)
@@ -294,6 +308,24 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }
         }
 
+        selectedCoordinate?.let { p ->
+            val coordText = "X = ${"%.3f".format(java.util.Locale.US, p.first)}\nY = ${"%.3f".format(java.util.Locale.US, p.second)}"
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                tonalElevation = 6.dp,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = if (distanceMsg != null) 92.dp else 50.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
+                    Text(coordText, fontWeight = FontWeight.SemiBold, color = TextPrimary, modifier = Modifier.weight(1f))
+                    IconButton(onClick = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("مختصات", coordText.replace("\n", " ")))
+                        message = "مختصات کپی شد"
+                    }) { Icon(Icons.Filled.ContentCopy, "کپی مختصات") }
+                }
+            }
+        }
+
         NavigationBar(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             NavigationBarItem(selected = false, onClick = { openFile.launch(arrayOf("*/*")) },
                 icon = { Icon(Icons.Filled.FolderOpen, null) }, label = { Text("فایل") })
@@ -301,9 +333,13 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 icon = { Icon(Icons.Filled.Map, null) }, label = { Text("نقشه‌ها") })
             NavigationBarItem(selected = showLayers, onClick = { showLayers = true },
                 icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
-            NavigationBarItem(selected = satellite, onClick = {
-                if (satellite) satellite = false else showSatelliteDialog = true
-            }, icon = { Icon(Icons.Filled.Satellite, null) }, label = { Text("ماهواره") })
+            NavigationBarItem(selected = baseMap != BaseMapType.NONE, onClick = { showBaseMapMenu = true },
+                icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("پس‌زمینه") })
+            NavigationBarItem(selected = coordinateMode, onClick = {
+                coordinateMode = !coordinateMode
+                if (coordinateMode) { measureMode = false; message = "حالت مختصات: روی یک نقطه از نقشه لمس کن" }
+                else message = "حالت مختصات خاموش شد"
+            }, icon = { Icon(Icons.Filled.LocationOn, null) }, label = { Text("مختصات") })
             NavigationBarItem(selected = false, onClick = { fitAll(canvasSize.x, canvasSize.y) },
                 icon = { Icon(Icons.Filled.ZoomOutMap, null) }, label = { Text("Fit") })
             NavigationBarItem(selected = measureMode, onClick = {
@@ -311,6 +347,22 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 measureA = null; measureB = null
                 distanceMsg = if (measureMode) "حالت اندازه‌گیری: نقطه اول را لمس کن" else null
             }, icon = { Icon(Icons.Filled.Straighten, null) }, label = { Text("اندازه") })
+        }
+
+        if (showBaseMapMenu) {
+            AlertDialog(
+                onDismissRequest = { showBaseMapMenu = false },
+                title = { Text("نوع نقشه") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BaseMapChoice("بدون پس‌زمینه", baseMap == BaseMapType.NONE) { baseMap = BaseMapType.NONE; showBaseMapMenu = false; tiles = emptyList() }
+                        BaseMapChoice("تصاویر ماهواره‌ای", baseMap == BaseMapType.SATELLITE) { showSatelliteDialog = true; showBaseMapMenu = false }
+                        BaseMapChoice("نقشه خیابان‌ها", baseMap == BaseMapType.STREET) { baseMap = BaseMapType.STREET; showBaseMapMenu = false }
+                        BaseMapChoice("نقشه توپوگرافی", baseMap == BaseMapType.TOPO) { baseMap = BaseMapType.TOPO; showBaseMapMenu = false }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showBaseMapMenu = false }) { Text("بستن") } }
+            )
         }
 
         FloatingActionButton(
@@ -341,7 +393,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { satellite = true; showSatelliteDialog = false }) { Text("نمایش") } },
+            confirmButton = { TextButton(onClick = { baseMap = BaseMapType.SATELLITE; showSatelliteDialog = false }) { Text("نمایش") } },
             dismissButton = { TextButton(onClick = { showSatelliteDialog = false }) { Text("لغو") } }
         )
     }
@@ -407,6 +459,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     }
 }
 
+private enum class BaseMapType { NONE, SATELLITE, STREET, TOPO }
+
+@Composable
+private fun BaseMapChoice(title: String, selected: Boolean, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(title, modifier = Modifier.weight(1f))
+    }
+}
+
 @Composable
 private fun LayerColorButton(current: Color, onColor: (Color) -> Unit) {
     var open by remember { mutableStateOf(false) }
@@ -462,30 +524,39 @@ private fun tileToLatLon(x: Int, y: Int, zoom: Int): Pair<Double, Double> {
     return lat to lon
 }
 
-private fun loadEsriTilesCached(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int): List<TileBmp> {
+private suspend fun loadBaseTilesCached(type: BaseMapType, minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int): List<TileBmp> = coroutineScope {
     val (aX, aY) = latLonToTile(minLat, minLon, zoom)
     val (bX, bY) = latLonToTile(maxLat, maxLon, zoom)
     val minX = min(aX, bX); val maxX = max(aX, bX)
     val minY = min(aY, bY); val maxY = max(aY, bY)
-    val result = mutableListOf<TileBmp>()
-    var count = 0
-    for (x in minX..maxX) for (y in minY..maxY) {
-        if (count >= 24) break
-        val key = "$zoom/$x/$y"
-        SatelliteTileCache.get(key)?.let { result += it; count++; return@let }
-        try {
-            val conn = URL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x").openConnection() as HttpURLConnection
-            conn.connectTimeout = 3500; conn.readTimeout = 5000
-            conn.inputStream.use { input ->
-                val bmp = BitmapFactory.decodeStream(input) ?: return@use
-                val (latN, lonW) = tileToLatLon(x, y, zoom)
-                val (latS, lonE) = tileToLatLon(x + 1, y + 1, zoom)
-                val tile = TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
-                SatelliteTileCache.put(key, tile)
-                result += tile; count++
-            }
-            conn.disconnect()
-        } catch (_: Exception) {}
+    val keys = mutableListOf<Triple<Int, Int, Int>>()
+    outer@ for (x in minX..maxX) for (y in minY..maxY) {
+        keys += Triple(x, y, zoom)
+        if (keys.size >= 30) break@outer
     }
-    return result
+    coroutineScope {
+        keys.map { (x, y, z) -> async(Dispatchers.IO) {
+            val key = "${type.name}/$z/$x/$y"
+            SatelliteTileCache.get(key)?.let { return@async it }
+            val service = when (type) {
+                BaseMapType.SATELLITE -> "World_Imagery"
+                BaseMapType.STREET -> "World_Street_Map"
+                BaseMapType.TOPO -> "World_Topo_Map"
+                BaseMapType.NONE -> return@async null
+            }
+            try {
+                val url = "https://server.arcgisonline.com/ArcGIS/rest/services/$service/MapServer/tile/$z/$y/$x"
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 2200; conn.readTimeout = 3500
+                conn.inputStream.use { input ->
+                    val bmp = BitmapFactory.decodeStream(input) ?: return@async null
+                    val (latN, lonW) = tileToLatLon(x, y, z)
+                    val (latS, lonE) = tileToLatLon(x + 1, y + 1, z)
+                    val tile = TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
+                    SatelliteTileCache.put(key, tile)
+                    tile
+                }.also { conn.disconnect() }
+            } catch (_: Exception) { null }
+        }.awaitAll().filterNotNull()
+    }
 }
