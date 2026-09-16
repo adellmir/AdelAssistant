@@ -4,6 +4,7 @@ import android.content.Context
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
+import com.adel.assistant.ai.tools.TaskTools
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.formatMoney
@@ -34,7 +35,9 @@ object AssistantAgent {
         val title: String = "",
         val store: String? = null,
         val index: Int = -1,
-        val choices: List<AgentChoice> = emptyList()
+        val choices: List<AgentChoice> = emptyList(),
+        val dueDate: String? = null,
+        val dueTime: String? = null
     )
     private var pending: Pending? = null
 
@@ -102,21 +105,21 @@ object AssistantAgent {
                 }
                 if (store != null) {
                     pending = null
-                    return addTask(context, store, p.title)
+                    return addTask(context, store, p.title, p.dueDate, p.dueTime)
                 }
                 if (isBoth(msg) || msg == "__task_both") {
                     pending = null
-                    addTask(context, "tunnel_tasks", p.title)
-                    addTask(context, "project_tasks", p.title)
+                    addTask(context, "tunnel_tasks", p.title, p.dueDate, p.dueTime)
+                    addTask(context, "project_tasks", p.title, p.dueDate, p.dueTime)
                     return AgentReply("تسک «${p.title}» در هر دو بخش تونل و پروژه ثبت شد ✅")
                 }
                 val numeric = msg.toIntOrNull()
-                if (numeric == 1) { pending = null; return addTask(context, "tunnel_tasks", p.title) }
-                if (numeric == 2) { pending = null; return addTask(context, "project_tasks", p.title) }
+                if (numeric == 1) { pending = null; return addTask(context, "tunnel_tasks", p.title, p.dueDate, p.dueTime) }
+                if (numeric == 2) { pending = null; return addTask(context, "project_tasks", p.title, p.dueDate, p.dueTime) }
                 if (numeric == 3) {
                     pending = null
-                    addTask(context, "tunnel_tasks", p.title)
-                    addTask(context, "project_tasks", p.title)
+                    addTask(context, "tunnel_tasks", p.title, p.dueDate, p.dueTime)
+                    addTask(context, "project_tasks", p.title, p.dueDate, p.dueTime)
                     return AgentReply("تسک «${p.title}» در هر دو بخش تونل و پروژه ثبت شد ✅")
                 }
                 if (isCancel(msg)) { pending = null; return AgentReply("عملیات لغو شد.") }
@@ -124,15 +127,10 @@ object AssistantAgent {
             }
             PendingType.TASK_DELETE_CONFIRM -> {
                 if (isConfirm(msg)) {
-                    val all = TaskStore.load(context, p.store!!)
-                    if (p.index in all.indices) {
-                        val removed = all.removeAt(p.index)
-                        TaskStore.save(context, p.store, all)
-                        pending = null
-                        return AgentReply("تسک «${removed.title}» حذف شد 🗑️")
-                    }
+                    val category = if (p.store == "tunnel_tasks") "tunnel" else "project"
+                    val result = TaskTools.delete(context, category, p.title)
                     pending = null
-                    return AgentReply("تسک دیگر پیدا نشد.")
+                    return AgentReply(if (result.success) "${result.message} 🗑️" else result.message)
                 }
                 if (isCancel(msg)) { pending = null; return AgentReply("حذف لغو شد.") }
                 return AgentReply("برای حذف «${p.title}» تأیید یا لغو کن.", choices = listOf(AgentChoice("بله", "بله"), AgentChoice("لغو", "لغو")))
@@ -186,6 +184,8 @@ object AssistantAgent {
         .replace('ي','ی').replace('ى','ی').replace('ك','ک').replace('ۀ','ه')
         .replace('ة','ه').replace('ؤ','و').replace('إ','ا').replace('أ','ا')
         .replace('ـ',' ')
+        .replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4')
+        .replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9')
         .replace(Regex("[\u064B-\u065F\u0670]"), "")
         .replace('‌',' ')
         .replace(Regex("[،؛؟!,.:/\\|()\\[\\]{}\"'`~]"), " ")
@@ -335,8 +335,9 @@ object AssistantAgent {
                 val all = TaskStore.load(context,s)
                 val i = all.indexOfFirst { !it.completed && it.title.contains(title, true) }
                 if (i >= 0) {
-                    all[i] = all[i].copy(completed = true); TaskStore.save(context,s,all)
-                    return AgentReply("تسک «${all[i].title}» انجام‌شده شد ✅")
+                    val category = if (s == "tunnel_tasks") "tunnel" else "project"
+                    val result = TaskTools.complete(context, category, all[i].title)
+                    return AgentReply(if (result.success) "${result.message} ✅" else result.message)
                 }
             }
             return AgentReply("تسک باز با این عنوان پیدا نشد.")
@@ -346,27 +347,57 @@ object AssistantAgent {
             val title = extractCreateTitle(msg)
             if (title.isBlank()) return AgentReply("عنوان تسک را بگو؛ مثلاً «برای تونل تسک برداشت مقطع ثبت کن». ")
             if (store == null) {
-                pending = Pending(PendingType.TASK_CATEGORY, title)
+                pending = Pending(
+                    type = PendingType.TASK_CATEGORY,
+                    title = title,
+                    dueDate = extractDueDate(msg),
+                    dueTime = extractDueTime(msg)
+                )
                 return AgentReply("تسک «$title» آماده است. برای تونل ثبت شود یا پروژه؟")
             }
-            return addTask(context,store,title)
+            return addTask(context, store, title, extractDueDate(msg), extractDueTime(msg))
         }
 
         return AgentReply(taskStats(context,store))
     }
 
-    private fun addTask(context: Context, store: String, title: String): AgentReply {
-        val all = TaskStore.load(context,store)
-        all.add(0,TaskItem(title=title)); TaskStore.save(context,store,all)
-        return AgentReply("تسک «$title» در بخش ${if(store=="tunnel_tasks") "تونل" else "پروژه"} ثبت شد ✅")
+    private fun addTask(
+        context: Context,
+        store: String,
+        title: String,
+        dueDate: String? = null,
+        dueTime: String? = null
+    ): AgentReply {
+        val category = if (store == "tunnel_tasks") "tunnel" else "project"
+        val result = TaskTools.create(context, category, title, dueDate, dueTime)
+        return AgentReply(if (result.success) "${result.message} ✅" else result.message)
     }
 
     private fun extractCreateTitle(msg: String): String {
         var s = msg
-        listOf("برای تونل","برای پروژه","تسک","جدید","ثبت کن","اضافه کن","ایجاد کن","بساز","فردا","امروز","پس فردا").forEach { s=s.replace(it," ") }
-        s=s.replace(Regex("\\s+")," ").trim().trim(':','-',' ')
+        listOf(
+            "برای تونل", "برای پروژه", "تسک", "جدید", "ثبت کن", "اضافه کن",
+            "ایجاد کن", "بساز", "فردا", "امروز", "پس فردا", "پسفردا"
+        ).forEach { s = s.replace(it, " ") }
+        s = s.replace(Regex("\\s+"), " ").trim().trim(':','-',' ')
         return s.take(160)
     }
+
+    private fun extractDueDate(msg: String): String? = when {
+        hasAny(msg, listOf("پس فردا", "پسفردا")) -> "پس فردا"
+        hasAny(msg, listOf("فردا")) -> "فردا"
+        hasAny(msg, listOf("امروز")) -> "امروز"
+        else -> null
+    }
+
+    private fun extractDueTime(msg: String): String? {
+        val match = Regex("(?:ساعت\\s*)?(\\d{1,2})(?::(\\d{2}))?").find(msg) ?: return null
+        val hour = match.groupValues[1].toIntOrNull() ?: return null
+        if (hour !in 0..23) return null
+        val minute = match.groupValues.getOrNull(2)?.ifBlank { "00" } ?: "00"
+        return "%02d:%s".format(hour, minute)
+    }
+
     private fun extractActionTitle(msg: String, markers: List<String>): String {
         var s=msg
         markers.forEach { s=s.replace(it," ") }
