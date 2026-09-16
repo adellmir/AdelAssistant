@@ -70,25 +70,13 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
 
-    // با تغییر شفت: آخرین سمت ثبت‌شده همان شفت را پیش‌فرض کن
-    LaunchedEffect(shaft) {
-        if (shaft.isNotBlank() && editingIndex < 0) {
-            val last = TunnelReportStore.allEntries(context)
-                .filter { it.shaft == shaft }
-                .maxByOrNull { it.dateSortKey }
-            if (last != null && side.isBlank()) {
-                side = last.side
-            }
-        }
-    }
+    // فقط وقتی خود کاربر سمت را وارد کرد: شماره نقطه و طول را پیش‌بینی کن
     LaunchedEffect(shaft, side) {
         if (shaft.isNotBlank() && side.isNotBlank() && editingIndex < 0) {
             val suggested = TunnelReportStore.suggestedNextPointNo(context, shaft, side)
             if (suggested != null) {
-                // Store خودش برای کمتر last-1 و برای بیشتر last+1 می‌دهد
                 pointNo = suggested.toString()
             }
-            // آخرین طول ثبت‌شده برای همین شفت-سمت
             val last = TunnelReportStore.allEntries(context)
                 .filter { it.key == "$shaft-${com.adel.assistant.data.normalizeSide(side)}" }
                 .maxByOrNull { it.dateSortKey }
@@ -102,7 +90,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
     val weekday = remember(day, month) { CalendarStore.weekdayFor(context, day, month) }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -196,7 +185,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(arrayOf("text/*", "*/*"))
+                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
@@ -241,8 +230,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = side, onValueChange = { side = filterNumericInput(it) }, label = { Text("سمت") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+                value = side, onValueChange = { side = it }, label = { Text("سمت") },
+                modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

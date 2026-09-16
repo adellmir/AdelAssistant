@@ -28,6 +28,7 @@ import com.adel.assistant.data.InvoiceLine
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
+import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -261,7 +262,7 @@ fun InvoiceScreen(
                         )
                         OutlinedTextField(
                             line.amount,
-                            { v -> lines = lines.toMutableList().also { it[index] = line.copy(amount = v) } },
+                            { v -> val g = formatGroupedNumericInput(v); lines = lines.toMutableList().also { it[index] = line.copy(amount = g) } },
                             label = { Text("مبلغ") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,

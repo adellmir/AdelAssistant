@@ -49,8 +49,9 @@ fun DxfConverterScreen(onBack: () -> Unit) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
         if (uri != null) {
             try {
                 val name = getFileName(context, uri) ?: "points.dat"
@@ -156,7 +157,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
-                        onClick = { filePicker.launch(arrayOf("*/*")) },
+                        onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*")) },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary)

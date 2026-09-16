@@ -55,8 +55,9 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             context.contentResolver.takePersistableUriPermission(
@@ -182,7 +183,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream")) },
+                    onClick = { picker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*", "text/*", "application/octet-stream")) },
                     colors = ButtonDefaults.buttonColors(containerColor = color)
                 ) { Text("باز کردن") }
 

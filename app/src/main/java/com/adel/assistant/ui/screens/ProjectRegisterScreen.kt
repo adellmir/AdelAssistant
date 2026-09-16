@@ -37,6 +37,7 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
+import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
@@ -91,7 +92,9 @@ fun ProjectRegisterScreen(
 
     BackHandler(enabled = editingRow != null) { clearForm() }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -217,7 +220,7 @@ fun ProjectRegisterScreen(
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(arrayOf("text/*", "*/*"))
+                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
@@ -264,7 +267,7 @@ fun ProjectRegisterScreen(
         )
         OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
+            OutlinedTextField(value = amount, onValueChange = { amount = formatGroupedNumericInput(it, allowDecimal = true) }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
                 keyboardOptions = numKb)
             OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)

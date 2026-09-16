@@ -63,8 +63,11 @@ fun TaskScreen(
     }
 
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        if (uri == null) return@rememberLauncherForActivityResult
+        // uri selected
         if (uri != null) {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
                 tasks = TaskStore.importRaw(context, storeName, reader.readText())
@@ -91,7 +94,7 @@ fun TaskScreen(
                     )
                     DropdownMenuItem(
                         text = { Text("📂 بارگذاری از CSV") },
-                        onClick = { showMenu = false; importLauncher.launch(arrayOf("text/csv", "text/plain", "text/*")) }
+                        onClick = { showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/csv", "text/plain", "text/*")) }
                     )
                     DropdownMenuItem(
                         text = { Text(if (showCompleted) "مخفی کردن انجام‌شده‌ها" else "نمایش انجام‌شده‌ها") },

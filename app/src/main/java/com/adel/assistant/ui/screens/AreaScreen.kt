@@ -72,7 +72,9 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
         nameInput = ""; xInput = ""; yInput = ""; result = null; message = null
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             runCatching {
                 val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -122,7 +124,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("افزودن")
             }
             OutlinedButton(
-                onClick = { filePicker.launch(arrayOf("text/*", "application/octet-stream", "*/*")) },
+                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/octet-stream", "*/*")) },
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(4.dp)); Text("خواندن فایل")

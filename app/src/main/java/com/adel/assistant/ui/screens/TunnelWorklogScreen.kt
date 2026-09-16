@@ -28,6 +28,7 @@ import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelMonthRow
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
+import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
@@ -70,7 +71,9 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     }
     BackHandler(enabled = editingCode != null) { clearForm() }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -131,7 +134,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن CSV") }, onClick = {
-                    showMenu = false; importLauncher.launch(arrayOf("text/*", "*/*"))
+                    showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false
@@ -151,7 +154,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("روز کارکرد") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = it }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
+            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = formatGroupedNumericInput(it) }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

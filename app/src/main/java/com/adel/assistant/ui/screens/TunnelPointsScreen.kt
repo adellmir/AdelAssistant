@@ -72,7 +72,9 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -208,7 +210,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(arrayOf("text/*", "*/*"))
+                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false

@@ -32,7 +32,9 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 
     fun refresh() { summary = TunnelFinanceStore.summary(context) }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -62,7 +64,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
                 statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا"
             }) { Icon(Icons.Filled.Settings, null, tint = Color(0xFFAAB697)) }
             TextButton(onClick = {
-                importLauncher.launch(arrayOf("text/*", "application/csv", "*/*"))
+                importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/csv", "*/*"))
             }) { Text("ورود CSV", color = color) }
             TextButton(onClick = { refresh() }) { Text("بروزرسانی", color = color) }
         }

@@ -249,8 +249,11 @@ fun TotalStationDumpScreen(
     }
 
     val openFile = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        if (uri == null) return@rememberLauncherForActivityResult
+        // uri selected
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val name = uri.lastPathSegment ?: "import.txt"
@@ -292,7 +295,7 @@ fun TotalStationDumpScreen(
                 modifier = Modifier.weight(1f)
             ) { Text("مجوز / تازه‌سازی") }
             OutlinedButton(
-                onClick = { openFile.launch(arrayOf("*/*", "text/*", "application/octet-stream")) },
+                onClick = { openFile.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*", "text/*", "application/octet-stream")) },
                 modifier = Modifier.weight(1f)
             ) { Text("از فایل") }
         }

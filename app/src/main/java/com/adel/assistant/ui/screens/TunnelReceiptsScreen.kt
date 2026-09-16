@@ -25,6 +25,7 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
+import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.TextPrimary
@@ -52,7 +53,9 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
 
     val nextEmpty = list.firstOrNull { it.receiveAmount == null }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -97,7 +100,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن CSV") }, onClick = {
-                    showMenu = false; importLauncher.launch(arrayOf("text/*", "*/*"))
+                    showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false
@@ -130,7 +133,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
             OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
                 keyboardOptions = numKb)
         }
-        OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ دریافتی") }, modifier = Modifier.fillMaxWidth(),
+        OutlinedTextField(value = amount, onValueChange = { amount = formatGroupedNumericInput(it) }, label = { Text("مبلغ دریافتی") }, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = numKb)
         OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 

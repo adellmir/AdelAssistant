@@ -81,7 +81,8 @@ fun AssistantScreen(
         AssistantChatStore.addMessage(context, activeChat.id, line.fromUser, line.text)
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
         if (uri != null) {
             val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':')
                 ?: "فایل انتخاب‌شده"
@@ -306,7 +307,7 @@ fun AssistantScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(
-                onClick = { filePicker.launch("*/*") },
+                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*")) },
                 enabled = !sending
             ) {
                 Icon(
