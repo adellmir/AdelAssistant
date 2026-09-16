@@ -4,11 +4,11 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.CancellationSignal
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
-import android.os.CancellationSignal
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -49,6 +49,7 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.LinkedHashMap
+import java.util.function.Consumer
 import kotlin.math.*
 
 private data class ViewerDrawing(
@@ -135,43 +136,58 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         centerOnUtm(e, n, zoom)
     }
 
-    fun applyGpsLocation(location: Location) {
-        val (e, n) = UtmGeo.fromLatLon(location.latitude, location.longitude, zone)
-        myLoc = e to n
-        centerOnUtm(e, n, 17)
-        if (baseMap == BaseMap.NONE) baseMap = BaseMap.STREET
-        message = "موقعیت فعلی روی نقشه"
-    }
-
     fun readGps() {
         try {
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            var best: Location? = null
-            for (provider in lm.getProviders(true)) {
-                val loc = lm.getLastKnownLocation(provider) ?: continue
-                if (best == null || loc.accuracy < best!!.accuracy) best = loc
-            }
-            best?.let { applyGpsLocation(it) }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val provider = when {
-                    lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-                    lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-                    else -> null
+
+            fun applyLocation(loc: Location?) {
+                if (loc == null) {
+                    message = "موقعیت فعلی دریافت نشد؛ GPS و اینترنت را بررسی کن"
+                    return
                 }
-                if (provider != null) {
-                    message = "در حال دریافت موقعیت دقیق..."
-                    lm.getCurrentLocation(provider, CancellationSignal(), context.mainExecutor) { location ->
-                        if (location != null) applyGpsLocation(location)
-                        else if (best == null) message = "موقعیت GPS دریافت نشد"
+                val (e, n) = UtmGeo.fromLatLon(loc.latitude, loc.longitude, zone)
+                myLoc = e to n
+                centerOnUtm(e, n, 17)
+                if (baseMap == BaseMap.NONE) baseMap = BaseMap.STREET
+                message = "مرکز نقشه روی موقعیت من قرار گرفت"
+            }
+
+            // اول موقعیت واقعی را درخواست می‌کنیم؛ اگر در دسترس نبود از آخرین موقعیت معتبر استفاده می‌کنیم.
+            val provider = when {
+                lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                else -> null
+            }
+            if (provider != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                lm.getCurrentLocation(
+                    provider,
+                    CancellationSignal(),
+                    ContextCompat.getMainExecutor(context),
+                    Consumer { current ->
+                        if (current != null) applyLocation(current)
+                        else {
+                            var best: Location? = null
+                            for (p in lm.getProviders(true)) {
+                                val loc = lm.getLastKnownLocation(p) ?: continue
+                                if (best == null || loc.accuracy < best!!.accuracy) best = loc
+                            }
+                            applyLocation(best)
+                        }
                     }
-                } else if (best == null) {
-                    message = "موقعیت‌یابی دستگاه خاموش است"
+                )
+            } else {
+                var best: Location? = null
+                for (p in lm.getProviders(true)) {
+                    val loc = lm.getLastKnownLocation(p) ?: continue
+                    if (best == null || loc.accuracy < best!!.accuracy) best = loc
                 }
-            } else if (best == null) {
-                message = "موقعیت GPS دریافت نشد"
+                applyLocation(best)
             }
-        } catch (_: SecurityException) { message = "دسترسی موقعیت داده نشده" }
-        catch (e: Exception) { message = "خطا در دریافت موقعیت: ${e.message ?: "نامشخص"}" }
+        } catch (_: SecurityException) {
+            message = "دسترسی موقعیت داده نشده"
+        } catch (e: Exception) {
+            message = "خطا در دریافت موقعیت: ${e.message ?: "نامشخص"}"
+        }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasPermission = granted
@@ -210,9 +226,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         val minLat = latLon.minOf { it.first }; val maxLat = latLon.maxOf { it.first }
         val minLon = latLon.minOf { it.second }; val maxLon = latLon.maxOf { it.second }
         val z = estimateZoom(minLat, maxLat, minLon, maxLon, canvasSize.x)
-        val loaded = withContext(Dispatchers.IO) { loadEsriTilesCached(minLat, maxLat, minLon, maxLon, z, baseMap) }
-        tiles = loaded
-        if (loaded.isEmpty()) message = "پس‌زمینه نقشه دریافت نشد؛ اتصال اینترنت یا سرویس نقشه را بررسی کن"
+        tiles = withContext(Dispatchers.IO) { loadEsriTilesCached(minLat, maxLat, minLon, maxLon, z, baseMap) }
     }
 
     LaunchedEffect(fitTrigger, canvasSize) {
@@ -428,7 +442,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
 
     pickedPoint?.let { p ->
         val coordTxt = formatEn("X=%.3f  Y=%.3f", p.easting, p.northing)
-        val neshanUrl = "https://nshn.ir/?lat=${p.lat}&lng=${p.lon}"
         AlertDialog(
             onDismissRequest = { pickedPoint = null },
             title = { Text("مختصات نقطه") },
@@ -443,13 +456,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         try {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UtmGeo.neshanIntentUri(p.lat, p.lon))))
                         } catch (_: Exception) {
-                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(neshanUrl))) } catch (_: Exception) {}
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(formatEn("https://nshn.ir/?lat=%.6f&lng=%.6f", p.lat, p.lon))))
+                            } catch (_: Exception) {}
                         }
                     }, modifier = Modifier.fillMaxWidth()) {
-                        Text("نمایش در مسیریاب نشان")
-                    }
-                    OutlinedButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(neshanUrl)); message = "لینک نشان کپی شد" }, modifier = Modifier.fillMaxWidth()) {
-                        Text("کپی لینک نشان")
+                        Text("نمایش در نشان")
                     }
                 }
             },
@@ -587,26 +599,36 @@ private fun tileToLatLon(x: Int, y: Int, zoom: Int): Pair<Double, Double> {
     return lat to lon
 }
 
-private suspend fun fetchTile(url: String, x: Int, y: Int, zoom: Int, key: String): TileBmp? = withContext(Dispatchers.IO) {
+private suspend fun fetchTile(url: String, fallbackUrl: String, x: Int, y: Int, zoom: Int, key: String): TileBmp? = withContext(Dispatchers.IO) {
     SatelliteTileCache.get(key)?.let { return@withContext it }
-    try {
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 5000
-            readTimeout = 7000
-            useCaches = true
-            setRequestProperty("User-Agent", "AdelAssistant/1.0 (Android)")
-            setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+    val urls = listOf(url, fallbackUrl)
+    for (tileUrl in urls) {
+        var conn: HttpURLConnection? = null
+        try {
+            conn = (URL(tileUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 7000
+                readTimeout = 10000
+                instanceFollowRedirects = true
+                useCaches = true
+                setRequestProperty("User-Agent", "AdelAssistant/1.0 (Android)")
+                setRequestProperty("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+            }
+            if (conn.responseCode !in 200..299) continue
+            val tile = conn.inputStream.use { input ->
+                val bmp = BitmapFactory.decodeStream(input) ?: return@use null
+                val (latN, lonW) = tileToLatLon(x, y, zoom)
+                val (latS, lonE) = tileToLatLon(x + 1, y + 1, zoom)
+                TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
+            } ?: continue
+            SatelliteTileCache.put(key, tile)
+            return@withContext tile
+        } catch (_: Exception) {
+            // Try the second ArcGIS endpoint.
+        } finally {
+            conn?.disconnect()
         }
-        val tile = conn.inputStream.use { input ->
-            val bmp = BitmapFactory.decodeStream(input) ?: return@withContext null
-            val (latN, lonW) = tileToLatLon(x, y, zoom)
-            val (latS, lonE) = tileToLatLon(x + 1, y + 1, zoom)
-            TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
-        }
-        conn.disconnect()
-        SatelliteTileCache.put(key, tile)
-        tile
-    } catch (_: Exception) { null }
+    }
+    null
 }
 
 private suspend fun loadEsriTilesCached(
@@ -627,9 +649,9 @@ private suspend fun loadEsriTilesCached(
     val jobs = coords.map { (x, y) ->
         async(Dispatchers.IO) {
             val key = "${baseMap.service}/$zoom/$x/$y"
-            val host = if (baseMap == BaseMap.SATELLITE) "server.arcgisonline.com" else "services.arcgisonline.com"
-            val url = "https://$host/ArcGIS/rest/services/${baseMap.service}/MapServer/tile/$zoom/$y/$x.jpg"
-            fetchTile(url, x, y, zoom, key)
+            val url = "https://services.arcgisonline.com/ArcGIS/rest/services/${baseMap.service}/MapServer/tile/$zoom/$y/$x"
+            val fallback = "https://server.arcgisonline.com/ArcGIS/rest/services/${baseMap.service}/MapServer/tile/$zoom/$y/$x"
+            fetchTile(url, fallback, x, y, zoom, key)
         }
     }
     jobs.awaitAll().filterNotNull()
