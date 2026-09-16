@@ -72,8 +72,8 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
         nameInput = ""; xInput = ""; yInput = ""; result = null; message = null
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { activityResult ->
+        val uri = activityResult.data?.data
         // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             runCatching {

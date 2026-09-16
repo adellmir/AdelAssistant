@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
@@ -35,12 +36,13 @@ import java.util.Locale
 fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
 
-    var fromDay by remember { mutableStateOf("") }
-    var fromMonth by remember { mutableStateOf("") }
-    var fromYear by remember { mutableStateOf("1405") }
-    var toDay by remember { mutableStateOf("") }
-    var toMonth by remember { mutableStateOf("") }
-    var toYear by remember { mutableStateOf("1405") }
+    val todayJ = remember { CalendarStore.todayJalali() }
+    var fromDay by remember { mutableStateOf("1") }
+    var fromMonth by remember { mutableStateOf("1") }
+    var fromYear by remember { mutableStateOf(todayJ.first.toString()) }
+    var toDay by remember { mutableStateOf(todayJ.third.toString()) }
+    var toMonth by remember { mutableStateOf(todayJ.second.toString()) }
+    var toYear by remember { mutableStateOf(todayJ.first.toString()) }
 
     var points by remember { mutableStateOf<List<ReportEntry>>(emptyList()) }
     var selectMode by remember { mutableStateOf(false) }
