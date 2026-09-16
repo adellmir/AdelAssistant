@@ -524,39 +524,63 @@ private fun tileToLatLon(x: Int, y: Int, zoom: Int): Pair<Double, Double> {
     return lat to lon
 }
 
-private suspend fun loadBaseTilesCached(type: BaseMapType, minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int): List<TileBmp> = coroutineScope {
+private suspend fun loadBaseTilesCached(
+    type: BaseMapType,
+    minLat: Double,
+    maxLat: Double,
+    minLon: Double,
+    maxLon: Double,
+    zoom: Int
+): List<TileBmp> = coroutineScope {
     val (aX, aY) = latLonToTile(minLat, minLon, zoom)
     val (bX, bY) = latLonToTile(maxLat, maxLon, zoom)
-    val minX = min(aX, bX); val maxX = max(aX, bX)
-    val minY = min(aY, bY); val maxY = max(aY, bY)
+    val minX = min(aX, bX)
+    val maxX = max(aX, bX)
+    val minY = min(aY, bY)
+    val maxY = max(aY, bY)
+
     val keys = mutableListOf<Triple<Int, Int, Int>>()
-    outer@ for (x in minX..maxX) for (y in minY..maxY) {
-        keys += Triple(x, y, zoom)
-        if (keys.size >= 30) break@outer
+    outer@ for (x in minX..maxX) {
+        for (y in minY..maxY) {
+            keys += Triple(x, y, zoom)
+            if (keys.size >= 30) break@outer
+        }
     }
-    coroutineScope {
-        keys.map { (x, y, z) -> async(Dispatchers.IO) {
+
+    val deferred = keys.map { (x, y, z) ->
+        async(Dispatchers.IO) {
             val key = "${type.name}/$z/$x/$y"
             SatelliteTileCache.get(key)?.let { return@async it }
+
             val service = when (type) {
                 BaseMapType.SATELLITE -> "World_Imagery"
                 BaseMapType.STREET -> "World_Street_Map"
                 BaseMapType.TOPO -> "World_Topo_Map"
                 BaseMapType.NONE -> return@async null
             }
+
             try {
                 val url = "https://server.arcgisonline.com/ArcGIS/rest/services/$service/MapServer/tile/$z/$y/$x"
                 val conn = URL(url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 2200; conn.readTimeout = 3500
-                conn.inputStream.use { input ->
-                    val bmp = BitmapFactory.decodeStream(input) ?: return@async null
-                    val (latN, lonW) = tileToLatLon(x, y, z)
-                    val (latS, lonE) = tileToLatLon(x + 1, y + 1, z)
-                    val tile = TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
-                    SatelliteTileCache.put(key, tile)
-                    tile
-                }.also { conn.disconnect() }
-            } catch (_: Exception) { null }
-        }.awaitAll().filterNotNull()
+                conn.connectTimeout = 2200
+                conn.readTimeout = 3500
+                try {
+                    conn.inputStream.use { input ->
+                        val bmp = BitmapFactory.decodeStream(input) ?: return@async null
+                        val (latN, lonW) = tileToLatLon(x, y, z)
+                        val (latS, lonE) = tileToLatLon(x + 1, y + 1, z)
+                        val tile = TileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
+                        SatelliteTileCache.put(key, tile)
+                        tile
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
+
+    deferred.awaitAll().filterNotNull()
 }
