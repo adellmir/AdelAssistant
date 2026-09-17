@@ -10,8 +10,6 @@ import java.io.File
 
 object FileExport {
 
-    const val ROOT = "AdelAssistant"
-
     fun exportTextToDocuments(
         context: Context,
         fileName: String,
@@ -31,13 +29,12 @@ object FileExport {
     ): Uri? {
         val safeName = normalizeName(fileName, mimeType)
         val mime = resolveMime(safeName, mimeType)
-        val rel = relativePathFor(safeName, mime)
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, safeName)
                     put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, rel)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant")
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
                 val resolver = context.contentResolver
@@ -63,7 +60,7 @@ object FileExport {
             } else {
                 val dir = File(
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                    rel.removePrefix(Environment.DIRECTORY_DOCUMENTS + "/")
+                    "AdelAssistant"
                 )
                 if (!dir.exists()) dir.mkdirs()
                 val f = File(dir, safeName)
@@ -79,35 +76,6 @@ object FileExport {
     fun readAsCsvText(context: Context, csvName: String): String {
         val f = CsvStore.getFile(context, csvName)
         return if (f.exists()) f.readText() else ""
-    }
-
-    /**
-     * Documents/AdelAssistant/<زیرپوشه>
-     * dxf, txt, backup, tunel-report, letter, gsi, kml, pdf
-     */
-    fun relativePathFor(fileName: String, mimeType: String = ""): String {
-        val sub = subfolderFor(fileName, mimeType)
-        val base = Environment.DIRECTORY_DOCUMENTS + "/" + ROOT
-        return if (sub.isBlank()) base else "$base/$sub"
-    }
-
-    fun subfolderFor(fileName: String, mimeType: String = ""): String {
-        val n = fileName.lowercase().substringAfterLast('/').substringAfterLast(':')
-        val mime = mimeType.lowercase()
-        return when {
-            n.contains("survey_tunnel_report") ||
-                n.contains("tunel-report") ||
-                n.contains("tunnel_report") ||
-                Regex("""^b\d{4}\.xlsx$""").matches(n) -> "tunel-report"
-            n.startsWith("letter") || n.contains("letter") || n.contains("leter") -> "letter"
-            n.contains("backup") -> "backup"
-            n.endsWith(".dxf") || mime.contains("dxf") -> "dxf"
-            n.endsWith(".gsi") -> "gsi"
-            n.endsWith(".kml") || n.endsWith(".kmz") || mime.contains("google-earth") -> "kml"
-            n.endsWith(".pdf") || mime.contains("pdf") -> "pdf"
-            n.endsWith(".txt") -> "txt"
-            else -> ""
-        }
     }
 
     private fun normalizeName(fileName: String, mimeType: String): String {

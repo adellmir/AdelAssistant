@@ -15,10 +15,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -73,9 +72,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -202,16 +199,16 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
             ScreenTopBar(title = "نقاط تونل", color = color, onBack = onBack)
             Row(modifier = Modifier.align(Alignment.CenterEnd)) {
                 IconButton(onClick = { clearForm() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "رفرش", tint = Color(0xFFAAB697))
+                    Icon(Icons.Filled.Refresh, contentDescription = "رفرش", tint = Color(0xFFAAB697))
                 }
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                    Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
                 }
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
+                    importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
@@ -296,7 +293,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                                 isEditMode = true
                                 editingOriginalNo = p.pointNo
                             }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
                             }
                         }
                         Surface(

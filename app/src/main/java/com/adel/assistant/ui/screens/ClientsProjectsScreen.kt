@@ -9,9 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -96,22 +95,14 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                 modifier = Modifier.weight(1f)
             )
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { doSearch() }) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = "جستجو",
-                    tint = color
-                )
-            }
-        }
+        Spacer(Modifier.height(6.dp))
+        Button(
+            onClick = { doSearch() },
+            colors = ButtonDefaults.buttonColors(containerColor = color),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("جستجو") }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             listOf("پروژه", "کارفرمایان").forEachIndexed { i, label ->
                 val selected = tab == i
@@ -138,7 +129,7 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
         if (!showList) {
             Text(
                 "سربرگ را بزن یا جستجو کن تا لیست نمایش داده شود",
@@ -167,14 +158,14 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                     color = TextPrimary
                                 )
                                 IconButton(onClick = { call(e.phone) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Outlined.Call, contentDescription = "تماس", tint = color)
+                                    Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
                                 }
                                 IconButton(onClick = {
                                     editEmployerOld = e.employer
                                     editEmpName = e.employer
                                     editEmpPhone = e.phone
                                 }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = TextSecondary)
+                                    Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = TextSecondary)
                                 }
                             }
                             Text(
@@ -209,7 +200,7 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                     Text(p.employer, color = TextSecondary, fontSize = 12.sp)
                                 }
                                 IconButton(onClick = { call(p.phone) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Outlined.Call, contentDescription = "تماس", tint = color)
+                                    Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
                                 }
                             }
                             Text(

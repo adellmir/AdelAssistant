@@ -1,7 +1,5 @@
 package com.adel.assistant.ui.screens
 
-import com.adel.assistant.data.CalendarStore
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -92,13 +90,12 @@ private fun OverallStatus(context: android.content.Context) {
 
 @Composable
 private fun RangeStatus(context: android.content.Context, color: Color) {
-    val todayJ = remember { CalendarStore.todayJalali() }
-    var fromDay by remember { mutableStateOf("1") }
-    var fromMonth by remember { mutableStateOf("1") }
-    var fromYear by remember { mutableStateOf(todayJ.first.toString()) }
-    var toDay by remember { mutableStateOf(todayJ.third.toString()) }
-    var toMonth by remember { mutableStateOf(todayJ.second.toString()) }
-    var toYear by remember { mutableStateOf(todayJ.first.toString()) }
+    var fromDay by remember { mutableStateOf("") }
+    var fromMonth by remember { mutableStateOf("") }
+    var fromYear by remember { mutableStateOf("1405") }
+    var toDay by remember { mutableStateOf("") }
+    var toMonth by remember { mutableStateOf("") }
+    var toYear by remember { mutableStateOf("1405") }
     var results by remember { mutableStateOf(listOf<String>()) }
 
     Column {

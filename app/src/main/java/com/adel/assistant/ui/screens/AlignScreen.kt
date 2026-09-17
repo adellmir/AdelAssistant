@@ -74,14 +74,10 @@ fun AlignScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    val pickRef = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val pickRef = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadPoints(uri, true)
     }
-    val pickSrc = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val pickSrc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadPoints(uri, false)
     }
 
@@ -156,12 +152,12 @@ fun AlignScreen(color: Color, onBack: () -> Unit) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
-                onClick = { pickRef.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*", "text/*")) },
+                onClick = { pickRef.launch(arrayOf("*/*", "text/*")) },
                 colors = ButtonDefaults.buttonColors(containerColor = color),
                 modifier = Modifier.weight(1f)
             ) { Text("فایل مرجع (${refPoints.size})") }
             OutlinedButton(
-                onClick = { pickSrc.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*", "text/*")) },
+                onClick = { pickSrc.launch(arrayOf("*/*", "text/*")) },
                 modifier = Modifier.weight(1f)
             ) { Text("فایل برداشت (${srcPoints.size})") }
         }

@@ -10,12 +10,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,28 +70,30 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
 
-    // فقط وقتی خود کاربر سمت را وارد کرد: شماره نقطه و طول را پیش‌بینی کن
+    // با تغییر شفت: آخرین سمت ثبت‌شده همان شفت را پیش‌فرض کن
+    LaunchedEffect(shaft) {
+        if (shaft.isNotBlank() && editingIndex < 0) {
+            val last = TunnelReportStore.allEntries(context)
+                .filter { it.shaft == shaft }
+                .maxByOrNull { it.dateSortKey }
+            if (last != null && side.isBlank()) {
+                side = last.side
+            }
+        }
+    }
     LaunchedEffect(shaft, side) {
         if (shaft.isNotBlank() && side.isNotBlank() && editingIndex < 0) {
             val suggested = TunnelReportStore.suggestedNextPointNo(context, shaft, side)
             if (suggested != null) {
+                // Store خودش برای کمتر last-1 و برای بیشتر last+1 می‌دهد
                 pointNo = suggested.toString()
-            }
-            val last = TunnelReportStore.allEntries(context)
-                .filter { it.key == "$shaft-${com.adel.assistant.data.normalizeSide(side)}" }
-                .maxByOrNull { it.dateSortKey }
-            if (last != null && length.isBlank()) {
-                val lastLen = last.lengthCm
-                length = if (kotlin.math.abs(lastLen - lastLen.toLong()) < 1e-9)
-                    lastLen.toLong().toString() else lastLen.toString()
             }
         }
     }
 
     val weekday = remember(day, month) { CalendarStore.weekdayFor(context, day, month) }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -181,12 +182,12 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Box {
             ScreenTopBar(title = "گزارش روزانه", color = color, onBack = onBack)
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
+                    importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
@@ -211,7 +212,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { loadDay() }) {
-                Icon(Icons.Outlined.Search, contentDescription = "نمایش گزارش این روز", tint = color)
+                Icon(Icons.Filled.Search, contentDescription = "نمایش گزارش این روز", tint = color)
             }
         }
         if (weekday != null) {
@@ -247,7 +248,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { addOrUpdateRow() }) {
-                Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
+                Icon(Icons.Filled.Add, contentDescription = "افزودن", tint = color)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -285,13 +286,13 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                             )
                             IconButton(onClick = { startEdit(i) }, modifier = Modifier.size(24.dp)) {
                                 Icon(
-                                    Icons.Outlined.Edit, contentDescription = "ویرایش",
+                                    Icons.Filled.Edit, contentDescription = "ویرایش",
                                     tint = Color(0xFF7C8A6B), modifier = Modifier.size(14.dp)
                                 )
                             }
                             IconButton(onClick = { deleteRow(i) }, modifier = Modifier.size(24.dp)) {
                                 Icon(
-                                    Icons.Outlined.Delete, contentDescription = "پاک کردن",
+                                    Icons.Filled.Delete, contentDescription = "پاک کردن",
                                     tint = Color(0xFFC2685E), modifier = Modifier.size(14.dp)
                                 )
                             }

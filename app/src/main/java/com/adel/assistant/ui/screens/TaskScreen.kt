@@ -11,11 +11,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,11 +63,8 @@ fun TaskScreen(
     }
 
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val uri = result.data?.data
-        if (uri == null) return@rememberLauncherForActivityResult
-        // uri selected
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
         if (uri != null) {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
                 tasks = TaskStore.importRaw(context, storeName, reader.readText())
@@ -86,7 +82,7 @@ fun TaskScreen(
             }
             Box {
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "تنظیمات", tint = color)
+                    Icon(Icons.Filled.Settings, contentDescription = "تنظیمات", tint = color)
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     DropdownMenuItem(
@@ -95,7 +91,7 @@ fun TaskScreen(
                     )
                     DropdownMenuItem(
                         text = { Text("📂 بارگذاری از CSV") },
-                        onClick = { showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/csv", "text/plain", "text/*")) }
+                        onClick = { showMenu = false; importLauncher.launch(arrayOf("text/csv", "text/plain", "text/*")) }
                     )
                     DropdownMenuItem(
                         text = { Text(if (showCompleted) "مخفی کردن انجام‌شده‌ها" else "نمایش انجام‌شده‌ها") },
@@ -137,7 +133,7 @@ fun TaskScreen(
                 },
                 containerColor = color,
                 contentColor = Color.White
-            ) { Icon(Icons.Outlined.Add, contentDescription = "افزودن") }
+            ) { Icon(Icons.Filled.Add, contentDescription = "افزودن") }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -181,7 +177,7 @@ fun TaskScreen(
                                     editText = task.title
                                 }
                             }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
                             }
                             IconButton(onClick = {
                                 if (originalIndex >= 0) {
@@ -190,7 +186,7 @@ fun TaskScreen(
                                     persist(updated)
                                 }
                             }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = Color(0xFFB3261E))
+                                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFB3261E))
                             }
                         }
                     }

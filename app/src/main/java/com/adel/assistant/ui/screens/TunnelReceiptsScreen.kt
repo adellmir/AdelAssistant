@@ -8,9 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
@@ -26,7 +25,6 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
-import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.TextPrimary
@@ -54,9 +52,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
 
     val nextEmpty = list.firstOrNull { it.receiveAmount == null }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -97,11 +93,11 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
         Box {
             ScreenTopBar(title = "دریافتی‌های تونل", color = color, onBack = onBack)
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Outlined.Settings, null, tint = Color(0xFFAAB697))
+                Icon(Icons.Filled.Settings, null, tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن CSV") }, onClick = {
-                    showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
+                    showMenu = false; importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false
@@ -134,7 +130,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
             OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
                 keyboardOptions = numKb)
         }
-        OutlinedTextField(value = amount, onValueChange = { amount = formatGroupedNumericInput(it) }, label = { Text("مبلغ دریافتی") }, modifier = Modifier.fillMaxWidth(),
+        OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ دریافتی") }, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = numKb)
         OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 
@@ -176,7 +172,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
                             refresh()
                             statusMsg = "دریافت حذف شد"
                         }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Outlined.Delete, null, tint = Color(0xFFC2685E))
+                            Icon(Icons.Filled.Delete, null, tint = Color(0xFFC2685E))
                         }
                     }
                 }

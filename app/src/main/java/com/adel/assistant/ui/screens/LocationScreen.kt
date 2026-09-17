@@ -1,8 +1,5 @@
 package com.adel.assistant.ui.screens
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -24,7 +21,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.ui.ScreenTopBar
-import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 import com.adel.assistant.ui.theme.TextMuted
@@ -143,11 +139,11 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             OutlinedButton(
                 onClick = { status = "ذخیره شد: " + exportTxt().absolutePath },
                 modifier = Modifier.weight(1f)
-            ) { Icon(Icons.Outlined.Description, null); Spacer(Modifier.width(4.dp)); Text("TXT") }
+            ) { Text("خروجی TXT") }
             OutlinedButton(
                 onClick = { status = "ذخیره شد: " + exportKml().absolutePath },
                 modifier = Modifier.weight(1f)
-            ) { Icon(Icons.Outlined.Map, null); Spacer(Modifier.width(4.dp)); Text("KML") }
+            ) { Text("خروجی KML") }
         }
     }
 }

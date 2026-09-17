@@ -10,11 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.AddComment
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.Send
-import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -82,8 +81,7 @@ fun AssistantScreen(
         AssistantChatStore.addMessage(context, activeChat.id, line.fromUser, line.text)
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':')
                 ?: "فایل انتخاب‌شده"
@@ -193,7 +191,7 @@ fun AssistantScreen(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Icon(
-                    Icons.Outlined.AddComment,
+                    Icons.Filled.AddComment,
                     contentDescription = "چت جدید",
                     modifier = Modifier.size(18.dp)
                 )
@@ -249,7 +247,7 @@ fun AssistantScreen(
                             if (!line.fromUser) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Icons.Outlined.SmartToy,
+                                        Icons.Filled.SmartToy,
                                         contentDescription = null,
                                         tint = color,
                                         modifier = Modifier.size(16.dp)
@@ -308,11 +306,11 @@ fun AssistantScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(
-                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*")) },
+                onClick = { filePicker.launch("*/*") },
                 enabled = !sending
             ) {
                 Icon(
-                    Icons.Outlined.AttachFile,
+                    Icons.Filled.AttachFile,
                     contentDescription = "انتخاب فایل",
                     tint = color
                 )
@@ -340,7 +338,7 @@ fun AssistantScreen(
                 )
             ) {
                 Icon(
-                    Icons.Outlined.Send,
+                    Icons.Filled.Send,
                     contentDescription = "ارسال",
                     tint = Color.White
                 )

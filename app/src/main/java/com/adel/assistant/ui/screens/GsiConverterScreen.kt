@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import java.io.BufferedReader
@@ -89,7 +88,34 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun saveFile(fileName: String, body: String, mime: String = "text/plain"): Boolean {
-        return FileExport.exportTextToDocuments(context, fileName, body, mime) != null
+        return try {
+            val bytes = body.toByteArray(Charsets.UTF_8)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant"
+                    )
+                }
+                val outUri = context.contentResolver.insert(
+                    MediaStore.Files.getContentUri("external"), values
+                ) ?: return false
+                context.contentResolver.openOutputStream(outUri)?.use { it.write(bytes) } ?: return false
+                true
+            } else {
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "AdelAssistant"
+                )
+                if (!dir.exists()) dir.mkdirs()
+                FileOutputStream(File(dir, fileName)).use { it.write(bytes) }
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun export(kind: String) {

@@ -13,13 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
@@ -38,11 +37,9 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
-import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
-import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -94,9 +91,7 @@ fun ProjectRegisterScreen(
 
     BackHandler(enabled = editingRow != null) { clearForm() }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -217,12 +212,12 @@ fun ProjectRegisterScreen(
                 onClick = { showMenu = true },
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
-                Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
+                    importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
@@ -269,7 +264,7 @@ fun ProjectRegisterScreen(
         )
         OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = amount, onValueChange = { amount = formatGroupedNumericInput(it, allowDecimal = true) }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
+            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
                 keyboardOptions = numKb)
             OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
@@ -297,7 +292,9 @@ fun ProjectRegisterScreen(
             ) {
                 Text(if (editingRow != null) "ثبت ویرایش" else "ثبت")
             }
-            ToolbarIcon(Icons.Outlined.Search, "جستجو", color, onClick = { search() })
+            OutlinedButton(onClick = { search() }, modifier = Modifier.weight(1f)) {
+                Text("جستجو")
+            }
         }
 
         if (statusMsg.isNotBlank()) {
@@ -335,7 +332,7 @@ fun ProjectRegisterScreen(
                             modifier = Modifier.padding(top = 6.dp)
                         ) {
                             IconButton(onClick = { confirmCallFor = p }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Call, contentDescription = "تماس", tint = color)
+                                Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
@@ -364,13 +361,13 @@ fun ProjectRegisterScreen(
                                 phone = p.phone
                                 editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
                             }
                             IconButton(onClick = { onInvoice(listOf(p)) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.ReceiptLong, contentDescription = "فاکتور", tint = color)
+                                Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
                             }
                             IconButton(onClick = { confirmDeleteFor = p }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = Color(0xFFC2685E))
+                                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFC2685E))
                             }
                         }
                     }

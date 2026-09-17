@@ -4,8 +4,6 @@ import android.content.Context
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
-import com.adel.assistant.ai.tools.TaskTools
-import com.adel.assistant.ai.tools.SurveyTools
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.formatMoney
@@ -36,9 +34,7 @@ object AssistantAgent {
         val title: String = "",
         val store: String? = null,
         val index: Int = -1,
-        val choices: List<AgentChoice> = emptyList(),
-        val dueDate: String? = null,
-        val dueTime: String? = null
+        val choices: List<AgentChoice> = emptyList()
     )
     private var pending: Pending? = null
 
@@ -69,7 +65,6 @@ object AssistantAgent {
             navIntent(msg)?.let { return it }
         }
 
-        surveyIntent(context, msg)?.let { return it }
         taskIntent(context, msg)?.let { return it }
         statsIntent(context, msg)?.let { return it }
         if (hasAny(msg, listOf("امروز", "برنامه امروز", "کارهای امروز"))) return AgentReply(todayPlan(context))
@@ -107,21 +102,21 @@ object AssistantAgent {
                 }
                 if (store != null) {
                     pending = null
-                    return addTask(context, store, p.title, p.dueDate, p.dueTime)
+                    return addTask(context, store, p.title)
                 }
                 if (isBoth(msg) || msg == "__task_both") {
                     pending = null
-                    addTask(context, "tunnel_tasks", p.title, p.dueDate, p.dueTime)
-                    addTask(context, "project_tasks", p.title, p.dueDate, p.dueTime)
+                    addTask(context, "tunnel_tasks", p.title)
+                    addTask(context, "project_tasks", p.title)
                     return AgentReply("تسک «${p.title}» در هر دو بخش تونل و پروژه ثبت شد ✅")
                 }
                 val numeric = msg.toIntOrNull()
-                if (numeric == 1) { pending = null; return addTask(context, "tunnel_tasks", p.title, p.dueDate, p.dueTime) }
-                if (numeric == 2) { pending = null; return addTask(context, "project_tasks", p.title, p.dueDate, p.dueTime) }
+                if (numeric == 1) { pending = null; return addTask(context, "tunnel_tasks", p.title) }
+                if (numeric == 2) { pending = null; return addTask(context, "project_tasks", p.title) }
                 if (numeric == 3) {
                     pending = null
-                    addTask(context, "tunnel_tasks", p.title, p.dueDate, p.dueTime)
-                    addTask(context, "project_tasks", p.title, p.dueDate, p.dueTime)
+                    addTask(context, "tunnel_tasks", p.title)
+                    addTask(context, "project_tasks", p.title)
                     return AgentReply("تسک «${p.title}» در هر دو بخش تونل و پروژه ثبت شد ✅")
                 }
                 if (isCancel(msg)) { pending = null; return AgentReply("عملیات لغو شد.") }
@@ -129,10 +124,15 @@ object AssistantAgent {
             }
             PendingType.TASK_DELETE_CONFIRM -> {
                 if (isConfirm(msg)) {
-                    val category = if (p.store == "tunnel_tasks") "tunnel" else "project"
-                    val result = TaskTools.delete(context, category, p.title)
+                    val all = TaskStore.load(context, p.store!!)
+                    if (p.index in all.indices) {
+                        val removed = all.removeAt(p.index)
+                        TaskStore.save(context, p.store, all)
+                        pending = null
+                        return AgentReply("تسک «${removed.title}» حذف شد 🗑️")
+                    }
                     pending = null
-                    return AgentReply(if (result.success) "${result.message} 🗑️" else result.message)
+                    return AgentReply("تسک دیگر پیدا نشد.")
                 }
                 if (isCancel(msg)) { pending = null; return AgentReply("حذف لغو شد.") }
                 return AgentReply("برای حذف «${p.title}» تأیید یا لغو کن.", choices = listOf(AgentChoice("بله", "بله"), AgentChoice("لغو", "لغو")))
@@ -186,8 +186,6 @@ object AssistantAgent {
         .replace('ي','ی').replace('ى','ی').replace('ك','ک').replace('ۀ','ه')
         .replace('ة','ه').replace('ؤ','و').replace('إ','ا').replace('أ','ا')
         .replace('ـ',' ')
-        .replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4')
-        .replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9')
         .replace(Regex("[\u064B-\u065F\u0670]"), "")
         .replace('‌',' ')
         .replace(Regex("[،؛؟!,.:/\\|()\\[\\]{}\"'`~]"), " ")
@@ -295,50 +293,6 @@ object AssistantAgent {
         return choiceReply("برای «${ts.joinToString(" ")}» چند مقصد پیدا کردم؛ کدام را باز کنم؟", choices)
     }
 
-
-    /** درخواست‌های داده‌برداری/نقاط تونل را مستقیماً از Store واقعی پاسخ می‌دهد. */
-    private fun surveyIntent(context: Context, msg: String): AgentReply? {
-        val hasSurveyWord = hasAny(msg, listOf("نقطه", "پوینت", "کیلومتر", "کیلومتراژ", "چینج", "chainage", "برداشت"))
-        if (!hasSurveyWord) return null
-
-        val range = Regex("(?:از\\s*)?(\\d+(?:\\.\\d+)?)\\s*(?:تا|الی|-|\\.\\.)\\s*(\\d+(?:\\.\\d+)?)").find(msg)
-        if (range != null && hasAny(msg, listOf("بازه", "بین", "از", "تا", "الی"))) {
-            val a = range.groupValues[1].toDoubleOrNull()
-            val b = range.groupValues[2].toDoubleOrNull()
-            if (a != null && b != null) {
-                val r = SurveyTools.findByRange(context, a, b)
-                return AgentReply(r.message)
-            }
-        }
-
-        val kmMatch = Regex("(?:کیلومتر|کیلومتراژ|چینج|chainage|km)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)").find(msg)
-            ?: Regex("نقطه\\s+(\\d+(?:\\.\\d+)?)").find(msg)?.takeIf { hasAny(msg, listOf("کیلومتر", "کیلومتراژ", "چینج")) }
-        if (kmMatch != null) {
-            val km = kmMatch.groupValues[1].toDoubleOrNull()
-            if (km != null) {
-                val r = SurveyTools.findByChainage(context, km)
-                return AgentReply(r.message)
-            }
-        }
-
-        val noMatch = Regex("(?:نقطه|پوینت)\\s*(?:شماره\\s*)?([A-Za-zآ-ی0-9._-]+)").find(msg)
-        if (noMatch != null) {
-            val q = noMatch.groupValues[1]
-            if (q.any { it.isDigit() || it.isLetter() || it in 'آ'..'ی' }) {
-                val r = SurveyTools.findByName(context, q)
-                return AgentReply(r.message)
-            }
-        }
-
-        val keyword = msg.replace(Regex("\\b(نقطه|پوینت|برداشت|جستجو|پیدا|کن|رو|را)\\b"), " ")
-            .replace(Regex("\\s+"), " ").trim()
-        if (hasAny(msg, listOf("جستجو", "پیدا کن", "نوع", "شرح")) && keyword.isNotBlank()) {
-            val r = SurveyTools.search(context, keyword)
-            return AgentReply(r.message)
-        }
-        return null
-    }
-
     private fun categoryStore(msg: String): String? = when {
         hasAny(msg, listOf("تونل","tunnel")) && !hasAny(msg, listOf("پروژه","project")) -> "tunnel_tasks"
         hasAny(msg, listOf("پروژه","project")) && !hasAny(msg, listOf("تونل","tunnel")) -> "project_tasks"
@@ -381,9 +335,8 @@ object AssistantAgent {
                 val all = TaskStore.load(context,s)
                 val i = all.indexOfFirst { !it.completed && it.title.contains(title, true) }
                 if (i >= 0) {
-                    val category = if (s == "tunnel_tasks") "tunnel" else "project"
-                    val result = TaskTools.complete(context, category, all[i].title)
-                    return AgentReply(if (result.success) "${result.message} ✅" else result.message)
+                    all[i] = all[i].copy(completed = true); TaskStore.save(context,s,all)
+                    return AgentReply("تسک «${all[i].title}» انجام‌شده شد ✅")
                 }
             }
             return AgentReply("تسک باز با این عنوان پیدا نشد.")
@@ -393,57 +346,27 @@ object AssistantAgent {
             val title = extractCreateTitle(msg)
             if (title.isBlank()) return AgentReply("عنوان تسک را بگو؛ مثلاً «برای تونل تسک برداشت مقطع ثبت کن». ")
             if (store == null) {
-                pending = Pending(
-                    type = PendingType.TASK_CATEGORY,
-                    title = title,
-                    dueDate = extractDueDate(msg),
-                    dueTime = extractDueTime(msg)
-                )
+                pending = Pending(PendingType.TASK_CATEGORY, title)
                 return AgentReply("تسک «$title» آماده است. برای تونل ثبت شود یا پروژه؟")
             }
-            return addTask(context, store, title, extractDueDate(msg), extractDueTime(msg))
+            return addTask(context,store,title)
         }
 
         return AgentReply(taskStats(context,store))
     }
 
-    private fun addTask(
-        context: Context,
-        store: String,
-        title: String,
-        dueDate: String? = null,
-        dueTime: String? = null
-    ): AgentReply {
-        val category = if (store == "tunnel_tasks") "tunnel" else "project"
-        val result = TaskTools.create(context, category, title, dueDate, dueTime)
-        return AgentReply(if (result.success) "${result.message} ✅" else result.message)
+    private fun addTask(context: Context, store: String, title: String): AgentReply {
+        val all = TaskStore.load(context,store)
+        all.add(0,TaskItem(title=title)); TaskStore.save(context,store,all)
+        return AgentReply("تسک «$title» در بخش ${if(store=="tunnel_tasks") "تونل" else "پروژه"} ثبت شد ✅")
     }
 
     private fun extractCreateTitle(msg: String): String {
         var s = msg
-        listOf(
-            "برای تونل", "برای پروژه", "تسک", "جدید", "ثبت کن", "اضافه کن",
-            "ایجاد کن", "بساز", "فردا", "امروز", "پس فردا", "پسفردا"
-        ).forEach { s = s.replace(it, " ") }
-        s = s.replace(Regex("\\s+"), " ").trim().trim(':','-',' ')
+        listOf("برای تونل","برای پروژه","تسک","جدید","ثبت کن","اضافه کن","ایجاد کن","بساز","فردا","امروز","پس فردا").forEach { s=s.replace(it," ") }
+        s=s.replace(Regex("\\s+")," ").trim().trim(':','-',' ')
         return s.take(160)
     }
-
-    private fun extractDueDate(msg: String): String? = when {
-        hasAny(msg, listOf("پس فردا", "پسفردا")) -> "پس فردا"
-        hasAny(msg, listOf("فردا")) -> "فردا"
-        hasAny(msg, listOf("امروز")) -> "امروز"
-        else -> null
-    }
-
-    private fun extractDueTime(msg: String): String? {
-        val match = Regex("(?:ساعت\\s*)?(\\d{1,2})(?::(\\d{2}))?").find(msg) ?: return null
-        val hour = match.groupValues[1].toIntOrNull() ?: return null
-        if (hour !in 0..23) return null
-        val minute = match.groupValues.getOrNull(2)?.ifBlank { "00" } ?: "00"
-        return "%02d:%s".format(hour, minute)
-    }
-
     private fun extractActionTitle(msg: String, markers: List<String>): String {
         var s=msg
         markers.forEach { s=s.replace(it," ") }

@@ -92,9 +92,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { importZip(it.readBytes()) }
@@ -138,7 +136,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("خروجی یکجا + اشتراک") }
                 OutlinedButton(
-                    onClick = { importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("application/zip", "*/*")) },
+                    onClick = { importLauncher.launch(arrayOf("application/zip", "*/*")) },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("ورود یکجا از فایل ZIP") }
             }

@@ -6,11 +6,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -70,7 +68,7 @@ fun ProjectEventsScreen(color: Color, onBack: () -> Unit) {
                                 editingRow = p.row
                                 editText = p.description
                             }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
                             }
                         }
                         if (editingRow == p.row) {

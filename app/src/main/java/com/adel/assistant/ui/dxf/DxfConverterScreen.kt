@@ -11,9 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,9 +49,8 @@ fun DxfConverterScreen(onBack: () -> Unit) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val uri = result.data?.data
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
         if (uri != null) {
             try {
                 val name = getFileName(context, uri) ?: "points.dat"
@@ -143,7 +141,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(modifier = Modifier.height(40.dp))
-                    Icon(Icons.Outlined.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
+                    Icon(Icons.Default.UploadFile, null, tint = ToolPrimary, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "فایل نقاط را انتخاب کنید",
@@ -158,7 +156,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
-                        onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("*/*")) },
+                        onClick = { filePicker.launch(arrayOf("*/*")) },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary)
@@ -192,7 +190,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Icon(Icons.Outlined.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
+                    Icon(Icons.Default.CheckCircle, null, tint = ToolPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "DXF ساخته شد",
