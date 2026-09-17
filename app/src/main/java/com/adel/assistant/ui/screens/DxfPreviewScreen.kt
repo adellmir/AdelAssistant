@@ -39,9 +39,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.*
-import com.adel.assistant.data.FileExport
-import com.adel.assistant.data.GsiParser
-import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -90,8 +87,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var mapInitialized by remember { mutableStateOf(false) }
     var pickCoordinateMode by remember { mutableStateOf(false) }
     var pickedPoints by remember { mutableStateOf<List<PickedPoint>>(emptyList()) }
-    var selectedPointIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    var showExportMenu by remember { mutableStateOf(false) }
     var nextPointId by remember { mutableStateOf(1) }
     var showPointsDialog by remember { mutableStateOf(false) }
     var editingPointId by remember { mutableStateOf<Int?>(null) }
@@ -284,15 +279,15 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             onDrag = { change: PointerInputChange, dragAmount: Offset ->
                                 change.consume()
                                 val s = scale.toDouble().coerceAtLeast(1e-9)
-                                val dx = dragAmount.x.toDouble() / s
-                                val dy = (-dragAmount.y).toDouble() / s
-                                pickedPoints = pickedPoints.map { pt ->
-                                    if (pt.id != id) pt
+                                val dxv = dragAmount.x.toDouble() / s
+                                val dyv = (-dragAmount.y).toDouble() / s
+                                pickedPoints = pickedPoints.map { p ->
+                                    if (p.id != id) p
                                     else {
-                                        val e = pt.easting + dx
-                                        val n = pt.northing + dy
+                                        val e = p.easting + dxv
+                                        val n = p.northing + dyv
                                         val ll = UtmGeo.toLatLon(e, n, zone)
-                                        pt.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
+                                        p.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
                                     }
                                 }
                             },
@@ -315,9 +310,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                     if (pickCoordinateMode) {
                                         val p = screenToWorld(tap.x, tap.y)
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
-                                        val nid = nextPointId
-                                        pickedPoints = pickedPoints + PickedPoint(nid, p.first, p.second, lat, lon)
-                                        selectedPointIds = selectedPointIds + nid
+                                        pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
                                         nextPointId++
                                         pickCoordinateMode = false
                                         showPointsDialog = true
@@ -565,58 +558,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("مختصات (${pickedPoints.size})", Modifier.weight(1f))
-                    Box {
-                        IconButton(
-                            onClick = { showExportMenu = true },
-                            enabled = pickedPoints.isNotEmpty()
-                        ) {
-                            Icon(Icons.Filled.Download, "خروجی")
-                        }
-                        DropdownMenu(expanded = showExportMenu, onDismissRequest = { showExportMenu = false }) {
-                            fun exportSelected(kind: String) {
-                                val list = if (selectedPointIds.isEmpty()) pickedPoints
-                                else pickedPoints.filter { it.id in selectedPointIds }
-                                if (list.isEmpty()) {
-                                    message = "نقطه‌ای برای خروجی نیست"
-                                    showExportMenu = false
-                                    return
-                                }
-                                val gsi = list.map { GsiPoint(name = it.id.toString(), e = it.easting, n = it.northing, z = 0.0) }
-                                val nameBase = "map_points"
-                                val uri = when (kind) {
-                                    "txt" -> FileExport.exportTextToDocuments(context, "$nameBase.txt", GsiParser.toTxt(gsi))
-                                    "gsi" -> FileExport.exportTextToDocuments(context, "$nameBase.gsi", GsiParser.toGsi(gsi))
-                                    "dxf" -> FileExport.exportTextToDocuments(context, "$nameBase.dxf", GsiParser.toDxf(gsi), "application/dxf")
-                                    "kml" -> {
-                                        val kml = buildString {
-                                            appendLine("""<?xml version="1.0" encoding="UTF-8"?>""")
-                                            appendLine("""<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>$nameBase</name>""")
-                                            list.forEach { pt ->
-                                                appendLine("""<Placemark><name>${pt.id}</name>""")
-                                                appendLine(formatEn("<Point><coordinates>%.8f,%.8f,0</coordinates></Point>", pt.lon, pt.lat))
-                                                appendLine("</Placemark>")
-                                            }
-                                            appendLine("</Document></kml>")
-                                        }
-                                        FileExport.exportTextToDocuments(context, "$nameBase.kml", kml, "application/vnd.google-earth.kml+xml")
-                                    }
-                                    else -> null
-                                }
-                                message = if (uri != null) "خروجی $kind ذخیره شد (${list.size} نقطه)" else "خطا در خروجی $kind"
-                                showExportMenu = false
-                            }
-                            DropdownMenuItem(text = { Text("خروجی TXT") }, onClick = { exportSelected("txt") })
-                            DropdownMenuItem(text = { Text("خروجی GSI") }, onClick = { exportSelected("gsi") })
-                            DropdownMenuItem(text = { Text("خروجی DXF") }, onClick = { exportSelected("dxf") })
-                            DropdownMenuItem(text = { Text("خروجی KML") }, onClick = { exportSelected("kml") })
-                        }
-                    }
-                    IconButton(onClick = {
-                        if (selectedPointIds.isEmpty()) selectedPointIds = pickedPoints.map { it.id }.toSet()
-                        else selectedPointIds = emptySet()
-                    }, enabled = pickedPoints.isNotEmpty()) {
-                        Icon(Icons.Filled.DoneAll, "گزینش همه")
-                    }
                     IconButton(onClick = { pickCoordinateMode = true; showPointsDialog = false; message = "نقطه بعدی را روی نقشه انتخاب کن" }) {
                         Icon(Icons.Filled.Add, "نقطه جدید")
                     }
@@ -630,12 +571,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Checkbox(
-                                checked = p.id in selectedPointIds,
-                                onCheckedChange = { on ->
-                                    selectedPointIds = if (on) selectedPointIds + p.id else selectedPointIds - p.id
-                                }
-                            )
+                            Checkbox(checked = true, onCheckedChange = { })
                             Column(Modifier.weight(1f)) {
                                 Text("${p.id}: ${formatEn("X=%.3f  Y=%.3f", p.easting, p.northing)}", style = MaterialTheme.typography.bodySmall)
                             }
@@ -651,7 +587,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 showPointsDialog = false
                                 message = "ویرایش نقطه ${p.id}: انگشت را هرجای صفحه بگذار و بکش؛ نقطه همان فاصله حرکت می‌کند"
                             }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.Edit, "ویرایش", modifier = Modifier.size(18.dp)) }
-                            IconButton(onClick = { pickedPoints = pickedPoints.filterNot { it.id == p.id }; selectedPointIds = selectedPointIds - p.id }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.Delete, "حذف", modifier = Modifier.size(18.dp)) }
+                            IconButton(onClick = { pickedPoints = pickedPoints.filterNot { it.id == p.id } }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.Delete, "حذف", modifier = Modifier.size(18.dp)) }
                         }
                     }
                 }
@@ -780,7 +716,7 @@ private object SatelliteTileCache {
 private fun estimateZoom(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, screenW: Float): Int {
     val lonDiff = (maxLon - minLon).absoluteValue.coerceAtLeast(1e-7)
     val raw = ln((360.0 * screenW / 256.0) / lonDiff) / ln(2.0)
-    return raw.roundToInt().coerceIn(10, 19)
+    return raw.roundToInt().coerceIn(12, 20)
 }
 
 private fun latLonToTile(lat: Double, lon: Double, zoom: Int): Pair<Int, Int> {
@@ -809,7 +745,7 @@ private suspend fun fetchTile(url: String, fallbackUrl: String, x: Int, y: Int, 
                 readTimeout = 10000
                 instanceFollowRedirects = true
                 useCaches = true
-                setRequestProperty("User-Agent", "AdelAssistant/1.0 (Android)")
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                 setRequestProperty("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
             }
             if (conn.responseCode !in 200..299) continue
@@ -841,16 +777,26 @@ private suspend fun loadEsriTilesCached(
     val minY = min(aY, bY); val maxY = max(aY, bY)
     val coords = buildList {
         outer@ for (x in minX..maxX) for (y in minY..maxY) {
-            if (size >= 36) break@outer
+            if (size >= 64) break@outer
             add(x to y)
         }
     }
     val jobs = coords.map { (x, y) ->
         async(Dispatchers.IO) {
-            val key = "${baseMap.service}/$zoom/$x/$y"
-            val url = "https://services.arcgisonline.com/ArcGIS/rest/services/${baseMap.service}/MapServer/tile/$zoom/$y/$x"
-            val fallback = "https://server.arcgisonline.com/ArcGIS/rest/services/${baseMap.service}/MapServer/tile/$zoom/$y/$x"
-            fetchTile(url, fallback, x, y, zoom, key)
+            val key = "${baseMap.name}/$zoom/$x/$y"
+            // گوگل ماهواره کیفیت بهتر؛ اسری پشتیبان
+            val primary = when (baseMap) {
+                BaseMap.SATELLITE -> "https://mt1.google.com/vt/lyrs=s&x=$x&y=$y&z=$zoom"
+                BaseMap.STREET -> "https://mt1.google.com/vt/lyrs=m&x=$x&y=$y&z=$zoom"
+                BaseMap.TOPO -> "https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/$zoom/$y/$x"
+                else -> "https://mt1.google.com/vt/lyrs=s&x=$x&y=$y&z=$zoom"
+            }
+            val fallback = when (baseMap) {
+                BaseMap.SATELLITE -> "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x"
+                BaseMap.STREET -> "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/$zoom/$y/$x"
+                else -> "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x"
+            }
+            fetchTile(primary, fallback, x, y, zoom, key)
         }
     }
     jobs.awaitAll().filterNotNull()
