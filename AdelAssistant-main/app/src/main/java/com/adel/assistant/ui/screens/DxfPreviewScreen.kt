@@ -319,16 +319,22 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     .pointerInput(pickMode, editingPointId, scale, offset, drawings) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
                             if (pickMode) {
-                                // In pick/edit mode the marker follows the finger without
-                                // replacing the smooth map gesture detector.
+                                // Keep normal map navigation disabled while picking/editing.
+                                // In edit mode the same smooth pan delta moves the point,
+                                // allowing the finger to start away from the point.
                                 activePick = centroid
-                                if (editingPointId != null && pan != Offset.Zero) {
-                                    val id = editingPointId!!
+                                val id = editingPointId
+                                if (id != null && pan != Offset.Zero) {
+                                    val dx = pan.x.toDouble() / scale.toDouble()
+                                    val dy = -pan.y.toDouble() / scale.toDouble()
                                     pickedPoints = pickedPoints.map { point ->
                                         if (point.id == id) {
-                                            val dx = pan.x.toDouble() / scale.toDouble()
-                                            val dy = -pan.y.toDouble() / scale.toDouble()
-                                            point.copy(x = point.x + dx, y = point.y + dy, snapped = false, snapLabel = "")
+                                            point.copy(
+                                                x = point.x + dx,
+                                                y = point.y + dy,
+                                                snapped = false,
+                                                snapLabel = ""
+                                            )
                                         } else point
                                     }
                                 }
@@ -346,13 +352,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                     offset += pan
                                 }
                             }
-                        }
-                    }
-                    .pointerInput(pickMode, editingPointId, scale, offset) {
-                        if (pickMode && editingPointId == null) {
-                            detectTapGestures(
-                                onTap = { tap -> commitPicked(screenToWorld(tap.x, tap.y)) }
-                            )
                         }
                     }
                     .pointerInput(measureMode, scale, offset, pickMode) {
@@ -482,7 +481,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 icon = { Icon(Icons.Filled.Satellite, null) }, label = { Text("ماهواره") })
             NavigationBarItem(selected = pickMode, onClick = {
                 measureMode = false; distanceMsg = null; pickMode = true; activePick = null
-                message = "انگشت را روی نقشه بگذار و نقطه را بکش؛ با برداشتن انگشت ثبت می‌شود"
+                message = "برای ثبت نقطه روی نقشه لمس کن؛ برای ویرایش، انگشت را هرجا خواستی بگذار و بکش"
             }, icon = { Icon(Icons.Filled.AddLocationAlt, null) }, label = { Text("مختصات") })
         }
 
