@@ -16,10 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.input.pointer.awaitPointerEvent
-import androidx.compose.ui.input.pointer.awaitPointerEventScope
-import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -75,6 +72,7 @@ private data class SnapCandidate(val x: Double, val y: Double, val label: String
 @Composable
 fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
@@ -180,7 +178,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
-    fun snapThresholdPx(): Float = with(LocalDensity.current) { 44.8f * density }
+    fun snapThresholdPx(): Float = 44.8f * density.density
 
     fun pointToSegment(px: Double, py: Double, line: DxfLine): Pair<Double, Double> {
         val dx = line.x2 - line.x1
@@ -321,26 +319,21 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     .padding(bottom = 76.dp)
                     .pointerInput(pickMode, editingPointId, scale, offset, drawings) {
                         if (pickMode) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    activePick = down.position
-                                    var last = down.position
-                                    while (true) {
-                                        val event = awaitPointerEvent(PointerEventPass.Main)
-                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                        if (change.pressed) {
-                                            last = change.position
-                                            activePick = last
-                                            change.consume()
-                                        } else {
-                                            activePick = last
-                                            commitPicked(screenToWorld(last.x, last.y))
-                                            break
-                                        }
+                            detectDragGestures(
+                                onDragStart = { start ->
+                                    activePick = start
+                                },
+                                onDrag = { change, _ ->
+                                    activePick = change.position
+                                    change.consume()
+                                },
+                                onDragEnd = {
+                                    activePick?.let { last ->
+                                        commitPicked(screenToWorld(last.x, last.y))
                                     }
-                                }
-                            }
+                                },
+                                onDragCancel = { activePick = null }
+                            )
                         } else {
                             detectTransformGestures { centroid, pan, zoom, _ ->
                                 val oldScale = scale
@@ -473,7 +466,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
 
         NavigationBar(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            NavigationBarItem(selected = false, onClick = { openFile.launch(arrayOf("*/*")), pickMode = false },
+            NavigationBarItem(selected = false, onClick = { openFile.launch(arrayOf("*/*")); pickMode = false },
                 icon = { Icon(Icons.Filled.FolderOpen, null) }, label = { Text("فایل") })
             NavigationBarItem(selected = showDrawings, onClick = { showDrawings = true },
                 icon = { Icon(Icons.Filled.Map, null) }, label = { Text("نقشه‌ها") })
