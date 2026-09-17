@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adel.assistant.data.DwgDxfConverter
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import java.io.BufferedReader
@@ -45,6 +47,8 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     var editE by remember { mutableStateOf("") }
     var editN by remember { mutableStateOf("") }
     var editZ by remember { mutableStateOf("") }
+    var drawingDxf by remember { mutableStateOf<String?>(null) }
+    var drawingName by remember { mutableStateOf("") }
 
     val displayList = remember(points, newestFirst) {
         if (newestFirst) points.asReversed() else points
@@ -66,25 +70,44 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         } catch (_: Exception) {
         }
         try {
-            val text = context.contentResolver.openInputStream(uri)?.use { ins ->
-                BufferedReader(InputStreamReader(ins, Charsets.UTF_8)).readText()
-            } ?: ""
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
             val name = uri.lastPathSegment?.lowercase() ?: ""
-            val parsed = when {
-                name.endsWith(".gsi") ||
-                    text.trimStart().startsWith("*11") ||
-                    text.contains("81..") ||
-                    text.contains("81.") -> GsiParser.parse(text)
-                else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
+            val shortName = name.substringAfterLast('/').substringAfterLast(':')
+            val text = runCatching { String(bytes, Charsets.UTF_8) }.getOrDefault("")
+            when {
+                shortName.endsWith(".dwg") || shortName.endsWith(".dxf") ||
+                    text.trimStart().startsWith("0") && text.contains("SECTION") ||
+                    bytes.size >= 6 && String(bytes, 0, 6, Charsets.ISO_8859_1).startsWith("AC") -> {
+                    val conv = DwgDxfConverter.convert(bytes, shortName)
+                    drawingDxf = if (conv.ok) conv.dxf else null
+                    drawingName = shortName.substringAfterLast('.').let { ext ->
+                        shortName.removeSuffix(".$ext").ifBlank { "drawing" } + ".dxf"
+                    }.substringAfterLast('/')
+                    if (drawingName.isBlank() || !drawingName.endsWith(".dxf")) drawingName = "converted.dxf"
+                    points = emptyList()
+                    selectedIds = emptySet()
+                    status = conv.message
+                }
+                else -> {
+                    drawingDxf = null
+                    val parsed = when {
+                        shortName.endsWith(".gsi") ||
+                            text.trimStart().startsWith("*11") ||
+                            text.contains("81..") ||
+                            text.contains("81.") -> GsiParser.parse(text)
+                        else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
+                    }
+                    points = parsed
+                    selectedIds = parsed.map { it.id }.toSet()
+                    selectAll = true
+                    status = if (parsed.isEmpty()) "نقطه‌ای یافت نشد" else "${parsed.size} نقطه"
+                }
             }
-            points = parsed
-            selectedIds = parsed.map { it.id }.toSet()
-            selectAll = true
-            status = if (parsed.isEmpty()) "نقطه‌ای یافت نشد" else "${parsed.size} نقطه"
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
             points = emptyList()
             selectedIds = emptySet()
+            drawingDxf = null
         }
     }
 
@@ -193,6 +216,27 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 ) {
                     Text(if (newestFirst) "جدید→قدیم" else "قدیم→جدید")
                 }
+
+                Button(
+                    onClick = {
+                        val body = drawingDxf
+                        if (body.isNullOrBlank()) {
+                            status = "ابتدا فایل DWG یا DXF را باز کن"
+                            return@Button
+                        }
+                        val uriOut = FileExport.exportTextToDocuments(
+                            context,
+                            drawingName.ifBlank { "converted.dxf" },
+                            body,
+                            "application/dxf"
+                        )
+                        status = if (uriOut != null)
+                            "DXF در Documents/AdelAssistant ذخیره شد"
+                        else "خطا در ذخیره DXF"
+                    },
+                    enabled = drawingDxf != null,
+                    colors = ButtonDefaults.buttonColors(containerColor = color)
+                ) { Text("خروجی DXF نقشه") }
             }
 
             Spacer(Modifier.height(6.dp))
