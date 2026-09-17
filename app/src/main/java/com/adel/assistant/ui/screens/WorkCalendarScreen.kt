@@ -85,7 +85,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
 
         Spacer(modifier = Modifier.height(8.dp))
         // هدر ایام هفته شمسی (شنبه اول)
-        Row(Modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             WEEK_DAYS_FA.forEach { name ->
                 Text(
                     name,
@@ -96,7 +96,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                 )
             }
         }
-        Spacer(Modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         val firstOffset = remember(year, month) { CalendarStore.jalaliWeekdayIndex(year, month, 1) }
         val cellCount = firstOffset + monthLength
         val rows = (cellCount + 6) / 7
@@ -107,7 +107,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
             modifier = Modifier.height((48.dp * rows).coerceIn(288.dp, 432.dp))
         ) {
             items(firstOffset) {
-                Box(Modifier.aspectRatio(1f))
+                Box(modifier = Modifier.aspectRatio(1f))
             }
             items((1..monthLength).toList()) { d ->
                 val hasProject = markedDays.contains(d)
