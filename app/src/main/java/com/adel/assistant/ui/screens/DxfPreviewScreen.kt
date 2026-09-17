@@ -68,7 +68,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
     var zoneText by remember { mutableStateOf("40") }
-    var baseMap by remember { mutableStateOf(BaseMap.SATELLITE) }
+    var baseMap by remember { mutableStateOf(BaseMap.NONE) }
     var emptyMapColor by remember { mutableStateOf(Color(0xFF202124)) }
     var showEmptyColorPalette by remember { mutableStateOf(false) }
     var showBaseMapDialog by remember { mutableStateOf(false) }
@@ -156,7 +156,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 val (e, n) = UtmGeo.fromLatLon(loc.latitude, loc.longitude, zone)
                 myLoc = e to n
                 centerOnUtm(e, n, 17)
-                if (baseMap == BaseMap.NONE) baseMap = BaseMap.STREET
+                // پس‌زمینه ساده پیش‌فرض می‌ماند؛ کاربر خودش ماهواره/ترافیک را انتخاب می‌کند
                 message = "مرکز نقشه روی موقعیت من قرار گرفت"
             }
 

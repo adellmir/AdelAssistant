@@ -11,11 +11,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.ToolbarIcon
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -72,7 +74,9 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
         nameInput = ""; xInput = ""; yInput = ""; result = null; message = null
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { activityResult ->
+        val uri = activityResult.data?.data
+        // SAF starts at Documents/AdelAssistant
         if (uri != null) {
             runCatching {
                 val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -119,13 +123,13 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = color),
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("افزودن")
+                Icon(Icons.Outlined.Add, null); Spacer(Modifier.width(4.dp)); Text("افزودن")
             }
             OutlinedButton(
-                onClick = { filePicker.launch(arrayOf("text/*", "application/octet-stream", "*/*")) },
+                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/octet-stream", "*/*")) },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(4.dp)); Text("خواندن فایل")
+                Icon(Icons.Outlined.FolderOpen, null); Spacer(Modifier.width(4.dp)); Text("خواندن فایل")
             }
         }
 
@@ -154,7 +158,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.ContentPaste, null); Spacer(Modifier.width(4.dp)); Text("افزودن لیست")
+                Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(4.dp)); Text("افزودن لیست")
             }
             OutlinedButton(
                 onClick = {
@@ -181,29 +185,33 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                "لیست نقاط (${points.size}) — انتخاب‌شده: ${selectedKeys.size}",
+                "لیست (${points.size}/${selectedKeys.size})",
                 style = MaterialTheme.typography.titleSmall,
-                color = TextPrimary
+                color = TextPrimary,
+                modifier = Modifier.weight(1f)
             )
-            if (points.isNotEmpty()) {
-                TextButton(onClick = { newestFirst = !newestFirst }) {
-                    Text(if (newestFirst) "جدید→قدیم" else "قدیم→جدید")
-                }
+            // باز کردن | جدید→قدیم | انتخاب همه | گزینش(لغو)
+            IconButton(
+                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/octet-stream", "*/*")) }
+            ) { Icon(Icons.Outlined.FolderOpen, "بازکردن", tint = color) }
+            IconButton(onClick = { newestFirst = !newestFirst }, enabled = points.isNotEmpty()) {
+                Icon(
+                    if (newestFirst) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward,
+                    if (newestFirst) "جدید به قدیم" else "قدیم به جدید",
+                    tint = color
+                )
             }
-        }
-        if (points.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { selectedKeys = points.map { it.key }.toSet() }) {
-                    Text("انتخاب همه")
-                }
-                TextButton(onClick = { selectedKeys = emptySet() }) {
-                    Text("لغو انتخاب")
-                }
-            }
+            IconButton(
+                onClick = { selectedKeys = points.map { it.key }.toSet() },
+                enabled = points.isNotEmpty()
+            ) { Icon(Icons.Outlined.DoneAll, "انتخاب همه", tint = color) }
+            IconButton(
+                onClick = { selectedKeys = emptySet() },
+                enabled = selectedKeys.isNotEmpty()
+            ) { Icon(Icons.Outlined.Clear, "لغو گزینش", tint = color) }
         }
 
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -240,7 +248,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 editingKey = if (isEditing) null else point.key
                             }) {
-                                Icon(Icons.Default.Edit, contentDescription = "ویرایش", tint = color)
+                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
                             }
                             IconButton(onClick = {
                                 points = points.filter { it.key != point.key }
@@ -248,7 +256,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                                 if (editingKey == point.key) editingKey = null
                                 result = null
                             }) {
-                                Icon(Icons.Default.Delete, contentDescription = "حذف")
+                                Icon(Icons.Outlined.Delete, contentDescription = "حذف")
                             }
                         }
                         if (isEditing) {

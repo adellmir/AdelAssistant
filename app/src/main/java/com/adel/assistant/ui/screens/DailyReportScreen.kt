@@ -232,8 +232,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
-                value = side, onValueChange = { side = it }, label = { Text("سمت") },
-                modifier = Modifier.weight(1f)
+                value = side, onValueChange = { side = filterNumericInput(it) }, label = { Text("سمت") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

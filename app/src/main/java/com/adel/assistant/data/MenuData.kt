@@ -37,7 +37,7 @@ object AppMenu {
             MenuTab("تونل", listOf(
                 MenuItem("گزارش روزانه", Icons.Outlined.Assignment, Routes.SURVEY_TUNNEL_REPORT),
                 MenuItem("نقاط حفاری", Icons.Outlined.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
-                MenuItem("ثبت وقایع تونل", Icons.Outlined.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
+                MenuItem("نقاط تونل", Icons.Outlined.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
                 MenuItem("وضعیت", Icons.Outlined.Insights, Routes.SURVEY_TUNNEL_STATUS),
                 MenuItem("تسک‌ها", Icons.Outlined.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
             )),

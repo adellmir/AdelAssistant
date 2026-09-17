@@ -32,6 +32,8 @@ import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
+private val WEEK_DAYS_FA = listOf("شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه")
+
 private val PERSIAN_MONTHS = listOf(
     "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
     "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -82,12 +84,31 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        // هدر ایام هفته شمسی (شنبه اول)
+        Row(Modifier = Modifier.fillMaxWidth()) {
+            WEEK_DAYS_FA.forEach { name ->
+                Text(
+                    name,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color
+                )
+            }
+        }
+        Spacer(Modifier = Modifier.height(4.dp))
+        val firstOffset = remember(year, month) { CalendarStore.jalaliWeekdayIndex(year, month, 1) }
+        val cellCount = firstOffset + monthLength
+        val rows = (cellCount + 6) / 7
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.height((48.dp * ((monthLength + 6) / 7)).coerceIn(288.dp, 432.dp))
+            modifier = Modifier.height((48.dp * rows).coerceIn(288.dp, 432.dp))
         ) {
+            items(firstOffset) {
+                Box(Modifier.aspectRatio(1f))
+            }
             items((1..monthLength).toList()) { d ->
                 val hasProject = markedDays.contains(d)
                 val selected = selectedDay == d

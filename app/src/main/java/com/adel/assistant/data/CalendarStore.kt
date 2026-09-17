@@ -15,6 +15,24 @@ object CalendarStore {
     }
 
     /** نام روز هفته برای تاریخ شمسی — مستقل از CSV */
+    /** 0=شنبه … 6=جمعه — ترتیب هفتهٔ شمسی */
+    fun jalaliWeekdayIndex(jy: Int, jm: Int, jd: Int): Int {
+        if (jy <= 0 || jm !in 1..12 || jd <= 0) return 0
+        val (gy, gm, gd) = jalaliToGregorian(jy, jm, jd)
+        val cal = Calendar.getInstance()
+        cal.set(gy, gm - 1, gd)
+        return when (cal.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.SATURDAY -> 0
+            Calendar.SUNDAY -> 1
+            Calendar.MONDAY -> 2
+            Calendar.TUESDAY -> 3
+            Calendar.WEDNESDAY -> 4
+            Calendar.THURSDAY -> 5
+            Calendar.FRIDAY -> 6
+            else -> 0
+        }
+    }
+
     fun weekdayNameJalali(jy: Int, jm: Int, jd: Int): String {
         if (jy <= 0 || jm !in 1..12 || jd <= 0) return ""
         val (gy, gm, gd) = jalaliToGregorian(jy, jm, jd)
