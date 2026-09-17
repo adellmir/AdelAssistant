@@ -336,14 +336,33 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 canvasSize = Offset(size.width, size.height)
 
                 if (baseMap != BaseMap.NONE) {
-                    tiles.forEach { t ->
-                        val (e0, n0) = UtmGeo.fromLatLon(t.latNorth, t.lonWest, zone)
-                        val (e1, n1) = UtmGeo.fromLatLon(t.latSouth, t.lonEast, zone)
-                        val tl = worldToScreen(e0, n0); val br = worldToScreen(e1, n1)
-                        val w = (br.x - tl.x).roundToInt(); val h = (br.y - tl.y).roundToInt()
-                        if (w > 1 && h > 1) drawImage(t.image,
-                            dstOffset = androidx.compose.ui.unit.IntOffset(tl.x.roundToInt(), tl.y.roundToInt()),
-                            dstSize = androidx.compose.ui.unit.IntSize(w, h))
+                    tiles.forEach { tile ->
+                        // چهار گوشهٔ کاشی را به صفحه می‌بریم تا در UTM هم تراز بماند
+                        val (eNW, nNW) = UtmGeo.fromLatLon(tile.latNorth, tile.lonWest, zone)
+                        val (eNE, nNE) = UtmGeo.fromLatLon(tile.latNorth, tile.lonEast, zone)
+                        val (eSW, nSW) = UtmGeo.fromLatLon(tile.latSouth, tile.lonWest, zone)
+                        val (eSE, nSE) = UtmGeo.fromLatLon(tile.latSouth, tile.lonEast, zone)
+                        val cNW = worldToScreen(eNW, nNW)
+                        val cNE = worldToScreen(eNE, nNE)
+                        val cSW = worldToScreen(eSW, nSW)
+                        val cSE = worldToScreen(eSE, nSE)
+                        // min/max برای پوشش کامل + ۱ پیکسل همپوشانی تا خط سیاه بین کاشی‌ها نماند
+                        val left = minOf(cNW.x, cNE.x, cSW.x, cSE.x)
+                        val right = maxOf(cNW.x, cNE.x, cSW.x, cSE.x)
+                        val top = minOf(cNW.y, cNE.y, cSW.y, cSE.y)
+                        val bottom = maxOf(cNW.y, cNE.y, cSW.y, cSE.y)
+                        val dstLeft = kotlin.math.floor(left.toDouble()).toInt() - 1
+                        val dstTop = kotlin.math.floor(top.toDouble()).toInt() - 1
+                        val dstRight = kotlin.math.ceil(right.toDouble()).toInt() + 1
+                        val dstBottom = kotlin.math.ceil(bottom.toDouble()).toInt() + 1
+                        val w = (dstRight - dstLeft).coerceAtLeast(2)
+                        val h = (dstBottom - dstTop).coerceAtLeast(2)
+                        drawImage(
+                            image = tile.image,
+                            dstOffset = androidx.compose.ui.unit.IntOffset(dstLeft, dstTop),
+                            dstSize = androidx.compose.ui.unit.IntSize(w, h),
+                            filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                        )
                     }
                 }
 
@@ -773,11 +792,13 @@ private suspend fun loadEsriTilesCached(
     if (baseMap == BaseMap.NONE) return@coroutineScope emptyList()
     val (aX, aY) = latLonToTile(minLat, minLon, zoom)
     val (bX, bY) = latLonToTile(maxLat, maxLon, zoom)
-    val minX = min(aX, bX); val maxX = max(aX, bX)
-    val minY = min(aY, bY); val maxY = max(aY, bY)
+    val minX = (min(aX, bX) - 1).coerceAtLeast(0)
+    val maxX = max(aX, bX) + 1
+    val minY = (min(aY, bY) - 1).coerceAtLeast(0)
+    val maxY = max(aY, bY) + 1
     val coords = buildList {
         outer@ for (x in minX..maxX) for (y in minY..maxY) {
-            if (size >= 64) break@outer
+            if (size >= 80) break@outer
             add(x to y)
         }
     }
