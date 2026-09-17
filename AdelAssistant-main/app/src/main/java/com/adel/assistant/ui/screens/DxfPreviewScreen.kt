@@ -16,7 +16,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -69,13 +68,6 @@ private data class PickedMapPoint(
 
 private data class SnapCandidate(val x: Double, val y: Double, val label: String)
 
-private enum class BaseMap(val title: String, val tileUrl: String) {
-    NONE("پس‌زمینه خالی", ""),
-    SATELLITE("ماهواره‌ای", "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/%d/%d/%d"),
-    STREET("نقشه جاده‌ای / ترافیکی", "https://tile.openstreetmap.org/%d/%d/%d.png"),
-    TOPO("توپوگرافی", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/%d/%d/%d")
-}
-
 @Composable
 fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -84,10 +76,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
     var zoneText by remember { mutableStateOf("40") }
-    var baseMap by remember { mutableStateOf(BaseMap.NONE) }
-    var blankBackgroundColor by remember { mutableStateOf(Color(0xFF202124)) }
-    var showBaseMapDialog by remember { mutableStateOf(false) }
-    var tileReloadTrigger by remember { mutableStateOf(0) }
+    var satellite by remember { mutableStateOf(false) }
+    var showSatelliteDialog by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
@@ -187,7 +177,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
-    val snapThresholdPx = 44.8f * density.density
+    fun snapThresholdPx(): Float = 44.8f * density.density
 
     fun pointToSegment(px: Double, py: Double, line: DxfLine): Pair<Double, Double> {
         val dx = line.x2 - line.x1
@@ -211,7 +201,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
 
     fun nearestSnap(world: Pair<Double, Double>): SnapCandidate? {
         if (allModels.isEmpty()) return null
-        val thresholdWorld = snapThresholdPx / scale.toDouble()
+        val thresholdWorld = snapThresholdPx() / scale.toDouble()
         val px = world.first; val py = world.second
         var best: SnapCandidate? = null
         var bestD2 = thresholdWorld * thresholdWorld
@@ -253,21 +243,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
-    fun startPick(editId: Int? = null) {
-        showPointDialog = false
-        showExportMenu = false
-        editingPointId = editId
-        activePick = if (editId != null) {
-            pickedPoints.firstOrNull { it.id == editId }?.let { worldToScreen(it.x, it.y) }
-        } else null
-        measureMode = false
-        measureA = null
-        measureB = null
-        distanceMsg = null
-        pickMode = true
-        message = if (editId != null) "نقطه را جابه‌جا کن و انگشت را بردار" else "نقطه را روی نقشه بکش و با برداشتن انگشت ثبت کن"
-    }
-
     fun commitPicked(world: Pair<Double, Double>) {
         val point = makePoint(world)
         val editing = editingPointId
@@ -281,7 +256,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
         activePick = worldToScreen(point.x, point.y)
         pickMode = false
-        editingPointId = null
         showPointDialog = true
     }
 
@@ -312,12 +286,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         showExportMenu = false
     }
 
-    LaunchedEffect(baseMap, tileReloadTrigger, canvasSize, zone, drawings) {
-        if (baseMap == BaseMap.NONE || allModels.isEmpty() || canvasSize.x <= 0f) {
+    LaunchedEffect(satellite, scale, offset, canvasSize, zone, drawings) {
+        if (!satellite || allModels.isEmpty() || canvasSize.x <= 0f) {
             tiles = emptyList()
             return@LaunchedEffect
         }
-        delay(120)
+        delay(250)
         val corners = listOf(
             screenToWorld(0f, 0f), screenToWorld(canvasSize.x, 0f),
             screenToWorld(0f, canvasSize.y), screenToWorld(canvasSize.x, canvasSize.y)
@@ -326,9 +300,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         val minLat = latLon.minOf { it.first }; val maxLat = latLon.maxOf { it.first }
         val minLon = latLon.minOf { it.second }; val maxLon = latLon.maxOf { it.second }
         val z = estimateZoom(minLat, maxLat, minLon, maxLon, canvasSize.x)
-        tiles = withContext(Dispatchers.IO) {
-            loadBaseTilesCached(minLat, maxLat, minLon, maxLon, z, baseMap)
-        }
+        tiles = withContext(Dispatchers.IO) { loadEsriTilesCached(minLat, maxLat, minLon, maxLon, z) }
     }
 
     LaunchedEffect(fitTrigger, canvasSize) {
@@ -338,37 +310,49 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Background)) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = blankBackgroundColor
+            color = if (satellite) Color(0xFF111111) else Color(0xFF202124)
         ) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = 76.dp)
-                    .pointerInput(pickMode, editingPointId) {
-                        if (pickMode) {
-                            detectDragGestures(
-                                onDragStart = { start -> activePick = start },
-                                onDrag = { change, _ ->
-                                    activePick = change.position
-                                    change.consume()
-                                },
-                                onDragEnd = {
-                                    activePick?.let { last -> commitPicked(screenToWorld(last.x, last.y)) }
-                                },
-                                onDragCancel = { activePick = null }
-                            )
-                        } else {
-                            detectTransformGestures { centroid, pan, zoom, _ ->
+                    .pointerInput(pickMode, editingPointId, scale, offset, drawings) {
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            if (pickMode) {
+                                // In pick/edit mode the marker follows the finger without
+                                // replacing the smooth map gesture detector.
+                                activePick = centroid
+                                if (editingPointId != null && pan != Offset.Zero) {
+                                    val id = editingPointId!!
+                                    pickedPoints = pickedPoints.map { point ->
+                                        if (point.id == id) {
+                                            val dx = pan.x.toDouble() / scale.toDouble()
+                                            val dy = -pan.y.toDouble() / scale.toDouble()
+                                            point.copy(x = point.x + dx, y = point.y + dy, snapped = false, snapLabel = "")
+                                        } else point
+                                    }
+                                }
+                            } else {
                                 val oldScale = scale
                                 val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
-                                val factor = newScale / oldScale
-                                offset = Offset(
-                                    centroid.x - (centroid.x - offset.x) * factor + pan.x,
-                                    centroid.y - (centroid.y - offset.y) * factor + pan.y
-                                )
-                                scale = newScale
+                                if (newScale != oldScale) {
+                                    val factor = newScale / oldScale
+                                    offset = Offset(
+                                        centroid.x - (centroid.x - offset.x) * factor + pan.x,
+                                        centroid.y - (centroid.y - offset.y) * factor + pan.y
+                                    )
+                                    scale = newScale
+                                } else {
+                                    offset += pan
+                                }
                             }
-                            tileReloadTrigger++
+                        }
+                    }
+                    .pointerInput(pickMode, editingPointId, scale, offset) {
+                        if (pickMode && editingPointId == null) {
+                            detectTapGestures(
+                                onTap = { tap -> commitPicked(screenToWorld(tap.x, tap.y)) }
+                            )
                         }
                     }
                     .pointerInput(measureMode, scale, offset, pickMode) {
@@ -399,7 +383,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             ) {
                 canvasSize = Offset(size.width, size.height)
 
-                if (baseMap != BaseMap.NONE) {
+                if (satellite) {
                     tiles.forEach { t ->
                         val (e0, n0) = UtmGeo.fromLatLon(t.latNorth, t.lonWest, zone)
                         val (e1, n1) = UtmGeo.fromLatLon(t.latSouth, t.lonEast, zone)
@@ -411,26 +395,15 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
 
-                val viewLeft = min(screenToWorld(0f, 0f).first, screenToWorld(canvasSize.x, canvasSize.y).first)
-                val viewRight = max(screenToWorld(0f, 0f).first, screenToWorld(canvasSize.x, canvasSize.y).first)
-                val viewTop = max(screenToWorld(0f, 0f).second, screenToWorld(canvasSize.x, canvasSize.y).second)
-                val viewBottom = min(screenToWorld(0f, 0f).second, screenToWorld(canvasSize.x, canvasSize.y).second)
-                fun segmentVisible(x1: Double, y1: Double, x2: Double, y2: Double): Boolean {
-                    return max(x1, x2) >= viewLeft && min(x1, x2) <= viewRight &&
-                        max(y1, y2) >= viewBottom && min(y1, y2) <= viewTop
-                }
-
                 activeDrawings.forEach { drawing ->
                     val m = drawing.model
                     m.lines.forEach { ln ->
-                        if (!segmentVisible(ln.x1, ln.y1, ln.x2, ln.y2)) return@forEach
                         val layer = m.layers[ln.layer]
                         if (layer?.visible == false) return@forEach
                         val c = layer?.displayColor ?: DxfParser.aciToColor(if (ln.color in 1..255) ln.color else layer?.colorAci ?: 7)
                         drawLine(c, worldToScreen(ln.x1, ln.y1), worldToScreen(ln.x2, ln.y2), strokeWidth = 2.2f)
                     }
                     m.circles.forEach { c ->
-                        if (c.x + c.r < viewLeft || c.x - c.r > viewRight || c.y + c.r < viewBottom || c.y - c.r > viewTop) return@forEach
                         val layer = m.layers[c.layer]
                         if (layer?.visible == false) return@forEach
                         val col = layer?.displayColor ?: DxfParser.aciToColor(if (c.color in 1..255) c.color else layer?.colorAci ?: 7)
@@ -440,7 +413,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         drawLine(col, Offset(p.x,p.y-r), Offset(p.x,p.y+r), 1.8f)
                     }
                     m.texts.forEach { t ->
-                        if (t.x < viewLeft || t.x > viewRight || t.y < viewBottom || t.y > viewTop) return@forEach
                         val layer = m.layers[t.layer]
                         if (layer?.visible == false) return@forEach
                         val col = layer?.displayColor ?: DxfParser.aciToColor(if (t.color in 1..255) t.color else layer?.colorAci ?: 7)
@@ -506,10 +478,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 icon = { Icon(Icons.Filled.Map, null) }, label = { Text("نقشه‌ها") })
             NavigationBarItem(selected = showLayers, onClick = { showLayers = true },
                 icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
-            NavigationBarItem(selected = baseMap != BaseMap.NONE, onClick = { showBaseMapDialog = true },
-                icon = { Icon(Icons.Filled.LayersClear, null) }, label = { Text("پس‌زمینه") })
-            NavigationBarItem(selected = pickMode, onClick = { startPick() },
-                icon = { Icon(Icons.Filled.AddLocationAlt, null) }, label = { Text("مختصات") })
+            NavigationBarItem(selected = satellite, onClick = { if (satellite) satellite = false else showSatelliteDialog = true },
+                icon = { Icon(Icons.Filled.Satellite, null) }, label = { Text("ماهواره") })
+            NavigationBarItem(selected = pickMode, onClick = {
+                measureMode = false; distanceMsg = null; pickMode = true; activePick = null
+                message = "انگشت را روی نقشه بگذار و نقطه را بکش؛ با برداشتن انگشت ثبت می‌شود"
+            }, icon = { Icon(Icons.Filled.AddLocationAlt, null) }, label = { Text("مختصات") })
         }
 
         FloatingActionButton(
@@ -519,6 +493,24 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             containerColor = color,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp)
         ) { Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White) }
+
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+            IconButton(onClick = { showExportMenu = true }) {
+                Icon(Icons.Filled.Add, "افزودن/خروجی", tint = Color.White)
+            }
+            DropdownMenu(expanded = showExportMenu, onDismissRequest = { showExportMenu = false }) {
+                DropdownMenuItem(text = { Text("نمایش در نشان") }, onClick = { openSelectedInNeshan() }, enabled = pickedPoints.isNotEmpty())
+                DropdownMenuItem(text = { Text("حذف انتخاب‌شده‌ها") }, onClick = {
+                    pickedPoints = pickedPoints.filterNot { selectedPointIds.contains(it.id) }
+                    selectedPointIds = emptySet(); showExportMenu = false
+                    message = "نقاط انتخاب‌شده حذف شدند"
+                }, enabled = selectedPointIds.isNotEmpty())
+                HorizontalDivider()
+                DropdownMenuItem(text = { Text("خروجی DXF") }, onClick = { exportPoints("dxf") }, enabled = pickedPoints.isNotEmpty())
+                DropdownMenuItem(text = { Text("خروجی KML") }, onClick = { exportPoints("kml") }, enabled = pickedPoints.isNotEmpty())
+                DropdownMenuItem(text = { Text("خروجی TXT") }, onClick = { exportPoints("txt") }, enabled = pickedPoints.isNotEmpty())
+            }
+        }
 
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
             Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
@@ -532,32 +524,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text("مختصات (${pickedPoints.size})", modifier = Modifier.weight(1f))
-                    Box {
-                        IconButton(onClick = { showExportMenu = true }) {
-                            Icon(Icons.Filled.FileDownload, "خروجی")
-                        }
-                        DropdownMenu(
-                            expanded = showExportMenu,
-                            onDismissRequest = { showExportMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("خروجی DXF") },
-                                onClick = { exportPoints("dxf") },
-                                enabled = pickedPoints.isNotEmpty()
-                            )
-                            DropdownMenuItem(
-                                text = { Text("خروجی TXT") },
-                                onClick = { exportPoints("txt") },
-                                enabled = pickedPoints.isNotEmpty()
-                            )
-                            DropdownMenuItem(
-                                text = { Text("خروجی KML") },
-                                onClick = { exportPoints("kml") },
-                                enabled = pickedPoints.isNotEmpty()
-                            )
-                        }
-                    }
-                    IconButton(onClick = { startPick() }) {
+                    IconButton(onClick = { showPointDialog = false; editingPointId = null; pickMode = true; activePick = null }) {
                         Icon(Icons.Filled.Add, "افزودن نقطه")
                     }
                 }
@@ -568,56 +535,36 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     itemsIndexed(pickedPoints, key = { _, p -> p.id }) { index, point ->
                         val checked = selectedPointIds.contains(point.id)
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Checkbox(
-                                checked = checked,
-                                onCheckedChange = { v ->
-                                    selectedPointIds = if (v) selectedPointIds + point.id else selectedPointIds - point.id
-                                },
-                                modifier = Modifier.size(38.dp)
-                            )
-                            Text(
-                                "${index + 1}: E=${"%.3f".format(java.util.Locale.US, point.x)}  N=${"%.3f".format(java.util.Locale.US, point.y)}",
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            IconButton(
-                                onClick = {
-                                    val (lat, lon) = UtmGeo.toLatLon(point.x, point.y, zone)
-                                    try {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UtmGeo.neshanIntentUri(lat, lon))))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://nshn.ir/?lat=$lat&lng=$lon")))
-                                    }
-                                },
-                                modifier = Modifier.size(34.dp)
-                            ) { Icon(Icons.Filled.Navigation, "نمایش در نشان", modifier = Modifier.size(19.dp)) }
-                            IconButton(
-                                onClick = {
-                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val text = "E=${"%.3f".format(java.util.Locale.US, point.x)}\nN=${"%.3f".format(java.util.Locale.US, point.y)}\nZ=${"%.3f".format(java.util.Locale.US, point.z)}"
-                                    cm.setPrimaryClip(ClipData.newPlainText("مختصات", text))
-                                    message = "مختصات نقطه ${index + 1} کپی شد"
-                                },
-                                modifier = Modifier.size(34.dp)
-                            ) { Icon(Icons.Filled.ContentCopy, "کپی", modifier = Modifier.size(18.dp)) }
-                            IconButton(
-                                onClick = { startPick(point.id) },
-                                modifier = Modifier.size(34.dp)
-                            ) { Icon(Icons.Filled.Edit, "ویرایش", modifier = Modifier.size(18.dp)) }
-                            IconButton(
-                                onClick = {
-                                    pickedPoints = pickedPoints.filterNot { it.id == point.id }
-                                    selectedPointIds = selectedPointIds - point.id
-                                },
-                                modifier = Modifier.size(34.dp)
-                            ) { Icon(Icons.Filled.Delete, "پاک کردن", modifier = Modifier.size(18.dp)) }
+                            Checkbox(checked = checked, onCheckedChange = { v ->
+                                selectedPointIds = if (v) selectedPointIds + point.id else selectedPointIds - point.id
+                            })
+                            Column(Modifier.weight(1f)) {
+                                Text("${index + 1}. E=${"%.3f".format(java.util.Locale.US, point.x)}")
+                                Text("N=${"%.3f".format(java.util.Locale.US, point.y)}", style = MaterialTheme.typography.bodySmall)
+                                if (point.snapped) Text(point.snapLabel, style = MaterialTheme.typography.labelSmall, color = color)
+                            }
+                            IconButton(onClick = {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val text = "E=${"%.3f".format(java.util.Locale.US, point.x)}\nN=${"%.3f".format(java.util.Locale.US, point.y)}\nZ=${"%.3f".format(java.util.Locale.US, point.z)}"
+                                cm.setPrimaryClip(ClipData.newPlainText("مختصات", text))
+                                message = "مختصات نقطه ${index + 1} کپی شد"
+                            }) { Icon(Icons.Filled.ContentCopy, "کپی") }
+                            IconButton(onClick = {
+                                editingPointId = point.id; showPointDialog = false; pickMode = true; activePick = worldToScreen(point.x, point.y)
+                                message = "ویرایش نقطه ${index + 1}: آن را روی نقشه جابه‌جا کن"
+                            }) { Icon(Icons.Filled.Edit, "ویرایش") }
+                            IconButton(onClick = {
+                                pickedPoints = pickedPoints.filterNot { it.id == point.id }
+                                selectedPointIds = selectedPointIds - point.id
+                            }) { Icon(Icons.Filled.Delete, "پاک کردن") }
                         }
                         if (index < pickedPoints.lastIndex) HorizontalDivider()
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { startPick() }) { Text("+ نقطه") } },
+            confirmButton = {
+                TextButton(onClick = { showPointDialog = false; pickMode = true; activePick = null }) { Text("+") }
+            },
             dismissButton = { TextButton(onClick = { showPointDialog = false }) { Text("بستن") } }
         )
     }
@@ -644,68 +591,23 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
-    if (showBaseMapDialog) {
+    if (showSatelliteDialog) {
         AlertDialog(
-            onDismissRequest = { showBaseMapDialog = false },
-            title = { Text("پس‌زمینه نقشه") },
+            onDismissRequest = { showSatelliteDialog = false },
+            title = { Text("پس‌زمینه ماهواره‌ای") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BaseMap.values().forEach { b ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            RadioButton(
-                                selected = baseMap == b,
-                                onClick = {
-                                    baseMap = b
-                                    showBaseMapDialog = false
-                                    tileReloadTrigger++
-                                }
-                            )
-                            Text(b.title)
-                        }
-                    }
-                    if (baseMap == BaseMap.NONE) {
-                        Text("رنگ پس‌زمینه", style = MaterialTheme.typography.labelLarge)
-                        val palette = listOf(
-                            Color(0xFF101010), Color(0xFF202124), Color(0xFF263238), Color(0xFF37474F),
-                            Color(0xFF455A64), Color(0xFF5D4037), Color(0xFF374151), Color(0xFF1E3A5F),
-                            Color(0xFF334155), Color(0xFFF2F2F2)
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            palette.forEach { c ->
-                                IconButton(
-                                    onClick = { blankBackgroundColor = c },
-                                    modifier = Modifier.size(30.dp)
-                                ) {
-                                    Surface(
-                                        color = c,
-                                        shape = RoundedCornerShape(50),
-                                        modifier = Modifier.size(22.dp)
-                                    ) {}
-                                }
-                            }
-                        }
-                    }
-                    if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.STREET || baseMap == BaseMap.TOPO) {
-                        OutlinedTextField(
-                            value = zoneText,
-                            onValueChange = { zoneText = it.filter(Char::isDigit).take(2) },
-                            label = { Text("UTM Zone") },
-                            singleLine = true
-                        )
-                    }
-                    if (baseMap == BaseMap.STREET) {
-                        Text(
-                            "منبع نقشه جاده‌ای: OpenStreetMap",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("زون UTM نقشه را وارد کن. موقعیت و بزرگنمایی فعلی حفظ می‌شود.")
+                    OutlinedTextField(
+                        value = zoneText,
+                        onValueChange = { zoneText = it.filter(Char::isDigit).take(2) },
+                        label = { Text("UTM Zone") },
+                        singleLine = true
+                    )
                 }
             },
-            confirmButton = { TextButton(onClick = { showBaseMapDialog = false; tileReloadTrigger++ }) { Text("بستن") } }
+            confirmButton = { TextButton(onClick = { satellite = true; showSatelliteDialog = false }) { Text("نمایش") } },
+            dismissButton = { TextButton(onClick = { showSatelliteDialog = false }) { Text("لغو") } }
         )
     }
 
@@ -807,7 +709,7 @@ private object SatelliteTileCache {
 private fun estimateZoom(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, screenW: Float): Int {
     val lonDiff = (maxLon - minLon).absoluteValue.coerceAtLeast(1e-7)
     val raw = ln((360.0 * screenW / 256.0) / lonDiff) / ln(2.0)
-    return raw.roundToInt().coerceIn(12, 20)
+    return raw.roundToInt().coerceIn(14, 19)
 }
 
 private fun latLonToTile(lat: Double, lon: Double, zoom: Int): Pair<Int, Int> {
@@ -825,7 +727,7 @@ private fun tileToLatLon(x: Int, y: Int, zoom: Int): Pair<Double, Double> {
     return lat to lon
 }
 
-private fun loadBaseTilesCached(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int, baseMap: BaseMap): List<TileBmp> {
+private fun loadEsriTilesCached(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int): List<TileBmp> {
     val (aX, aY) = latLonToTile(minLat, minLon, zoom)
     val (bX, bY) = latLonToTile(maxLat, maxLon, zoom)
     val minX = min(aX, bX); val maxX = max(aX, bX)
@@ -834,12 +736,11 @@ private fun loadBaseTilesCached(minLat: Double, maxLat: Double, minLon: Double, 
     var count = 0
     for (x in minX..maxX) for (y in minY..maxY) {
         if (count >= 24) break
-        val key = "${baseMap.name}/$zoom/$x/$y"
+        val key = "$zoom/$x/$y"
         SatelliteTileCache.get(key)?.let { result += it; count++; return@let }
         try {
-            val conn = URL(String.format(baseMap.tileUrl, zoom, y, x)).openConnection() as HttpURLConnection
+            val conn = URL("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x").openConnection() as HttpURLConnection
             conn.connectTimeout = 3500; conn.readTimeout = 5000
-            conn.setRequestProperty("User-Agent", "AdelAssistant/1.0")
             conn.inputStream.use { input ->
                 val bmp = BitmapFactory.decodeStream(input) ?: return@use
                 val (latN, lonW) = tileToLatLon(x, y, zoom)
