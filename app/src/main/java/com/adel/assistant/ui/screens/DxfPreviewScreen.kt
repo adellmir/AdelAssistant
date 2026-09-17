@@ -13,8 +13,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -277,26 +279,27 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                     .pointerInput(editingPointId, scale) {
-                        if (editingPointId != null) {
-                            androidx.compose.foundation.gestures.detectDragGestures(
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    val id = editingPointId ?: return@detectDragGestures
-                                    val dx = dragAmount.x.toDouble() / scale.toDouble()
-                                    val dy = -dragAmount.y.toDouble() / scale.toDouble()
-                                    pickedPoints = pickedPoints.map { p ->
-                                        if (p.id != id) p
-                                        else {
-                                            val e = p.easting + dx
-                                            val n = p.northing + dy
-                                            val ll = UtmGeo.toLatLon(e, n, zone)
-                                            p.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
-                                        }
+                        val id = editingPointId ?: return@pointerInput
+                        detectDragGestures(
+                            onDrag = { change: PointerInputChange, dragAmount: Offset ->
+                                change.consume()
+                                val s = scale.toDouble().coerceAtLeast(1e-9)
+                                val dx = dragAmount.x.toDouble() / s
+                                val dy = (-dragAmount.y).toDouble() / s
+                                pickedPoints = pickedPoints.map { pt ->
+                                    if (pt.id != id) pt
+                                    else {
+                                        val e = pt.easting + dx
+                                        val n = pt.northing + dy
+                                        val ll = UtmGeo.toLatLon(e, n, zone)
+                                        pt.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
                                     }
-                                },
-                                onDragEnd = { message = "موقعیت نقطه تغییر کرد؛ برای پایان ویرایش دکمه تأیید را بزن" }
-                            )
-                        }
+                                }
+                            },
+                            onDragEnd = {
+                                message = "موقعیت نقطه تغییر کرد؛ برای پایان ویرایش دکمه تأیید را بزن"
+                            }
+                        )
                     }
                     .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId) {
                         if (editingPointId == null) {
