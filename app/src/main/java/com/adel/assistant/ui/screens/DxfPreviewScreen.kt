@@ -87,6 +87,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var distanceMsg by remember { mutableStateOf<String?>(null) }
+    var editingMeasureEnd by remember { mutableStateOf<Int?>(null) } // 1=A 2=B
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -308,6 +309,41 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             }
                         )
                     }
+                    .pointerInput(measureMode, measureA, measureB, scale, offset) {
+                        // ویرایش اندازه با کشیدن فاصله‌دار: نزدیک‌ترین سر اندازه را جابجا کن
+                        if (!measureMode || measureA == null || measureB == null) return@pointerInput
+                        detectDragGestures(
+                            onDragStart = { off ->
+                                val a = worldToScreen(measureA!!.first, measureA!!.second)
+                                val b = worldToScreen(measureB!!.first, measureB!!.second)
+                                val da = (off - a).getDistance()
+                                val db = (off - b).getDistance()
+                                editingMeasureEnd = when {
+                                    da < 48f && da <= db -> 1
+                                    db < 48f -> 2
+                                    else -> null
+                                }
+                            },
+                            onDrag = { change, dragAmount ->
+                                val end = editingMeasureEnd ?: return@detectDragGestures
+                                change.consume()
+                                val s = scale.toDouble().coerceAtLeast(1e-9)
+                                val dxv = dragAmount.x.toDouble() / s
+                                val dyv = (-dragAmount.y).toDouble() / s
+                                if (end == 1) {
+                                    measureA = (measureA!!.first + dxv) to (measureA!!.second + dyv)
+                                } else {
+                                    measureB = (measureB!!.first + dxv) to (measureB!!.second + dyv)
+                                }
+                                val d = DxfParser.horizontalDistance(
+                                    measureA!!.first, measureA!!.second,
+                                    measureB!!.first, measureB!!.second
+                                )
+                                distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
+                            },
+                            onDragEnd = { editingMeasureEnd = null }
+                        )
+                    }
                     .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId) {
                         if (editingPointId == null) {
                             detectTapGestures(
@@ -320,25 +356,32 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 },
                                 onTap = { tap ->
                                     if (pickCoordinateMode) {
-                                        val p = screenToWorld(tap.x, tap.y)
+                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val snapped = snapToFeature(raw.first, raw.second, allModels, scale)
+                                        val p = snapped ?: raw
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
                                         pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
                                         nextPointId++
-                                        pickCoordinateMode = false
-                                        showPointsDialog = true
-                                        message = "نقطه ثبت شد؛ برای ثبت نقطه بعدی + را بزن"
+                                        // حالت باز می‌ماند تا با ضربدر تمام شود؛ لیست حفظ می‌شود
+                                        message = "نقطه ${nextPointId - 1} ثبت شد (${pickedPoints.size} نقطه) — ضربدر = اتمام"
                                         return@detectTapGestures
                                     }
                                     if (!measureMode) return@detectTapGestures
-                                    val p = screenToWorld(tap.x, tap.y)
-                                    if (measureA == null || measureB != null) {
-                                        measureA = p; measureB = null
-                                        distanceMsg = "نقطه اول انتخاب شد؛ نقطه دوم را لمس کن"
-                                    } else {
+                                    val raw = screenToWorld(tap.x, tap.y)
+                                    val p = snapToFeature(raw.first, raw.second, allModels, scale) ?: raw
+                                    if (measureA == null || (measureB != null && editingMeasureEnd == null)) {
+                                        measureA = p; measureB = null; editingMeasureEnd = null
+                                        distanceMsg = "نقطه اول (حساس به عارضه) — نقطه دوم را لمس کن"
+                                    } else if (measureB == null) {
                                         measureB = p
                                         val d = DxfParser.horizontalDistance(measureA!!.first, measureA!!.second, p.first, p.second)
+                                        distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر — برای ویرایش نقطه را لمس و بکش"
+                                        // حالت را باز نگه می‌داریم تا ویرایش ممکن باشد
+                                    } else if (editingMeasureEnd != null) {
+                                        if (editingMeasureEnd == 1) measureA = p else measureB = p
+                                        val d = DxfParser.horizontalDistance(measureA!!.first, measureA!!.second, measureB!!.first, measureB!!.second)
                                         distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
-                                        measureMode = false
+                                        editingMeasureEnd = null
                                     }
                                 }
                             )
@@ -541,7 +584,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             Icon(Icons.Filled.Public, null, tint = Color.White)
                         }
                         IconButton(onClick = {
-                            pickCoordinateMode = true
+                            pickCoordinateMode = true // نقاط قبلی حفظ می‌شوند
                             showPointsDialog = true
                             message = "نقطه را روی نقشه انتخاب کن"
                         }) {
@@ -549,6 +592,19 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         }
                         IconButton(onClick = { fitAll(canvasSize.x, canvasSize.y) }) {
                             Icon(Icons.Filled.ZoomOutMap, null, tint = Color.White)
+                        }
+                        IconButton(onClick = {
+                            if (pickCoordinateMode) {
+                                pickCoordinateMode = false
+                                message = if (pickedPoints.isEmpty()) "" else "${pickedPoints.size} نقطه ثبت‌شده — از لیست ببین"
+                                if (pickedPoints.isNotEmpty()) showPointsDialog = true
+                            }
+                        }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "اتمام مختصات‌یابی",
+                                tint = if (pickCoordinateMode) Color(0xFFFF8A80) else Color.White.copy(alpha = 0.35f)
+                            )
                         }
                         IconButton(onClick = { measureMode = !measureMode }) {
                             Icon(Icons.Filled.Straighten, null, tint = if (measureMode) Color(0xFF81C995) else Color.White)
@@ -633,7 +689,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("مختصات (${pickedPoints.size})", Modifier.weight(1f))
-                    IconButton(onClick = { pickCoordinateMode = true; showPointsDialog = false; message = "نقطه بعدی را روی نقشه انتخاب کن" }) {
+                    IconButton(onClick = { pickCoordinateMode = true; showPointsDialog = false; message = if (pickedPoints.isEmpty()) "نقطه را روی نقشه لمس کن (حساس به عارضه)" else "ادامه مختصات‌یابی — ${pickedPoints.size} نقطه قبلی حفظ شد" }) {
                         Icon(Icons.Filled.Add, "نقطه جدید")
                     }
                 }
@@ -751,6 +807,31 @@ private fun LayerColorButton(current: Color, onColor: (Color) -> Unit) {
             }
         }
     }
+}
+
+
+/** نزدیک‌ترین رأس خط / مرکز دایره در آستانهٔ پیکسلی صفحه */
+private fun snapToFeature(
+    e: Double, n: Double,
+    models: List<DxfModel>,
+    scale: Float,
+    maxPx: Float = 28f
+): Pair<Double, Double>? {
+    val maxWorld = (maxPx / scale.coerceAtLeast(1e-6f)).toDouble()
+    var best: Pair<Double, Double>? = null
+    var bestD = maxWorld
+    fun consider(x: Double, y: Double) {
+        val d = kotlin.math.hypot(x - e, y - n)
+        if (d < bestD) { bestD = d; best = x to y }
+    }
+    models.forEach { m ->
+        m.lines.forEach {
+            consider(it.x1, it.y1); consider(it.x2, it.y2)
+        }
+        m.circles.forEach { consider(it.x, it.y) }
+        m.texts.forEach { consider(it.x, it.y) }
+    }
+    return best
 }
 
 private enum class BaseMap(val title: String, val service: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {

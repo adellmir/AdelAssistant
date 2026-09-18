@@ -42,9 +42,20 @@ object GsiParser {
         }
 
         val points = mutableListOf<GsiPoint>()
+        // کد نقطه در برخی فایل‌ها روی WI41 (خط جدا) است، نه فقط WI71
+        var lastCode = ""
         for (i in lines.indices) {
             if (drop[i]) continue
             val words = parseWords(lines[i])
+            // خط کد/ریمارک: 41 بدون 11 و 81
+            if (words.containsKey("41") && !words.containsKey("11") && !words.containsKey("81")) {
+                val c = cleanName(words["41"]!!)
+                val cu = c.uppercase()
+                if (c.isNotBlank() && c != "0" && cu != "OCUPAR" && cu != "RE") {
+                    lastCode = c
+                }
+                continue
+            }
             val w11 = words["11"] ?: continue
             val w81 = words["81"] ?: continue
             val w82 = words["82"] ?: continue
@@ -55,8 +66,9 @@ object GsiParser {
             val nameUp = name.uppercase()
             if (nameUp == "OCUPAR" || nameUp == "RE") continue
 
-            val code = words["71"]?.let { cleanName(it) }
+            val code71 = words["71"]?.let { cleanName(it) }
                 ?.takeIf { it.isNotBlank() && it != "0" } ?: ""
+            val code = if (code71.isNotBlank()) code71 else lastCode
 
             points.add(
                 GsiPoint(
@@ -94,9 +106,8 @@ object GsiParser {
             try {
                 fun d(i: Int) = p.getOrNull(i)?.replace(',', '.')?.toDoubleOrNull()
                 when {
-                    // N,X,Y,Z[,D] یا N,Y,X,Z[,D]
-                    p.size >= 4 && d(1) != null && d(2) != null && d(3) != null &&
-                        (d(0) == null || p[0].any { it.isLetter() } || p.size >= 5) -> {
+                    // همیشه N,X,Y,Z[,D] وقتی حداقل ۴ فیلد مختصاتی باشد (حتی اگر نام عددی باشد)
+                    p.size >= 4 && d(1) != null && d(2) != null && d(3) != null -> {
                         val e = if (swapXY) d(2)!! else d(1)!!
                         val n = if (swapXY) d(1)!! else d(2)!!
                         out.add(
@@ -109,7 +120,7 @@ object GsiParser {
                             )
                         )
                     }
-                    // X,Y,Z[,D] (یا Y,X,Z در DAT)
+                    // X,Y,Z[,D] (یا Y,X,Z در DAT) — فقط وقتی نام جدا نیست
                     d(0) != null && d(1) != null && d(2) != null -> {
                         val e = if (swapXY) d(1)!! else d(0)!!
                         val n = if (swapXY) d(0)!! else d(1)!!
