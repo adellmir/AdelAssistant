@@ -315,29 +315,21 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         ScreenTopBar(title = "نقشه تونل", color = color, onBack = onBack)
 
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { reload() }) {
-                Icon(Icons.Outlined.Refresh, "بروزرسانی", tint = color)
-            }
-            IconButton(onClick = { needFit = true; fit() }) {
-                Icon(Icons.Outlined.ZoomOutMap, "Fit", tint = color)
-            }
+            IconButton(onClick = { reload() }) { Icon(Icons.Outlined.Refresh, "بروزرسانی", tint = color) }
+            IconButton(onClick = { needFit = true; fit() }) { Icon(Icons.Outlined.ZoomOutMap, "Fit", tint = color) }
             IconButton(onClick = {
                 if (!hasGps) permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 else readGps()
-            }) {
-                Icon(Icons.Outlined.MyLocation, "موقعیت من", tint = color)
-            }
+            }) { Icon(Icons.Outlined.MyLocation, "موقعیت من", tint = color) }
             IconButton(onClick = {
                 val (cx, cy) = if (canvasSize.x > 0) screenToWorld(canvasSize.x / 2, canvasSize.y / 2)
                 else 0.0 to 0.0
                 openAddAt(cx, cy)
-            }) {
-                Icon(Icons.Outlined.AddLocationAlt, "نقطه دستی", tint = color)
-            }
+            }) { Icon(Icons.Outlined.AddLocationAlt, "نقطه دستی", tint = color) }
             IconButton(onClick = { editMode = !editMode }) {
                 Icon(
                     if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit,
@@ -345,20 +337,20 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     tint = if (editMode) color else TextSecondary
                 )
             }
-            IconButton(onClick = { showBaseDialog = true }) {
-                Icon(Icons.Outlined.Map, "پس‌زمینه", tint = color)
-            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { showBaseDialog = true }) { Icon(Icons.Outlined.Map, "پس‌زمینه", tint = color) }
             IconButton(onClick = {
                 mapUploadLauncher.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream"))
-            }) {
-                Icon(Icons.Outlined.Upload, "آپلود نقشه تونل", tint = color)
-            }
-            IconButton(onClick = { showLayers = true }) {
-                Icon(Icons.Outlined.Layers, "لایه‌ها", tint = color)
-            }
-            IconButton(onClick = { showExport = true }) {
-                Icon(Icons.Outlined.FileDownload, "خروجی", tint = color)
-            }
+            }) { Icon(Icons.Outlined.Upload, "آپلود نقشه", tint = color) }
+            IconButton(onClick = { showLayers = true }) { Icon(Icons.Outlined.Layers, "لایه‌ها", tint = color) }
+            IconButton(onClick = { showExport = true }) { Icon(Icons.Outlined.FileDownload, "خروجی", tint = color) }
+            // دکمه متنی خروجی برای دیده شدن مطمئن
+            TextButton(onClick = { showExport = true }) { Text("خروجی", color = color) }
         }
 
         Text(status, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -469,7 +461,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
 
-                // نقشه ثابت آپلود‌شده (DXF)
+                // نقشه ثابت آپلود‌شده (DXF) — خط + دایره + متن
                 if (showBg) {
                     bgModel?.lines?.forEach { ln ->
                         drawLine(
@@ -483,6 +475,18 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         val center = worldToScreen(c.x, c.y)
                         val r = (c.r * scale).toFloat().coerceAtLeast(2f)
                         drawCircle(Color(0xFF90CAF9).copy(alpha = 0.7f), radius = r, center = center, style = Stroke(width = 2f))
+                    }
+                    bgModel?.texts?.forEach { tx ->
+                        val pos = worldToScreen(tx.x, tx.y)
+                        // ارتفاع متن DXF به پیکسل صفحه؛ حداقل خوانا
+                        val hPx = (tx.height * scale).toFloat().coerceIn(14f, 48f)
+                        val tp = Paint().apply {
+                            this.color = android.graphics.Color.rgb(0xE3, 0xF2, 0xFD)
+                            textSize = hPx
+                            isAntiAlias = true
+                            textAlign = Paint.Align.LEFT
+                        }
+                        drawContext.canvas.nativeCanvas.drawText(tx.text, pos.x, pos.y, tp)
                     }
                 }
 
@@ -505,7 +509,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
 
                 if (showReport) {
-                    val textPx = (0.05f * scale).coerceIn(12f, 42f) // معادل ۵ سانتی‌متر در مقیاس نقشه
+                    // سایز روی صفحه ثابت و خوانا — با زوم نزدیک ریز نمی‌شود
+                    val textPx = 20f
                     val textPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0xC8, 0xE6, 0xC9)
                         textSize = textPx
@@ -515,19 +520,19 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                     reportPts.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
-                        val arm = max(6f, textPx * 0.45f)
+                        val arm = 10f
                         val col = Color(0xFF81C995)
                         // ضربدر
                         drawLine(col, Offset(c.x - arm, c.y - arm), Offset(c.x + arm, c.y + arm), strokeWidth = 2.5f)
                         drawLine(col, Offset(c.x - arm, c.y + arm), Offset(c.x + arm, c.y - arm), strokeWidth = 2.5f)
-                        // سه ردیف سمت چپ نقطه: شماره / ارتفاع / کیلومتراژ
-                        val lineH = textPx * 1.15f
-                        val tx = c.x - arm - 4f
+                        // سه ردیف سمت چپ: شماره / ارتفاع / کیلومتراژ
+                        val lineH = textPx * 1.2f
+                        val tx = c.x - arm - 6f
                         val ty = c.y
                         drawContext.canvas.nativeCanvas.apply {
-                            drawText(p.dateLabel, tx, ty - lineH, textPaint)           // شماره مثل 050627
-                            drawText(formatEn("%.3f", p.z), tx, ty, textPaint)         // ارتفاع
-                            drawText(formatEn("%.3f", p.km), tx, ty + lineH, textPaint) // کیلومتراژ
+                            drawText(p.dateLabel, tx, ty - lineH, textPaint)
+                            drawText(formatEn("%.3f", p.z), tx, ty, textPaint)
+                            drawText(formatEn("%.3f", p.km), tx, ty + lineH, textPaint)
                         }
                     }
                 }
