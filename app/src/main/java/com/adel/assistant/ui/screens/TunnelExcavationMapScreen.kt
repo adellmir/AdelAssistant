@@ -506,8 +506,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
 
                 if (showReport) {
                     val textPx = (0.05f * scale).coerceIn(12f, 42f) // معادل ۵ سانتی‌متر در مقیاس نقشه
-                    val paint = Paint().apply {
-                        color = android.graphics.Color.rgb(0xC8, 0xE6, 0xC9)
+                    val textPaint = Paint().apply {
+                        this.color = android.graphics.Color.rgb(0xC8, 0xE6, 0xC9)
                         textSize = textPx
                         isAntiAlias = true
                         typeface = Typeface.DEFAULT_BOLD
@@ -525,9 +525,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         val tx = c.x - arm - 4f
                         val ty = c.y
                         drawContext.canvas.nativeCanvas.apply {
-                            drawText(p.dateLabel, tx, ty - lineH, paint)           // شماره مثل 050627
-                            drawText(formatEn("%.3f", p.z), tx, ty, paint)         // ارتفاع
-                            drawText(formatEn("%.3f", p.km), tx, ty + lineH, paint) // کیلومتراژ
+                            drawText(p.dateLabel, tx, ty - lineH, textPaint)           // شماره مثل 050627
+                            drawText(formatEn("%.3f", p.z), tx, ty, textPaint)         // ارتفاع
+                            drawText(formatEn("%.3f", p.km), tx, ty + lineH, textPaint) // کیلومتراژ
                         }
                     }
                 }
