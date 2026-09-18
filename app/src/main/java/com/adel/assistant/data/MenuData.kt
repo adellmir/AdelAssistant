@@ -41,7 +41,7 @@ object AppMenu {
                 MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
                 MenuItem("نقشه تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
                 MenuItem("ثبت وقایع تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
-                MenuItem("وضعیت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
+                MenuItem("پیشرفت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
             )),
             MenuTab("پروژه‌ها", listOf(

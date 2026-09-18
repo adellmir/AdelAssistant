@@ -43,9 +43,9 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
             .background(Background)
             .padding(horizontal = 20.dp)
     ) {
-        ScreenTopBar(title = "وضعیت تونل", color = color, onBack = onBack)
+        ScreenTopBar(title = "پیشرفت تونل", color = color, onBack = onBack)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-            listOf("وضعیت کلی", "بازه‌ای").forEachIndexed { i, label ->
+            listOf("پیشرفت کلی", "بازه‌ای").forEachIndexed { i, label ->
                 val selected = i == tab
                 Surface(
                     modifier = Modifier.weight(1f).clickable { tab = i },
@@ -90,12 +90,15 @@ private fun OverallStatus(context: android.content.Context) {
 
 @Composable
 private fun RangeStatus(context: android.content.Context, color: Color) {
-    var fromDay by remember { mutableStateOf("") }
-    var fromMonth by remember { mutableStateOf("") }
-    var fromYear by remember { mutableStateOf("1405") }
-    var toDay by remember { mutableStateOf("") }
-    var toMonth by remember { mutableStateOf("") }
-    var toYear by remember { mutableStateOf("1405") }
+    val allEntries = remember { TunnelReportStore.allEntries(context) }
+    val first = allEntries.minByOrNull { it.dateSortKey }
+    val last = allEntries.maxByOrNull { it.dateSortKey }
+    var fromDay by remember { mutableStateOf(first?.day ?: "") }
+    var fromMonth by remember { mutableStateOf(first?.month ?: "") }
+    var fromYear by remember { mutableStateOf(first?.year ?: "1405") }
+    var toDay by remember { mutableStateOf(last?.day ?: "") }
+    var toMonth by remember { mutableStateOf(last?.month ?: "") }
+    var toYear by remember { mutableStateOf(last?.year ?: "1405") }
     var results by remember { mutableStateOf(listOf<String>()) }
 
     Column {

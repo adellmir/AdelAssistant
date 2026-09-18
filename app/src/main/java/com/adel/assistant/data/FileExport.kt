@@ -83,7 +83,7 @@ object FileExport {
 
     /**
      * Documents/AdelAssistant/<زیرپوشه>
-     * dxf, txt, backup, tunel-report, letter, gsi, kml, pdf
+     * dxf, txt, backup, tunel-report, letter, invoice, gsi, kml, pdf
      */
     fun relativePathFor(fileName: String, mimeType: String = ""): String {
         val sub = subfolderFor(fileName, mimeType)
@@ -95,21 +95,27 @@ object FileExport {
         val n = fileName.lowercase().substringAfterLast('/').substringAfterLast(':')
         val mime = mimeType.lowercase()
         return when {
+            // گزارش روزانه تونل
             n.contains("survey_tunnel_report") ||
                 n.contains("tunel-report") ||
                 n.contains("tunnel_report") ||
-                Regex("""^b\d{4}\.xlsx$""").matches(n) -> "tunel-report"
-            n.startsWith("letter") || n.contains("letter") || n.contains("leter") -> "letter"
-            n.startsWith("invoice") -> "letter"
-            n.contains("backup") -> "backup"
+                n.contains("tunnel-report") ||
+                Regex("""^b\d{4}\.xlsx$""").matches(n) ||
+                (n.startsWith("b") && n.endsWith(".xlsx") && n.length in 8..14) -> "tunel-report"
+            // فاکتور
+            n.startsWith("invoice") || n.contains("invoice") || n.contains("فاکتور") -> "invoice"
+            // نامه
+            n.startsWith("letter") || n.contains("letter") || n.contains("leter") || n.contains("نامه") -> "letter"
+            n.contains("backup") || n.endsWith(".zip") && n.contains("backup") -> "backup"
             n.endsWith(".dxf") || mime.contains("dxf") -> "dxf"
-            n.endsWith(".gsi") -> "gsi"
-            n.endsWith(".kml") || n.endsWith(".kmz") || mime.contains("google-earth") -> "kml"
+            n.endsWith(".gsi") || mime.contains("gsi") -> "gsi"
+            n.endsWith(".kml") || n.endsWith(".kmz") || mime.contains("google-earth") || mime.contains("kml") -> "kml"
             n.endsWith(".pdf") || mime.contains("pdf") -> "pdf"
             n.endsWith(".txt") || n.endsWith(".csv") || n.endsWith(".dat") -> "txt"
             else -> ""
         }
     }
+
 
     private fun normalizeName(fileName: String, mimeType: String): String {
         var n = fileName.trim()
