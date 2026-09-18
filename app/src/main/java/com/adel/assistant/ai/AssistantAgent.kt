@@ -9,6 +9,8 @@ import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.normalizeSide
+import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.AppMenu
 import com.adel.assistant.navigation.Routes
@@ -25,7 +27,9 @@ data class AgentReply(
     val text: String,
     val navigateTo: String? = null,
     val action: String? = null,
-    val choices: List<AgentChoice> = emptyList()
+    val choices: List<AgentChoice> = emptyList(),
+    /** مثلاً maps:35.1,51.2 برای باز کردن مسیریاب */
+    val mapsLatLon: Pair<Double, Double>? = null
 )
 
 /**
@@ -61,15 +65,18 @@ object AssistantAgent {
 
     fun handle(context: Context, userMessage: String): AgentReply {
         val msg = normalize(userMessage)
-        if (msg.isBlank()) return AgentReply("پیامت را بنویس. مثلاً «فردا برای تونل تسک برداشت مقطع ثبت کن». ")
+        if (msg.isBlank()) return AgentReply("پیامت را بنویس. مثلاً «۵۰ متر شفت ۱» یا «آمار تونل» یا «برو گزارش روزانه».")
 
         resolvePending(context, msg)?.let { return it }
         if (isHelp(msg)) return AgentReply(helpText())
+
+        // اولویت ۱: پرسش‌های مکانی/کیلومتراژ/شفت روی پایگاه نقاط تونل
+        surveyLocationIntent(context, msg)?.let { return it }
+
         fileIntent(msg)?.let { return it }
         databaseIntent(context, msg)?.let { return it }
         actionIntent(context, msg)?.let { return it }
 
-        // «برو» یک فرمان صریح برای ناوبری است؛ در غیر این صورت کار را داخل چت انجام می‌دهیم.
         if (hasNavigationVerb(msg)) {
             navIntent(msg)?.let { return it }
         }
@@ -79,7 +86,129 @@ object AssistantAgent {
         if (hasAny(msg, listOf("امروز", "برنامه امروز", "کارهای امروز"))) return AgentReply(todayPlan(context))
 
         menuIntent(msg)?.let { return it }
-        return AgentReply("منظورت را کامل متوجه نشدم. اسم بخش یا کاری که می‌خواهی را بگو؛ اگر چند معنی داشته باشد گزینه‌های قابل انتخاب نشان می‌دهم.")
+        return AgentReply(
+            "منظورت را کامل متوجه نشدم.
+" +
+            "مثال‌ها:
+• ۵۰ متر شفت ۱
+• مختصات کیلومتر ۱۲۳.۵
+• نقطه AH1
+• آمار تونل
+• برو نقشه تونل
+" +
+            "یا حالت آنلاین را روشن کن تا با دانش کامل برنامه مشورت کنی.",
+            action = "fallback"
+        )
+    }
+
+    /**
+     * درک عبارات نقشه‌برداری:
+     * «۵۰ متر شفت ۱»، «شفت ۲ سمت ۳، ۳۰ متر»، «کیلومتر ۱۲۳.۴»، «نقطه AH1»، «مسیریاب شفت ۱»
+     */
+    private fun surveyLocationIntent(context: Context, msg: String): AgentReply? {
+        val raw = msg
+        val wantsMaps = hasAny(msg, listOf("مسیریاب", "مسیر یاب", "گوگل مپ", "google map", "navigation", "ناوبری", "ببر من"))
+        val wantsCoord = hasAny(msg, listOf("مختصات", "موقعیت", "کجا", "بده", "پیدا", "نقطه", "کیلومتر", "کیلومتراژ", "متر", "شفت", "دهانه", "محور"))
+            || Regex("""\d+([\./]\d+)?\s*(متر|m|km|کیلومتر)""").containsMatchIn(msg)
+            || Regex("""شفت\s*\d+|ش\s*\d+|sh\s*\d+|ah\s*\d+""", RegexOption.IGNORE_CASE).containsMatchIn(msg)
+
+        if (!wantsCoord && !wantsMaps) return null
+
+        // ۱) اشاره مستقیم به شماره نقطه (AH1، 1234، …)
+        Regex("""(?:نقطه|point)\s*([A-Za-zآ-ی]{0,4}\d{1,6}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+            .find(raw)?.groupValues?.getOrNull(1)?.let { pn ->
+                val p = TunnelReportStore.findByPointNo(context, pn)
+                    ?: TunnelReportStore.allPoints(context).firstOrNull {
+                        it.pointNo.equals(pn, true) || it.pointNo.equals(pn.uppercase(), true)
+                    }
+                if (p != null) return formatPointReply(p, wantsMaps, "نقطهٔ $pn")
+            }
+
+        // ۲) کیلومتر مطلق: «کیلومتر ۱۲۳.۴۵» یا «km 123.45»
+        Regex("""(?:کیلومتر(?:اژ)?|km)\s*([0-9]+(?:[./][0-9]+)?)""", RegexOption.IGNORE_CASE)
+            .find(msg)?.groupValues?.getOrNull(1)?.let { kmStr ->
+                val km = kmStr.replace('/', '.').toEnglishDigits().toDoubleOrNull() ?: return@let
+                val p = TunnelReportStore.findByKm(context, km)
+                if (p != null) return formatPointReply(p, wantsMaps, "کیلومتراژ ${"%.3f".format(km)}")
+                return AgentReply("برای km=${"%.3f".format(km)} نقطه‌ای روی محور پیدا نشد. پایگاه tunnel_points را بررسی کن.")
+            }
+
+        // ۳) شفت + متراژ: «۵۰ متر شفت ۱» / «شفت ۱ پنجاه متر» / «از شفت ۲ به سمت ۳ ، ۲۰ متر»
+        val shaftMatch = Regex("""(?:شفت|sh|ش)\s*([0-9۰-۹]{1,2})""", RegexOption.IGNORE_CASE).find(msg)
+        val metersMatch = Regex("""([0-9۰-۹]+(?:[./][0-9۰-۹]+)?)\s*(?:متر|m)""", RegexOption.IGNORE_CASE).find(msg)
+        val sideMatch = Regex("""(?:سمت|به سمت|جهت)\s*([0-9۰-۹]+|start|end|آغاز|پایان)""", RegexOption.IGNORE_CASE).find(msg)
+
+        if (shaftMatch != null) {
+            val shaft = shaftMatch.groupValues[1].toEnglishDigits()
+            val meters = metersMatch?.groupValues?.get(1)?.replace('/', '.')?.toEnglishDigits()?.toDoubleOrNull() ?: 0.0
+            var side = sideMatch?.groupValues?.get(1)?.toEnglishDigits()?.lowercase() ?: "start"
+            if (side == "آغاز") side = "start"
+            if (side == "پایان") side = "end"
+            side = normalizeSide(side)
+
+            val fixed = TunnelReportStore.shaftFixedKm(context, shaft)
+                ?: run {
+                    // fallback: type shN یا نام نقطه
+                    val pts = TunnelReportStore.allPoints(context)
+                    pts.firstOrNull { it.type.equals("sh$shaft", true) || it.type.equals("sh$shaft", true) }?.km
+                        ?: pts.firstOrNull { it.pointNo.equals("AH$shaft", true) || it.pointNo.equals("ah$shaft", true) }?.km
+                }
+            if (fixed == null) {
+                return AgentReply(
+                    "شفت $shaft در پایگاه نقاط (type=sh$shaft) پیدا نشد.
+" +
+                    DomainCatalog.liveSnapshot(context)
+                )
+            }
+            val dir = TunnelReportStore.direction(shaft, side)
+            val targetKm = fixed + dir * meters
+            val p = TunnelReportStore.findByKm(context, targetKm)
+            if (p == null) {
+                return AgentReply(
+                    "شفت $shaft: km پایه=${"%.3f".format(fixed)} | هدف=${"%.3f".format(targetKm)} (سمت $side، ${meters}m)
+" +
+                    "ولی محور نقاط برای درون‌یابی کافی نیست."
+                )
+            }
+            val title = if (meters > 0) "شفت $shaft + ${meters}m (سمت $side)" else "شفت $shaft (سمت $side)"
+            return formatPointReply(p, wantsMaps || meters > 0, title, baseKm = fixed, targetKm = targetKm)
+        }
+
+        // ۴) فقط «مسیریاب» بدون هدف مشخص
+        if (wantsMaps && !wantsCoord) {
+            return AgentReply("بگو به کجا: مثلاً «مسیریاب ۵۰ متر شفت ۱» یا «مسیریاب نقطه AH1».")
+        }
+        return null
+    }
+
+    private fun formatPointReply(
+        p: TunnelReportStore.TunnelPoint,
+        wantsMaps: Boolean,
+        title: String,
+        baseKm: Double? = null,
+        targetKm: Double? = null
+    ): AgentReply {
+        val (lat, lon) = runCatching {
+            com.adel.assistant.data.UtmGeo.toLatLon(p.x, p.y, com.adel.assistant.data.UtmGeo.DEFAULT_ZONE)
+        }.getOrNull() ?: (0.0 to 0.0)
+        val text = buildString {
+            appendLine("📍 $title")
+            baseKm?.let { appendLine("km پایه شفت: ${"%.3f".format(it)}") }
+            targetKm?.let { appendLine("km هدف: ${"%.3f".format(it)}") }
+            appendLine("نزدیک‌ترین/درون‌یابی: ${p.pointNo} | type=${p.type}")
+            appendLine("km محور: ${"%.3f".format(p.km)}")
+            appendLine("X=${"%.3f".format(p.x)}")
+            appendLine("Y=${"%.3f".format(p.y)}")
+            appendLine("Z=${"%.3f".format(p.z)}")
+            if (lat != 0.0 || lon != 0.0) {
+                appendLine("Lat=${"%.7f".format(lat)}  Lon=${"%.7f".format(lon)}")
+            }
+            if (wantsMaps && (lat != 0.0 || lon != 0.0)) {
+                append("مسیریاب آماده است — دکمهٔ نقشه را بزن یا لینک geo را باز کن.")
+            }
+        }
+        val maps = if (wantsMaps && (lat != 0.0 || lon != 0.0)) lat to lon else null
+        return AgentReply(text.trim(), mapsLatLon = maps)
     }
 
     /** درخواست‌های مربوط به فایل انتخاب‌شده در چت */
@@ -369,7 +498,12 @@ object AssistantAgent {
             "پروژه" to setOf("پروژه","پروژ","پروژهها","پروژه‌ها"),
             "تونل" to setOf("تونل","tunnel"),
             "گزارش" to setOf("گزارش","ریپورت","report"),
-            "وقایع" to setOf("وقایع","رویداد","رویدادها","رخداد"),
+            "وقایع" to setOf("وقایع","رویداد","رویدادها","رخداد","نقاط تونل"),
+            "نقاط" to setOf("نقاط تونل","نقاط","حفاری"),
+            "پیشرفت" to setOf("پیشرفت","وضعیت تونل","وضعیت"),
+            "نقشه تونل" to setOf("نقشه تونل","نقشه حفاری"),
+            "الاین" to setOf("الاین","هم‌مختصات","هم مختصات","helmert","ترانسفرم"),
+            "کارفرما" to setOf("کارفرما","کارفرمایان","مشتری"),
             "تقویم" to setOf("تقویم","calendar"),
             "کارکرد" to setOf("کارکرد","صورت وضعیت","کردکرد"),
             "دریافتی" to setOf("دریافتی","دریافت","وصول"),

@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -13,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +29,7 @@ import com.adel.assistant.ai.AgentChoice
 import com.adel.assistant.ai.AgentReply
 import com.adel.assistant.ai.AssistantAgent
 import com.adel.assistant.ai.OnlineAiClient
+import com.adel.assistant.ai.DomainCatalog
 import com.adel.assistant.data.AssistantChatStore
 import com.adel.assistant.data.AssistantMemoryStore
 import com.adel.assistant.data.AssistantPermissionStore
@@ -70,11 +75,29 @@ fun AssistantScreen(
         messages = listOf(
             ChatLine(
                 false,
-                "سلام، من دستیار هوشمند AdelAssistant هستم. محاوره‌ای بگو چه کاری انجام بدهم."
+                "سلام، من دستیار AdelAssistant هستم.\nمثال: «۵۰ متر شفت ۱» | «آمار تونل» | «برو نقشه تونل»"
             )
         )
         input = ""
         selectedFileName = null
+        scrollToEnd()
+    }
+
+    fun clearCurrentChat() {
+        AssistantChatStore.clearMessages(context, activeChat.id)
+        messages = listOf(
+            ChatLine(false, "گفتگو پاک شد. دوباره بپرس — مثلاً «۵۰ متر شفت ۱».")
+        )
+        scrollToEnd()
+    }
+
+    fun deleteCurrentChat() {
+        val id = activeChat.id
+        AssistantChatStore.delete(context, id)
+        activeChat = AssistantChatStore.ensureDefault(context)
+        messages = loadMessages(context, activeChat.id).ifEmpty {
+            listOf(ChatLine(false, "گفتگو حذف شد. می‌توانی از نو شروع کنی."))
+        }
         scrollToEnd()
     }
 
@@ -102,31 +125,33 @@ fun AssistantScreen(
         input = ""
         scrollToEnd()
 
-        if (onlineMode) {
-            sending = true
-            messages = messages + ChatLine(false, "⏳ در حال فکر کردن…")
-            scrollToEnd()
+        // همیشه اول موتور محلی با دانش پایگاه/عملیات
+        val local: AgentReply = try {
+            AssistantAgent.handle(context, t)
+        } catch (e: Exception) {
+            AgentReply("خطا در پردازش محلی: ${e.message ?: e.javaClass.simpleName}")
+        }
 
+        val isFallback = local.action == "fallback"
+
+        if (onlineMode && isFallback) {
+            sending = true
+            messages = messages + ChatLine(false, "⏳ در حال فکر کردن با دانش برنامه…")
+            scrollToEnd()
             scope.launch {
                 try {
-                    val history = messages.dropLast(1).map {
+                    val history = messages.filterNot { it.text.startsWith("⏳") }.map {
                         (if (it.fromUser) "user" else "assistant") to it.text
                     }
                     val memory = AssistantMemoryStore.load(context).take(20).joinToString("\n") { "- $it" }
-                    val answer = OnlineAiClient.chat(history, memory)
-                    messages = messages.dropLast(1) + ChatLine(false, answer)
+                    val domain = DomainCatalog.systemPrompt(context)
+                    val answer = OnlineAiClient.chat(history, memory, domain)
+                    messages = messages.filterNot { it.text.startsWith("⏳") } + ChatLine(false, answer)
                     AssistantChatStore.addMessage(context, activeChat.id, false, answer)
                 } catch (e: Exception) {
-                    messages = messages.dropLast(1) + ChatLine(
-                        false,
-                        "❌ اتصال به هوش آنلاین ناموفق بود: ${e.message ?: e.javaClass.simpleName}"
-                    )
-                    AssistantChatStore.addMessage(
-                        context,
-                        activeChat.id,
-                        false,
-                        "❌ اتصال به هوش آنلاین ناموفق بود: ${e.message ?: e.javaClass.simpleName}"
-                    )
+                    // اگر آنلاین شکست خورد همان پاسخ محلی fallback
+                    messages = messages.filterNot { it.text.startsWith("⏳") } + ChatLine(false, local.text, local.choices)
+                    AssistantChatStore.addMessage(context, activeChat.id, false, local.text)
                 } finally {
                     sending = false
                     scrollToEnd()
@@ -135,28 +160,30 @@ fun AssistantScreen(
             return
         }
 
-        val reply: AgentReply = try {
-            AssistantAgent.handle(context, t)
-        } catch (e: Exception) {
-            AgentReply("خطا در پردازش: ${e.message ?: e.javaClass.simpleName}")
-        }
-
-        appendMessage(ChatLine(false, reply.text, reply.choices))
+        appendMessage(ChatLine(false, local.text, local.choices))
         try {
-            reply.navigateTo?.let { route -> onNavigate(route) }
+            local.navigateTo?.let { route -> onNavigate(route) }
         } catch (_: Exception) {
+        }
+        local.mapsLatLon?.let { (lat, lon) ->
+            try {
+                val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(AdelAssistant)")
+                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+            } catch (_: Exception) {
+            }
         }
         scrollToEnd()
     }
 
+
     val quick = listOf(
-        "امروز چه کارهایی دارم؟",
-        "کارهای باز تونل چیه؟",
-        "آمار کلی",
-        "برو درون‌یابی",
+        "۵۰ متر شفت ۱",
+        "آمار تونل",
+        "آخرین گزارش روزانه",
+        "برو نقشه تونل",
         "وضعیت مالی پروژه‌ها",
-        "نمای کلی داده‌های برنامه",
-        "در همه اطلاعات جستجو کن"
+        "امروز چه کارهایی دارم؟",
+        "نمای کلی داده‌های برنامه"
     )
 
     Column(
@@ -194,18 +221,29 @@ fun AssistantScreen(
                 )
             }
 
-            FilledTonalButton(
-                onClick = { startNewChat() },
-                enabled = !sending,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    Icons.Filled.AddComment,
-                    contentDescription = "چت جدید",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(5.dp))
-                Text("چت جدید")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilledTonalButton(
+                    onClick = { clearCurrentChat() },
+                    enabled = !sending,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = "پاک کردن پیام‌ها", modifier = Modifier.size(18.dp), tint = Color(0xFFE57373))
+                    Spacer(Modifier.width(4.dp))
+                    Text("پاک کردن")
+                }
+                FilledTonalButton(
+                    onClick = { startNewChat() },
+                    enabled = !sending,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.AddComment,
+                        contentDescription = "چت جدید",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text("چت جدید")
+                }
             }
         }
 

@@ -9,7 +9,14 @@ import java.net.URL
 object OnlineAiClient {
     private const val BACKEND_URL = "https://adelassistant-backend.fastapicloud.dev"
 
-    suspend fun chat(messages: List<Pair<String, String>>, memory: String = ""): String = withContext(Dispatchers.IO) {
+    /**
+     * @param domainContext دانش‌نامه + اسنپ‌شات دادهٔ زنده (از DomainCatalog)
+     */
+    suspend fun chat(
+        messages: List<Pair<String, String>>,
+        memory: String = "",
+        domainContext: String = ""
+    ): String = withContext(Dispatchers.IO) {
         val url = URL("$BACKEND_URL/chat")
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -22,7 +29,20 @@ object OnlineAiClient {
 
         try {
             val messageArray = org.json.JSONArray()
-            messages.takeLast(20).forEach { (role, content) ->
+            // system-like first user message with domain (backend may not support system role)
+            if (domainContext.isNotBlank()) {
+                messageArray.put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", "[CONTEXT_PROGRAM]\n$domainContext\n[/CONTEXT_PROGRAM]\nدستور: فقط با همین زمینه جواب بده. اگر عمل مشخص است مختصات/مسیر را عدد بده.")
+                })
+                messageArray.put(JSONObject().apply {
+                    put("role", "assistant")
+                    put("content", "متوجه شدم. بر اساس داده و عملیات AdelAssistant جواب می‌دهم.")
+                })
+            }
+            messages.takeLast(16).forEach { (role, content) ->
+                // skip thinking placeholder
+                if (content.startsWith("⏳")) return@forEach
                 messageArray.put(JSONObject().apply {
                     put("role", if (role == "assistant") "assistant" else "user")
                     put("content", content)
@@ -31,6 +51,7 @@ object OnlineAiClient {
             val body = JSONObject().apply {
                 put("messages", messageArray)
                 put("memory", memory)
+                if (domainContext.isNotBlank()) put("domain", domainContext.take(12000))
             }.toString()
 
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }

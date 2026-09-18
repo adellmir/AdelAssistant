@@ -25,6 +25,15 @@ object AssistantChatStore {
     }
     fun ensureDefault(context: Context): Chat = chats(context).firstOrNull() ?: create(context)
     fun delete(context: Context,id:String){ saveChats(context,chats(context).filterNot{it.id==id}); saveMessages(context, allMessages(context).filterNot{it.chatId==id}) }
+    /** پاک کردن فقط پیام‌های یک گفتگو (خود گفتگو می‌ماند) */
+    fun clearMessages(context: Context, id: String) {
+        saveMessages(context, allMessages(context).filterNot { it.chatId == id })
+    }
+    /** حذف همه گفتگوها و پیام‌ها */
+    fun clearAll(context: Context) {
+        saveChats(context, emptyList())
+        saveMessages(context, emptyList())
+    }
     fun messages(context: Context,id:String): MutableList<Message>{
         val f=messagesFile(context); if(!f.exists()) return mutableListOf()
         return runCatching { val a=JSONArray(f.readText()); MutableList(a.length()){i->val o=a.getJSONObject(i); Message(o.getString("chatId"),o.getBoolean("fromUser"),o.getString("text"),o.getLong("at"))}.filter{it.chatId==id}.toMutableList() }.getOrElse{mutableListOf()}
