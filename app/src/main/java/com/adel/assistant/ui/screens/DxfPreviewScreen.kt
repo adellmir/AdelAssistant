@@ -20,6 +20,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -73,9 +74,9 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
     var nextDrawingId by remember { mutableStateOf(1) }
-    var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
+    var message by remember { mutableStateOf("") }
     var zoneText by remember { mutableStateOf("40") }
-    var baseMap by remember { mutableStateOf(BaseMap.SATELLITE) }
+    var baseMap by remember { mutableStateOf(BaseMap.NONE) }
     var emptyMapColor by remember { mutableStateOf(Color(0xFF202124)) }
     var showEmptyColorPalette by remember { mutableStateOf(false) }
     var showBaseMapDialog by remember { mutableStateOf(false) }
@@ -228,12 +229,15 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
-    LaunchedEffect(baseMap, scale, offset, canvasSize, zone) {
+    // فقط وقتی پس‌زمینه نقشه روشن است؛ debounce تا زوم لگ ندهد
+    val tileScaleKey = ((kotlin.math.ln(scale.toDouble().coerceAtLeast(1e-9)) / kotlin.math.ln(1.15)).toInt())
+    val tileOffsetKey = Offset((offset.x / 48f).toInt() * 48f, (offset.y / 48f).toInt() * 48f)
+    LaunchedEffect(baseMap, tileScaleKey, tileOffsetKey, canvasSize, zone) {
         if (baseMap == BaseMap.NONE || canvasSize.x <= 0f) {
             tiles = emptyList()
             return@LaunchedEffect
         }
-        delay(120)
+        delay(220)
         val corners = listOf(
             screenToWorld(0f, 0f), screenToWorld(canvasSize.x, 0f),
             screenToWorld(0f, canvasSize.y), screenToWorld(canvasSize.x, canvasSize.y)
@@ -264,29 +268,11 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = 76.dp)
-                    .pointerInput(pickCoordinateMode, editingPointId, scale) {
+                    .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
-                            if (editingPointId != null) {
-                                val id = editingPointId
-                                val s = scale.toDouble().coerceAtLeast(1e-9)
-                                val dxv = pan.x.toDouble() / s
-                                val dyv = (-pan.y).toDouble() / s
-                                if (dxv != 0.0 || dyv != 0.0) {
-                                    pickedPoints = pickedPoints.map { p ->
-                                        if (p.id != id) p
-                                        else {
-                                            val e = p.easting + dxv
-                                            val n = p.northing + dyv
-                                            val ll = UtmGeo.toLatLon(e, n, zone)
-                                            p.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
-                                        }
-                                    }
-                                }
-                                message = "موقعیت نقطه تغییر کرد؛ برای پایان ویرایش دکمه تأیید را بزن"
-                                return@detectTransformGestures
-                            }
-                            if (pickCoordinateMode) return@detectTransformGestures
-
+                            // Keep the original smooth map gesture. While editing a point,
+                            // the map must stay still so the point can move independently.
+                            if (editingPointId != null || pickCoordinateMode) return@detectTransformGestures
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -296,10 +282,31 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                     centroid.y - (centroid.y - offset.y) * factor + pan.y
                                 )
                                 scale = newScale
-                            } else {
-                                offset += pan
-                            }
+                            } else offset += pan
                         }
+                    }
+                    .pointerInput(editingPointId, scale) {
+                        val id = editingPointId ?: return@pointerInput
+                        detectDragGestures(
+                            onDrag = { change: PointerInputChange, dragAmount: Offset ->
+                                change.consume()
+                                val s = scale.toDouble().coerceAtLeast(1e-9)
+                                val dxv = dragAmount.x.toDouble() / s
+                                val dyv = (-dragAmount.y).toDouble() / s
+                                pickedPoints = pickedPoints.map { p ->
+                                    if (p.id != id) p
+                                    else {
+                                        val e = p.easting + dxv
+                                        val n = p.northing + dyv
+                                        val ll = UtmGeo.toLatLon(e, n, zone)
+                                        p.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                message = "موقعیت نقطه تغییر کرد؛ برای پایان ویرایش دکمه تأیید را بزن"
+                            }
+                        )
                     }
                     .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId) {
                         if (editingPointId == null) {

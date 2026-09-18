@@ -87,9 +87,7 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
             )
 
             Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "خروجی روی قالب: C7 شماره | C8 تاریخ | E7 کارفرما | C11 متن",
-                    Modifier.padding(12.dp),
+,
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
