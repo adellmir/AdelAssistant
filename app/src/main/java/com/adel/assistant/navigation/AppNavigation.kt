@@ -34,6 +34,7 @@ import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TotalStationDumpScreen
 import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
+import com.adel.assistant.ui.screens.TunnelExcavationMapScreen
 import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
@@ -83,7 +84,10 @@ fun AppNavigation() {
             TunnelPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_EXCAVATION) {
-            ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+            ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() }
+        composable(Routes.SURVEY_TUNNEL_MAP) {
+            TunnelExcavationMapScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+        })
         }
         composable(Routes.SURVEY_TUNNEL_STATUS) {
             TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })

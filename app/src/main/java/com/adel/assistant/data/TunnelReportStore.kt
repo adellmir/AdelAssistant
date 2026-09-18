@@ -302,6 +302,19 @@ object TunnelReportStore {
     fun findByPointNo(context: Context, pointNo: String): TunnelPoint? =
         allPoints(context).firstOrNull { it.pointNo == pointNo }
 
+    /** نزدیک‌ترین نقطهٔ محور تونل به مختصات XY (فاصلهٔ اقلیدسی) */
+    fun findNearestByXy(context: Context, x: Double, y: Double): TunnelPoint? {
+        val pts = allPoints(context)
+        if (pts.isEmpty()) return null
+        return pts.minByOrNull { p ->
+            val dx = p.x - x
+            val dy = p.y - y
+            dx * dx + dy * dy
+        }
+    }
+
+
+
     fun searchByKeyword(context: Context, keyword: String): List<TunnelPoint> =
         allPoints(context).filter { it.type.contains(keyword) || it.pointNo.contains(keyword) }
 

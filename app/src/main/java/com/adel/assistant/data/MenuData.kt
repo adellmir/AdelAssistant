@@ -1,7 +1,9 @@
 package com.adel.assistant.data
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.adel.assistant.navigation.Routes
@@ -31,61 +33,62 @@ object AppMenu {
 
     private val survey = MenuSection(
         title = "نقشه‌برداری",
-        icon = Icons.Outlined.Map,
+        icon = Icons.Filled.Map,
         color = WorkPrimary,
         tabs = listOf(
             MenuTab("تونل", listOf(
-                MenuItem("گزارش روزانه", Icons.Outlined.Assignment, Routes.SURVEY_TUNNEL_REPORT),
-                MenuItem("نقاط حفاری", Icons.Outlined.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
-                MenuItem("نقاط تونل", Icons.Outlined.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
-                MenuItem("وضعیت", Icons.Outlined.Insights, Routes.SURVEY_TUNNEL_STATUS),
-                MenuItem("تسک‌ها", Icons.Outlined.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
+                MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
+                MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
+                MenuItem("نقشه حفاری تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
+                MenuItem("ثبت وقایع تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
+                MenuItem("وضعیت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
+                MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
             )),
             MenuTab("پروژه‌ها", listOf(
-                MenuItem("ثبت پروژه", Icons.Outlined.AddLocationAlt, Routes.SURVEY_PROJECT_REGISTER),
-                MenuItem("کارفرمایان و پروژه‌ها", Icons.Outlined.People, Routes.SURVEY_PROJECT_CLIENTS),
-                MenuItem("ثبت وقایع پروژه", Icons.Outlined.EventNote, Routes.SURVEY_PROJECT_EVENTS),
-                MenuItem("تقویم کاری", Icons.Outlined.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR),
-                MenuItem("تسک‌ها", Icons.Outlined.CheckCircle, Routes.SURVEY_PROJECT_TASKS)
+                MenuItem("ثبت پروژه", Icons.Filled.AddLocationAlt, Routes.SURVEY_PROJECT_REGISTER),
+                MenuItem("کارفرمایان و پروژه‌ها", Icons.Filled.People, Routes.SURVEY_PROJECT_CLIENTS),
+                MenuItem("ثبت وقایع پروژه", Icons.Filled.EventNote, Routes.SURVEY_PROJECT_EVENTS),
+                MenuItem("تقویم کاری", Icons.Filled.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR),
+                MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_PROJECT_TASKS)
             ))
         )
     )
 
     private val finance = MenuSection(
         title = "مالی",
-        icon = Icons.Outlined.Payments,
+        icon = Icons.Filled.AttachMoney,
         color = FinancePrimary,
         tabs = listOf(
             MenuTab("تونل", listOf(
-                MenuItem("کارکرد ماهانه", Icons.Outlined.CalendarMonth, Routes.FIN_TUNNEL_WORKLOG),
-                MenuItem("دریافتی‌ها", Icons.Outlined.Payments, Routes.FIN_TUNNEL_RECEIPTS),
-                MenuItem("خلاصه مطالبات", Icons.Outlined.Summarize, Routes.FIN_TUNNEL_SUMMARY)
+                MenuItem("کارکرد ماهانه", Icons.Filled.CalendarMonth, Routes.FIN_TUNNEL_WORKLOG),
+                MenuItem("دریافتی‌ها", Icons.Filled.Payments, Routes.FIN_TUNNEL_RECEIPTS),
+                MenuItem("خلاصه مطالبات", Icons.Filled.Summarize, Routes.FIN_TUNNEL_SUMMARY)
             )),
             MenuTab("پروژه‌ها", listOf(
-                MenuItem("صدور فاکتور", Icons.Outlined.ReceiptLong, Routes.FIN_PROJECT_INVOICE),
-                MenuItem("ثبت دریافتی", Icons.Outlined.Payments, Routes.FIN_PROJECT_RECEIPT),
-                MenuItem("مطالبات کلی", Icons.Outlined.AccountBalance, Routes.FIN_PROJECT_RECEIVABLES),
-                MenuItem("وضعیت", Icons.Outlined.Insights, Routes.FIN_PROJECT_STATUS)
+                MenuItem("صدور فاکتور", Icons.Filled.ReceiptLong, Routes.FIN_PROJECT_INVOICE),
+                MenuItem("ثبت دریافتی", Icons.Filled.Payments, Routes.FIN_PROJECT_RECEIPT),
+                MenuItem("مطالبات کلی", Icons.Filled.AccountBalance, Routes.FIN_PROJECT_RECEIVABLES),
+                MenuItem("وضعیت", Icons.Filled.Insights, Routes.FIN_PROJECT_STATUS)
             ))
         )
     )
 
     private val tools = MenuSection(
         title = "ابزار",
-        icon = Icons.Outlined.Build,
+        icon = Icons.Filled.Build,
         color = ToolPrimary,
         tabs = listOf(
             MenuTab("", listOf(
-                MenuItem("ترسیم نقشه", Icons.Outlined.Architecture, Routes.TOOL_DXF),
-                MenuItem("نمایش نقشه", Icons.Outlined.Map, Routes.TOOL_DXF_PREVIEW),
-                MenuItem("تخلیه دوربین", Icons.Outlined.Bluetooth, Routes.TOOL_TOTAL_STATION),
-                MenuItem("مبدل GSI", Icons.Outlined.SwapHoriz, Routes.TOOL_GSI),
-                MenuItem("مکان", Icons.Outlined.MyLocation, Routes.TOOL_LOCATION),
-                MenuItem("درون‌یابی", Icons.Outlined.Functions, Routes.TOOL_INTERPOLATE),
-                MenuItem("مساحت و محیط", Icons.Outlined.SquareFoot, Routes.TOOL_AREA),
-                MenuItem("محاسبه احجام", Icons.Outlined.ViewInAr, Routes.TOOL_VOLUME),
-                MenuItem("نامه‌نگاری", Icons.Outlined.Mail, Routes.TOOL_LETTER),
-                MenuItem("پشتیبان پایگاه", Icons.Outlined.Storage, Routes.TOOL_BACKUP)
+                MenuItem("تبدیل به DXF", Icons.Filled.Architecture, Routes.TOOL_DXF),
+                MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
+                MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
+                MenuItem("مبدل GSI", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
+                MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
+                MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
+                MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
+                MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
+                MenuItem("نامه‌نگاری", Icons.Filled.Mail, Routes.TOOL_LETTER),
+                MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))
         )
     )

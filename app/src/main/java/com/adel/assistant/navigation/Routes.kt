@@ -8,6 +8,7 @@ object Routes {
     const val SURVEY_TUNNEL_CHAINAGE = "survey/tunnel/chainage"
     const val SURVEY_TUNNEL_EVENTS = "survey/tunnel/events"
     const val SURVEY_TUNNEL_EXCAVATION = "survey/tunnel/excavation"
+    const val SURVEY_TUNNEL_MAP = "survey/tunnel/map"
     const val SURVEY_TUNNEL_STATUS = "survey/tunnel/status"
     const val SURVEY_TUNNEL_TASKS = "survey/tunnel/tasks"
     const val SURVEY_PROJECT_REGISTER = "survey/project/register"
