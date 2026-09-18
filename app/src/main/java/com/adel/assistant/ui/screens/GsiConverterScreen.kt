@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.AlignTransform
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.XlsxPointReader
@@ -56,6 +57,17 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     var editN by remember { mutableStateOf("") }
     var editZ by remember { mutableStateOf("") }
     var editCode by remember { mutableStateOf("") }
+    var showAlign by remember { mutableStateOf(false) }
+    var alignBaseName by remember { mutableStateOf("B1") }
+    var alignDirName by remember { mutableStateOf("B2") }
+    var alignBaseE by remember { mutableStateOf("") }
+    var alignBaseN by remember { mutableStateOf("") }
+    var alignBaseZ by remember { mutableStateOf("") }
+    var alignDirE by remember { mutableStateOf("") }
+    var alignDirN by remember { mutableStateOf("") }
+    var alignDirZ by remember { mutableStateOf("") }
+    var alignScale by remember { mutableStateOf(true) }
+    var alignAverage by remember { mutableStateOf(false) }
 
     val displayList = remember(points, newestFirst) {
         if (newestFirst) points.asReversed() else points
@@ -84,6 +96,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 else -> {
                     val text = bytes.toString(Charsets.UTF_8)
                     when {
+                        name.endsWith(".dat") -> GsiParser.parseDat(text)
                         name.endsWith(".gsi") ||
                             text.trimStart().startsWith("*11") ||
                             text.contains("81..") ||
@@ -115,6 +128,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         }
         val ok = when (kind) {
             "txt" -> saveFile("gsi_export.txt", GsiParser.toTxt(list))
+            "dat" -> saveFile("gsi_export.dat", GsiParser.toDat(list))
             "gsi" -> saveFile("gsi_export.gsi", GsiParser.toGsi(list))
             "kml" -> saveFile(
                 "gsi_export.kml",
@@ -219,6 +233,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             ) {
                 listOf(
                     "TXT" to "txt",
+                    "DAT" to "dat",
                     "GSI" to "gsi",
                     "KML" to "kml",
                     "DXF" to "dxf"
@@ -227,11 +242,26 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                         onClick = { export(kind) },
                         enabled = points.isNotEmpty(),
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = color)
-                    ) { Text(label, fontSize = 12.sp) }
+                    ) { Text(label, fontSize = 11.sp) }
                 }
             }
+
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    // پیش‌فرض نام‌ها از نقاط B1/B2 اگر باشد
+                    val names = points.map { it.name }.toSet()
+                    if ("B1" in names || points.any { it.code.equals("B1", true) }) alignBaseName = "B1"
+                    if ("B2" in names || points.any { it.code.equals("B2", true) }) alignDirName = "B2"
+                    showAlign = true
+                },
+                enabled = points.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = color)
+            ) { Text("الاین / هم‌مختصات") }
+
 
             Spacer(Modifier.height(8.dp))
 
@@ -349,6 +379,97 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         )
     }
 }
+
+    if (showAlign) {
+        AlertDialog(
+            onDismissRequest = { showAlign = false },
+            title = { Text("الاین نقاط") },
+            text = {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("نقطه مبنا (جابجایی اولیه + ارتفاع)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = alignBaseName,
+                        onValueChange = { alignBaseName = it },
+                        label = { Text("نام مبنا در فایل") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(value = alignBaseE, onValueChange = { alignBaseE = it }, label = { Text("E هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = alignBaseN, onValueChange = { alignBaseN = it }, label = { Text("N هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = alignBaseZ, onValueChange = { alignBaseZ = it }, label = { Text("Z هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
+                    Text("نقطه جهت (چرخش؛ مقیاس/میانگین اختیاری)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = alignDirName,
+                        onValueChange = { alignDirName = it },
+                        label = { Text("نام جهت در فایل") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(value = alignDirE, onValueChange = { alignDirE = it }, label = { Text("E هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = alignDirN, onValueChange = { alignDirN = it }, label = { Text("N هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = alignDirZ, onValueChange = { alignDirZ = it }, label = { Text("Z هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(alignScale, { alignScale = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                        Text("مقیاس (طول افقی و ارتفاع نسبی)", color = Color.White, fontSize = 13.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(alignAverage, { alignAverage = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                        Text("میانگین‌گیری (نصف residual جهت)", color = Color.White, fontSize = 13.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val be = alignBaseE.replace(',', '.').toDoubleOrNull()
+                    val bn = alignBaseN.replace(',', '.').toDoubleOrNull()
+                    val bz = alignBaseZ.replace(',', '.').toDoubleOrNull()
+                    val de = alignDirE.replace(',', '.').toDoubleOrNull()
+                    val dn = alignDirN.replace(',', '.').toDoubleOrNull()
+                    val dz = alignDirZ.replace(',', '.').toDoubleOrNull()
+                    if (alignBaseName.isBlank() || alignDirName.isBlank() ||
+                        be == null || bn == null || bz == null ||
+                        de == null || dn == null || dz == null
+                    ) {
+                        status = "مختصات یا نام نامعتبر"
+                        return@TextButton
+                    }
+                    val src = if (selectAll) points else points.filter { it.id in selectedIds }
+                    if (src.isEmpty()) {
+                        status = "نقطه‌ای انتخاب نشده"
+                        return@TextButton
+                    }
+                    val res = AlignTransform.align(
+                        points = src,
+                        baseName = alignBaseName.trim(),
+                        dirName = alignDirName.trim(),
+                        targetBase = Triple(be, bn, bz),
+                        targetDir = Triple(de, dn, dz),
+                        useScale = alignScale,
+                        useAverage = alignAverage
+                    )
+                    if (selectAll) {
+                        points = res.points
+                    } else {
+                        val map = res.points.associateBy { it.id }
+                        points = points.map { map[it.id] ?: it }
+                    }
+                    selectedIds = points.map { it.id }.toSet()
+                    status = res.message
+                    showAlign = false
+                }) { Text("اعمال", color = color) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAlign = false }) { Text("انصراف") }
+            }
+        )
+    }
 
 private fun fmt(v: Double): String =
     String.format(java.util.Locale.US, "%.3f", v)

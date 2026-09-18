@@ -71,40 +71,56 @@ object GsiParser {
         return points
     }
 
-    fun parseTxt(text: String): List<GsiPoint> {
+    /**
+     * متن عادی: N,X,Y,Z[,D]
+     * اگر فقط اعداد X,Y,Z[,D]: نام از فیلد چهارم.
+     */
+    fun parseTxt(text: String): List<GsiPoint> = parseDelimited(text, swapXY = false)
+
+    /** DAT: N,Y,X,Z[,D] */
+    fun parseDat(text: String): List<GsiPoint> = parseDelimited(text, swapXY = true)
+
+    private fun parseDelimited(text: String, swapXY: Boolean): List<GsiPoint> {
         val out = mutableListOf<GsiPoint>()
         text.lineSequence().forEach { raw ->
             val line = raw.trim()
             if (line.isEmpty() || line.startsWith("#")) return@forEach
             val low = line.lowercase()
-            if (low.startsWith("x,y") || low.startsWith("id,") || low.contains("easting")) return@forEach
+            if (low.startsWith("x,y") || low.startsWith("n,x") || low.startsWith("n,y") ||
+                low.startsWith("id,") || low.contains("easting") || low.contains("northing")
+            ) return@forEach
             val p = line.split(Regex("[,;\\t]+")).map { it.trim() }.filter { it.isNotEmpty() }
             if (p.size < 3) return@forEach
             try {
                 fun d(i: Int) = p.getOrNull(i)?.replace(',', '.')?.toDoubleOrNull()
                 when {
-                    // ID,X,Y,Z[,D]
+                    // N,X,Y,Z[,D] یا N,Y,X,Z[,D]
                     p.size >= 4 && d(1) != null && d(2) != null && d(3) != null &&
                         (d(0) == null || p[0].any { it.isLetter() } || p.size >= 5) -> {
+                        val e = if (swapXY) d(2)!! else d(1)!!
+                        val n = if (swapXY) d(1)!! else d(2)!!
                         out.add(
                             GsiPoint(
                                 name = p[0],
-                                e = d(1)!!,
-                                n = d(2)!!,
+                                e = e,
+                                n = n,
                                 z = d(3)!!,
                                 code = p.drop(4).joinToString(" ")
                             )
                         )
                     }
-                    // X,Y,Z,D  یا  X,Y,Z
+                    // X,Y,Z[,D] (یا Y,X,Z در DAT)
                     d(0) != null && d(1) != null && d(2) != null -> {
+                        val e = if (swapXY) d(1)!! else d(0)!!
+                        val n = if (swapXY) d(0)!! else d(1)!!
+                        val codeOrName = p.drop(3).joinToString(" ")
                         out.add(
                             GsiPoint(
-                                name = (out.size + 1).toString(),
-                                e = d(0)!!,
-                                n = d(1)!!,
+                                name = if (codeOrName.isNotBlank()) codeOrName else (out.size + 1).toString(),
+                                e = e,
+                                n = n,
                                 z = d(2)!!,
-                                code = p.drop(3).joinToString(" ")
+                                code = codeOrName
                             )
                         )
                     }
@@ -142,10 +158,17 @@ object GsiParser {
         return if (neg) -meters else meters
     }
 
+    /** خروجی استاندارد: N,X,Y,Z,D */
     fun toTxt(points: List<GsiPoint>): String = buildString {
-        // فرمت: نام,E,N,Z,D
         points.forEach { p ->
             appendLine("${p.name},${fmt(p.e)},${fmt(p.n)},${fmt(p.z)},${p.code}")
+        }
+    }
+
+    /** خروجی DAT: N,Y,X,Z,D */
+    fun toDat(points: List<GsiPoint>): String = buildString {
+        points.forEach { p ->
+            appendLine("${p.name},${fmt(p.n)},${fmt(p.e)},${fmt(p.z)},${p.code}")
         }
     }
 
