@@ -3,6 +3,8 @@ package com.adel.assistant.ui.screens
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.location.Location
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,6 +44,8 @@ import com.adel.assistant.data.MapOverlayPoint
 import com.adel.assistant.data.MapOverlayStore
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.TunnelMapBgStore
+import com.adel.assistant.data.DxfModel
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
@@ -80,6 +85,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     var tunnelPts by remember { mutableStateOf(TunnelReportStore.allPoints(context)) }
+    var bgModel by remember { mutableStateOf<DxfModel?>(TunnelMapBgStore.parseModel(context)) }
+    var showBg by remember { mutableStateOf(true) }
     var reportPts by remember { mutableStateOf(listOf<ReportEntry>()) }
     var overlays by remember { mutableStateOf(MapOverlayStore.all(context)) }
 
@@ -122,6 +129,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         reportPts = TunnelReportStore.allEntries(context).map { TunnelReportStore.ensureCoords(context, it) }
             .filter { it.x != 0.0 || it.y != 0.0 }
         overlays = MapOverlayStore.all(context)
+        bgModel = TunnelMapBgStore.parseModel(context)
         needFit = true
         status = "تونل ${tunnelPts.size} | گزارش ${reportPts.size} | دستی ${overlays.size}"
     }
@@ -134,6 +142,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         tunnelPts.forEach { xs += it.x; ys += it.y }
         reportPts.forEach { xs += it.x; ys += it.y }
         overlays.forEach { xs += it.x; ys += it.y }
+        bgModel?.lines?.forEach { ln ->
+            xs += ln.x1; ys += ln.y1; xs += ln.x2; ys += ln.y2
+        }
         if (xs.isEmpty()) return null
         return Offset(xs.min().toFloat(), ys.min().toFloat()) to
             Offset(xs.max().toFloat(), ys.max().toFloat())
@@ -284,6 +295,22 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         if (granted) readGps() else status = "مجوز موقعیت رد شد"
     }
 
+    val mapUploadLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
+            TunnelMapBgStore.saveBytes(context, bytes)
+            bgModel = TunnelMapBgStore.parseModel(context)
+            needFit = true
+            status = if (bgModel == null || bgModel!!.isEmpty) "فایل ذخیره شد ولی خط ترسیمی پیدا نشد"
+            else "نقشه تونل بارگذاری شد (${bgModel!!.lines.size} خط) — در پشتیبان ZIP می‌آید"
+        } catch (e: Exception) {
+            status = "خطا در بارگذاری نقشه: ${e.message}"
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(Background)) {
         ScreenTopBar(title = "نقشه تونل", color = color, onBack = onBack)
 
@@ -320,6 +347,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             }
             IconButton(onClick = { showBaseDialog = true }) {
                 Icon(Icons.Outlined.Map, "پس‌زمینه", tint = color)
+            }
+            IconButton(onClick = {
+                mapUploadLauncher.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream"))
+            }) {
+                Icon(Icons.Outlined.Upload, "آپلود نقشه تونل", tint = color)
             }
             IconButton(onClick = { showLayers = true }) {
                 Icon(Icons.Outlined.Layers, "لایه‌ها", tint = color)
@@ -437,6 +469,23 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
 
+                // نقشه ثابت آپلود‌شده (DXF)
+                if (showBg) {
+                    bgModel?.lines?.forEach { ln ->
+                        drawLine(
+                            Color(0xFF90CAF9).copy(alpha = 0.85f),
+                            worldToScreen(ln.x1, ln.y1),
+                            worldToScreen(ln.x2, ln.y2),
+                            strokeWidth = 2f
+                        )
+                    }
+                    bgModel?.circles?.forEach { c ->
+                        val center = worldToScreen(c.x, c.y)
+                        val r = (c.r * scale).toFloat().coerceAtLeast(2f)
+                        drawCircle(Color(0xFF90CAF9).copy(alpha = 0.7f), radius = r, center = center, style = Stroke(width = 2f))
+                    }
+                }
+
                 if (showTunnel && tunnelPts.size >= 2) {
                     val sorted = tunnelPts.sortedBy { it.km }
                     for (i in 0 until sorted.lastIndex) {
@@ -456,12 +505,30 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
 
                 if (showReport) {
+                    val textPx = (0.05f * scale).coerceIn(12f, 42f) // معادل ۵ سانتی‌متر در مقیاس نقشه
+                    val paint = Paint().apply {
+                        color = android.graphics.Color.rgb(0xC8, 0xE6, 0xC9)
+                        textSize = textPx
+                        isAntiAlias = true
+                        typeface = Typeface.DEFAULT_BOLD
+                        textAlign = Paint.Align.RIGHT
+                    }
                     reportPts.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
-                        val arm = 8f
+                        val arm = max(6f, textPx * 0.45f)
                         val col = Color(0xFF81C995)
+                        // ضربدر
                         drawLine(col, Offset(c.x - arm, c.y - arm), Offset(c.x + arm, c.y + arm), strokeWidth = 2.5f)
                         drawLine(col, Offset(c.x - arm, c.y + arm), Offset(c.x + arm, c.y - arm), strokeWidth = 2.5f)
+                        // سه ردیف سمت چپ نقطه: شماره / ارتفاع / کیلومتراژ
+                        val lineH = textPx * 1.15f
+                        val tx = c.x - arm - 4f
+                        val ty = c.y
+                        drawContext.canvas.nativeCanvas.apply {
+                            drawText(p.dateLabel, tx, ty - lineH, paint)           // شماره مثل 050627
+                            drawText(formatEn("%.3f", p.z), tx, ty, paint)         // ارتفاع
+                            drawText(formatEn("%.3f", p.km), tx, ty + lineH, paint) // کیلومتراژ
+                        }
                     }
                 }
 
@@ -543,6 +610,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             title = { Text("لایه‌ها") },
             text = {
                 Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(showBg, { showBg = it }); Text("نقشه آپلود‌شده (DXF)")
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(showTunnel, { showTunnel = it }); Text("محور و نقاط تونل (ثابت)")
                     }
