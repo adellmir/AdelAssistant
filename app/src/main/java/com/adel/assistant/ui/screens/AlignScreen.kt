@@ -1,18 +1,14 @@
 package com.adel.assistant.ui.screens
 
-import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,243 +16,168 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.adel.assistant.data.AlignParams
-import com.adel.assistant.data.AlignPoint
 import com.adel.assistant.data.AlignTransform
+import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.GsiParser
+import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
-import java.io.File
-import java.io.FileOutputStream
 
-/**
- * الاین سری دوم (برداشت) روی سری اول (مرجع)
- * حالت پیش‌فرض: انتقال + دوران
- * اختیاری: مقیاس
- */
 @Composable
 fun AlignScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
+    var status by remember { mutableStateOf("فایل نقاط را باز کن؛ مبنا و جهت را مشخص کن.") }
+    var baseName by remember { mutableStateOf("B1") }
+    var dirName by remember { mutableStateOf("B2") }
+    var baseE by remember { mutableStateOf("") }
+    var baseN by remember { mutableStateOf("") }
+    var baseZ by remember { mutableStateOf("") }
+    var dirE by remember { mutableStateOf("") }
+    var dirN by remember { mutableStateOf("") }
+    var dirZ by remember { mutableStateOf("") }
+    var useScale by remember { mutableStateOf(true) }
+    var useAverage by remember { mutableStateOf(false) }
 
-    var refPoints by remember { mutableStateOf<List<AlignPoint>>(emptyList()) }
-    var srcPoints by remember { mutableStateOf<List<AlignPoint>>(emptyList()) }
-    var useScale by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("فایل مرجع و فایل برداشت را بخوان؛ نقاط هم‌نام جفت می‌شوند.") }
-    var params by remember { mutableStateOf<AlignParams?>(null) }
-    var residuals by remember { mutableStateOf<List<String>>(emptyList()) }
-    var resultPoints by remember { mutableStateOf<List<AlignPoint>>(emptyList()) }
-
-    fun loadPoints(uri: Uri, isRef: Boolean) {
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
         try {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+        }
+        try {
+            val name = uri.lastPathSegment?.lowercase() ?: ""
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
-            val pts = AlignTransform.parsePoints(text)
-            if (pts.isEmpty()) {
-                status = "نقطه‌ای در فایل پیدا نشد"
-                return
+            val parsed = when {
+                name.endsWith(".dat") -> GsiParser.parseDat(text)
+                name.endsWith(".gsi") || text.trimStart().startsWith("*11") -> GsiParser.parse(text)
+                else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
             }
-            if (isRef) {
-                refPoints = pts
-                status = "مرجع: ${pts.size} نقطه"
-            } else {
-                srcPoints = pts
-                status = "برداشت: ${pts.size} نقطه"
-            }
-            params = null
-            residuals = emptyList()
-            resultPoints = emptyList()
+            points = parsed
+            status = if (parsed.isEmpty()) "نقطه‌ای یافت نشد" else "${parsed.size} نقطه بارگذاری شد"
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
         }
     }
 
-    val pickRef = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) loadPoints(uri, true)
-    }
-    val pickSrc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) loadPoints(uri, false)
+    fun applyAlign() {
+        val be = baseE.replace(',', '.').toDoubleOrNull()
+        val bn = baseN.replace(',', '.').toDoubleOrNull()
+        val bz = baseZ.replace(',', '.').toDoubleOrNull()
+        val de = dirE.replace(',', '.').toDoubleOrNull()
+        val dn = dirN.replace(',', '.').toDoubleOrNull()
+        val dz = dirZ.replace(',', '.').toDoubleOrNull()
+        if (points.isEmpty()) {
+            status = "ابتدا فایل نقاط را باز کن"
+            return
+        }
+        if (baseName.isBlank() || dirName.isBlank() || be == null || bn == null || bz == null ||
+            de == null || dn == null || dz == null
+        ) {
+            status = "نام و مختصات هدف را کامل وارد کن"
+            return
+        }
+        val res = AlignTransform.alignSimple(
+            points = points,
+            baseName = baseName.trim(),
+            dirName = dirName.trim(),
+            targetBase = Triple(be, bn, bz),
+            targetDir = Triple(de, dn, dz),
+            useScale = useScale,
+            useAverage = useAverage
+        )
+        points = res.points
+        status = res.message
     }
 
-    fun compute() {
-        try {
-            val pairs = AlignTransform.matchByName(srcPoints, refPoints)
-            if (pairs.size < 2) {
-                status = "حداقل ۲ نقطهٔ هم‌نام بین مرجع و برداشت لازم است (الان ${pairs.size})"
-                params = null
-                return
-            }
-            val p = AlignTransform.compute(pairs, useScale)
-            params = p
-            residuals = pairs.map { pair ->
-                val t = p.transform(pair.source)
-                val dx = t.x - pair.target.x
-                val dy = t.y - pair.target.y
-                val d = kotlin.math.sqrt(dx * dx + dy * dy)
-                "${pair.source.name}: Δ=${"%.3f".format(d)} m  (dx=${"%.3f".format(dx)}, dy=${"%.3f".format(dy)})"
-            }
-            resultPoints = srcPoints.map { p.transform(it) }
-            status = "تبدیل با ${pairs.size} نقطهٔ مشترک انجام شد — RMSE=${"%.3f".format(p.residualRms)} m"
-        } catch (e: Exception) {
-            status = "خطا در محاسبه: ${e.message}"
-            params = null
+    fun export(kind: String) {
+        if (points.isEmpty()) {
+            status = "نقطه‌ای نیست"
+            return
         }
-    }
-
-    fun saveResult(): Boolean {
-        if (resultPoints.isEmpty()) return false
-        val body = AlignTransform.toTxt(resultPoints)
-        val name = "align_result.txt"
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val values = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant")
-                }
-                val outUri = context.contentResolver.insert(MediaStore.Files.getContentUri("external"), values)
-                    ?: return false
-                context.contentResolver.openOutputStream(outUri)?.use { it.write(body.toByteArray()) } ?: return false
-                true
-            } else {
-                val dir = File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                    "AdelAssistant"
-                )
-                if (!dir.exists()) dir.mkdirs()
-                FileOutputStream(File(dir, name)).use { it.write(body.toByteArray()) }
-                true
-            }
-        } catch (_: Exception) {
-            false
+        val ok = when (kind) {
+            "txt" -> FileExport.exportTextToDocuments(context, "aligned.txt", GsiParser.toTxt(points)) != null
+            "dat" -> FileExport.exportTextToDocuments(context, "aligned.dat", GsiParser.toDat(points)) != null
+            "dxf" -> FileExport.exportTextToDocuments(context, "aligned.dxf", GsiParser.toDxf(points), "application/dxf") != null
+            else -> false
         }
+        status = if (ok) "ذخیره شد: $kind" else "خطا در ذخیره"
     }
 
     Column(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .background(Background)
             .padding(horizontal = 16.dp)
     ) {
-        ScreenTopBar(title = "الاین مختصات", color = color, onBack = onBack)
-
-        Text(
-            "سری مرجع (ABC) و سری برداشت (a1b1c1…) را بخوان. نقاط هم‌نام جفت می‌شوند. پیش‌فرض: انتقال + دوران؛ در صورت نیاز مقیاس را روشن کن.",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
-        Spacer(Modifier.height(8.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            Button(
-                onClick = { pickRef.launch(arrayOf("*/*", "text/*")) },
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.weight(1f)
-            ) { Text("فایل مرجع (${refPoints.size})") }
-            OutlinedButton(
-                onClick = { pickSrc.launch(arrayOf("*/*", "text/*")) },
-                modifier = Modifier.weight(1f)
-            ) { Text("فایل برداشت (${srcPoints.size})") }
-        }
-
-        Spacer(Modifier.height(6.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+        ScreenTopBar(title = "الاین / هم‌مختصات", color = color, onBack = onBack)
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("اعمال مقیاس", color = TextPrimary, modifier = Modifier.weight(1f))
-            Switch(
-                checked = useScale,
-                onCheckedChange = {
-                    useScale = it
-                    params = null
-                    resultPoints = emptyList()
-                },
-                colors = SwitchDefaults.colors(checkedTrackColor = color)
-            )
-        }
-        Text(
-            if (useScale) "حالت: انتقال + دوران + مقیاس (Helmert)"
-            else "حالت: فقط انتقال + دوران (مقیاس = ۱)",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
+            Text(status, color = TextSecondary, fontSize = 13.sp)
+            Button(
+                onClick = { picker.launch(arrayOf("*/*", "text/*")) },
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("باز کردن فایل نقاط") }
 
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = { compute() },
-            enabled = refPoints.isNotEmpty() && srcPoints.isNotEmpty(),
-            colors = ButtonDefaults.buttonColors(containerColor = color),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("محاسبه الاین") }
-
-        Spacer(Modifier.height(6.dp))
-        Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-            Text(status, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-        }
-
-        params?.let { p ->
-            Spacer(Modifier.height(8.dp))
-            Surface(shape = RoundedCornerShape(10.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("پارامترهای تبدیل", fontWeight = FontWeight.Bold, color = Color.Black)
-                    Text("Tx = ${"%.4f".format(p.tx)}", color = Color.Black, fontSize = 13.sp)
-                    Text("Ty = ${"%.4f".format(p.ty)}", color = Color.Black, fontSize = 13.sp)
-                    Text("دوران = ${"%.6f".format(p.rotationDeg)} °", color = Color.Black, fontSize = 13.sp)
-                    Text(
-                        "مقیاس = ${"%.8f".format(p.scale)}" + if (p.useScale) "" else " (ثابت ۱)",
-                        color = Color.Black,
-                        fontSize = 13.sp
+            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("نقطه مبنا (جابجایی XYZ + مچ ارتفاع)", color = TextPrimary)
+                    OutlinedTextField(
+                        value = baseName, onValueChange = { baseName = it },
+                        label = { Text("نام مبنا در فایل") }, singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
-                    Text("RMSE نقاط کنترل = ${"%.4f".format(p.residualRms)} m", color = Color.Black, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(value = baseE, onValueChange = { baseE = it }, label = { Text("E هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = baseN, onValueChange = { baseN = it }, label = { Text("N هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = baseZ, onValueChange = { baseZ = it }, label = { Text("Z هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
                 }
             }
-        }
-
-        if (residuals.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            Text("باقیمانده روی نقاط مشترک", color = TextPrimary, style = MaterialTheme.typography.titleSmall)
-            LazyColumn(
-                modifier = Modifier.weight(1f, fill = false).heightIn(max = 160.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(residuals) { line ->
-                    Text(line, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("نقطه جهت (چرخش محور)", color = TextPrimary)
+                    OutlinedTextField(
+                        value = dirName, onValueChange = { dirName = it },
+                        label = { Text("نام جهت در فایل") }, singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(value = dirE, onValueChange = { dirE = it }, label = { Text("E هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = dirN, onValueChange = { dirN = it }, label = { Text("N هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(value = dirZ, onValueChange = { dirZ = it }, label = { Text("Z هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
                 }
             }
-        } else {
-            Spacer(Modifier.weight(1f))
-        }
-
-        if (resultPoints.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            Text("پیش‌نمایش نتیجه (${resultPoints.size} نقطه)", color = TextPrimary, style = MaterialTheme.typography.titleSmall)
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(resultPoints.take(40)) { pt ->
-                    Text(
-                        "${pt.name}  X=${"%.3f".format(pt.x)}  Y=${"%.3f".format(pt.y)}  Z=${"%.3f".format(pt.z)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-                if (resultPoints.size > 40) {
-                    item { Text("… و ${resultPoints.size - 40} نقطه دیگر", color = TextSecondary) }
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(useScale, { useScale = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                Text("مقیاس (طول افقی و ارتفاع نسبی)", color = TextPrimary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(useAverage, { useAverage = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                Text("میانگین‌گیری (نصف residual جهت)", color = TextPrimary)
             }
             Button(
-                onClick = {
-                    status = if (saveResult()) "ذخیره شد: Documents/AdelAssistant/align_result.txt"
-                    else "خطا در ذخیره"
-                },
+                onClick = { applyAlign() },
+                enabled = points.isNotEmpty(),
                 colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) { Text("ذخیره نتیجه (TXT)") }
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("اعمال الاین") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { export("txt") }, enabled = points.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("TXT") }
+                OutlinedButton(onClick = { export("dat") }, enabled = points.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("DAT") }
+                OutlinedButton(onClick = { export("dxf") }, enabled = points.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("DXF") }
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

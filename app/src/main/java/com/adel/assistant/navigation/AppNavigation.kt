@@ -15,6 +15,7 @@ import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.AreaScreen
 import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.ChainageScreen
+import com.adel.assistant.ui.screens.AlignScreen
 import com.adel.assistant.ui.screens.ClientsProjectsScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.ExcavationPointsScreen
@@ -34,7 +35,6 @@ import com.adel.assistant.ui.screens.TaskScreen
 import com.adel.assistant.ui.screens.TotalStationDumpScreen
 import com.adel.assistant.ui.screens.TunnelFinanceSummaryScreen
 import com.adel.assistant.ui.screens.TunnelPointsScreen
-import com.adel.assistant.ui.screens.TunnelExcavationMapScreen
 import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
@@ -85,9 +85,6 @@ fun AppNavigation() {
         }
         composable(Routes.SURVEY_TUNNEL_EXCAVATION) {
             ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.SURVEY_TUNNEL_MAP) {
-            TunnelExcavationMapScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_STATUS) {
             TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
@@ -195,6 +192,9 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
             FinanceStatusScreen(color = FinancePrimary, onBack = { navController.popBackStack() })
         }
 
+        composable(Routes.TOOL_ALIGN) {
+            AlignScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
         composable(Routes.TOOL_DXF) {
             DxfConverterScreen(onBack = { navController.popBackStack() })
         }

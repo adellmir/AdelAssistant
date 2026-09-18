@@ -1,11 +1,7 @@
 package com.adel.assistant.ui.screens
 
-import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -19,9 +15,7 @@ import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Deselect
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,15 +26,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.AlignTransform
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.XlsxPointReader
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStreamReader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,26 +63,20 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         if (newestFirst) points.asReversed() else points
     }
 
-    fun selectedPoints(): List<GsiPoint> {
-        return if (selectAll) points else points.filter { it.id in selectedIds }
-    }
+    fun selectedPoints(): List<GsiPoint> =
+        if (selectAll) points else points.filter { it.id in selectedIds }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            context.contentResolver.takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         } catch (_: Exception) {
         }
         try {
             val name = uri.lastPathSegment?.lowercase() ?: ""
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
             val parsed = when {
-                name.endsWith(".xlsx") || name.endsWith(".xls") ->
-                    XlsxPointReader.parse(bytes)
+                name.endsWith(".xlsx") || name.endsWith(".xls") -> XlsxPointReader.parse(bytes)
                 else -> {
                     val text = bytes.toString(Charsets.UTF_8)
                     when {
@@ -116,9 +100,8 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    fun saveFile(fileName: String, body: String, mime: String = "text/plain"): Boolean {
-        return FileExport.exportTextToDocuments(context, fileName, body, mime) != null
-    }
+    fun saveFile(fileName: String, body: String, mime: String = "text/plain"): Boolean =
+        FileExport.exportTextToDocuments(context, fileName, body, mime) != null
 
     fun export(kind: String) {
         val list = selectedPoints()
@@ -130,11 +113,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             "txt" -> saveFile("gsi_export.txt", GsiParser.toTxt(list))
             "dat" -> saveFile("gsi_export.dat", GsiParser.toDat(list))
             "gsi" -> saveFile("gsi_export.gsi", GsiParser.toGsi(list))
-            "kml" -> saveFile(
-                "gsi_export.kml",
-                GsiParser.toKml(list),
-                "application/vnd.google-earth.kml+xml"
-            )
+            "kml" -> saveFile("gsi_export.kml", GsiParser.toKml(list), "application/vnd.google-earth.kml+xml")
             "dxf" -> saveFile("gsi_export.dxf", GsiParser.toDxf(list), "application/dxf")
             else -> false
         }
@@ -161,9 +140,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("مبدل") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("بازگشت", color = color) }
-                },
+                navigationIcon = { TextButton(onClick = onBack) { Text("بازگشت", color = color) } },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF1A1F16),
                     titleContentColor = Color.White
@@ -172,72 +149,42 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         },
         containerColor = Color(0xFF12150F)
     ) { pad ->
-        Column(
-            Modifier
-                .padding(pad)
-                .fillMaxSize()
-                .padding(12.dp)
-        ) {
+        Column(Modifier.padding(pad).fillMaxSize().padding(12.dp)) {
             if (status.isNotBlank()) {
                 Text(status, color = Color(0xFFB0B8A8), fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
             }
-
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = {
-                        picker.launch(
-                            arrayOf(
-                                "*/*", "text/*", "application/octet-stream",
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                "application/vnd.ms-excel"
-                            )
-                        )
-                    }
-                ) { Icon(Icons.Outlined.FolderOpen, "باز کردن", tint = color) }
-                IconButton(
-                    onClick = { newestFirst = !newestFirst },
-                    enabled = points.isNotEmpty()
-                ) {
+                IconButton(onClick = {
+                    picker.launch(arrayOf("*/*", "text/*", "application/octet-stream",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                }) { Icon(Icons.Outlined.FolderOpen, "باز کردن", tint = color) }
+                IconButton(onClick = { newestFirst = !newestFirst }, enabled = points.isNotEmpty()) {
                     Icon(
                         if (newestFirst) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward,
-                        if (newestFirst) "جدید به قدیم" else "قدیم به جدید",
-                        tint = color
+                        null, tint = color
                     )
                 }
-                IconButton(
-                    onClick = {
-                        selectAll = true
-                        selectedIds = points.map { it.id }.toSet()
-                    },
-                    enabled = points.isNotEmpty()
-                ) { Icon(Icons.Outlined.Checklist, "انتخاب همه", tint = color) }
-                IconButton(
-                    onClick = {
-                        selectAll = false
-                        selectedIds = emptySet()
-                    },
-                    enabled = points.isNotEmpty()
-                ) { Icon(Icons.Outlined.Close, "گزینش", tint = color) }
+                IconButton(onClick = {
+                    selectAll = true
+                    selectedIds = points.map { it.id }.toSet()
+                }, enabled = points.isNotEmpty()) {
+                    Icon(Icons.Outlined.Checklist, "انتخاب همه", tint = color)
+                }
+                IconButton(onClick = {
+                    selectAll = false
+                    selectedIds = emptySet()
+                }, enabled = points.isNotEmpty()) {
+                    Icon(Icons.Outlined.Close, "گزینش", tint = color)
+                }
             }
-
             Spacer(Modifier.height(8.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(
-                    "TXT" to "txt",
-                    "DAT" to "dat",
-                    "GSI" to "gsi",
-                    "KML" to "kml",
-                    "DXF" to "dxf"
-                ).forEach { (label, kind) ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf("TXT" to "txt", "DAT" to "dat", "GSI" to "gsi", "KML" to "kml", "DXF" to "dxf").forEach { (label, kind) ->
                     Button(
                         onClick = { export(kind) },
                         enabled = points.isNotEmpty(),
@@ -247,28 +194,15 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                     ) { Text(label, fontSize = 11.sp) }
                 }
             }
-
             Spacer(Modifier.height(6.dp))
             Button(
-                onClick = {
-                    // پیش‌فرض نام‌ها از نقاط B1/B2 اگر باشد
-                    val names = points.map { it.name }.toSet()
-                    if ("B1" in names || points.any { it.code.equals("B1", true) }) alignBaseName = "B1"
-                    if ("B2" in names || points.any { it.code.equals("B2", true) }) alignDirName = "B2"
-                    showAlign = true
-                },
+                onClick = { showAlign = true },
                 enabled = points.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = color)
             ) { Text("الاین / هم‌مختصات") }
-
-
             Spacer(Modifier.height(8.dp))
-
-            LazyColumn(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(displayList, key = { it.id }) { p ->
                     val checked = selectAll || p.id in selectedIds
                     Row(
@@ -287,42 +221,28 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                             colors = CheckboxDefaults.colors(checkedColor = color)
                         )
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                p.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
+                            Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             Text(
                                 "E ${fmt(p.e)}  N ${fmt(p.n)}  Z ${fmt(p.z)}",
-                                color = Color(0xFFB0B8A8),
-                                fontSize = 12.sp
+                                color = Color(0xFFB0B8A8), fontSize = 12.sp
                             )
                             if (p.code.isNotBlank()) {
-                                Text(
-                                    "D: ${p.code}",
-                                    color = Color(0xFF90CAF9),
-                                    fontSize = 12.sp
-                                )
+                                Text("D: ${p.code}", color = Color(0xFF90CAF9), fontSize = 12.sp)
                             }
                         }
-                        TextButton(
-                            onClick = {
-                                editTarget = p
-                                editName = p.name
-                                editE = fmt(p.e)
-                                editN = fmt(p.n)
-                                editZ = fmt(p.z)
-                                editCode = p.code
-                            }
-                        ) { Text("ویرایش", color = color, fontSize = 12.sp) }
-                        TextButton(
-                            onClick = {
-                                points = points.filter { it.id != p.id }
-                                selectedIds = selectedIds - p.id
-                                status = "حذف شد"
-                            }
-                        ) { Text("حذف", color = Color(0xFFE57373), fontSize = 12.sp) }
+                        TextButton(onClick = {
+                            editTarget = p
+                            editName = p.name
+                            editE = fmt(p.e)
+                            editN = fmt(p.n)
+                            editZ = fmt(p.z)
+                            editCode = p.code
+                        }) { Text("ویرایش", color = color, fontSize = 12.sp) }
+                        TextButton(onClick = {
+                            points = points.filter { it.id != p.id }
+                            selectedIds = selectedIds - p.id
+                            status = "حذف شد"
+                        }) { Text("حذف", color = Color(0xFFE57373), fontSize = 12.sp) }
                     }
                 }
             }
@@ -335,81 +255,33 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             title = { Text("ویرایش نقطه") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = editName,
-                        onValueChange = { editName = it },
-                        label = { Text("نام") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = editE,
-                        onValueChange = { editE = it },
-                        label = { Text("E") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                    OutlinedTextField(
-                        value = editN,
-                        onValueChange = { editN = it },
-                        label = { Text("N") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                    OutlinedTextField(
-                        value = editZ,
-                        onValueChange = { editZ = it },
-                        label = { Text("Z") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                    OutlinedTextField(
-                        value = editCode,
-                        onValueChange = { editCode = it },
-                        label = { Text("D (اطلاعات / نوع)") },
-                        singleLine = true
-                    )
+                    OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text("نام") }, singleLine = true)
+                    OutlinedTextField(value = editE, onValueChange = { editE = it }, label = { Text("E") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    OutlinedTextField(value = editN, onValueChange = { editN = it }, label = { Text("N") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    OutlinedTextField(value = editZ, onValueChange = { editZ = it }, label = { Text("Z") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    OutlinedTextField(value = editCode, onValueChange = { editCode = it }, label = { Text("D (اطلاعات / نوع)") }, singleLine = true)
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { applyEdit() }) { Text("ذخیره", color = color) }
-            },
-            dismissButton = {
-                TextButton(onClick = { editTarget = null }) { Text("انصراف") }
-            }
+            confirmButton = { TextButton(onClick = { applyEdit() }) { Text("ذخیره", color = color) } },
+            dismissButton = { TextButton(onClick = { editTarget = null }) { Text("انصراف") } }
         )
     }
-}
 
     if (showAlign) {
         AlertDialog(
             onDismissRequest = { showAlign = false },
             title = { Text("الاین نقاط") },
             text = {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("نقطه مبنا (جابجایی اولیه + ارتفاع)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
-                    OutlinedTextField(
-                        value = alignBaseName,
-                        onValueChange = { alignBaseName = it },
-                        label = { Text("نام مبنا در فایل") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("نقطه مبنا (جابجایی + ارتفاع)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
+                    OutlinedTextField(value = alignBaseName, onValueChange = { alignBaseName = it }, label = { Text("نام مبنا در فایل") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedTextField(value = alignBaseE, onValueChange = { alignBaseE = it }, label = { Text("E هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                         OutlinedTextField(value = alignBaseN, onValueChange = { alignBaseN = it }, label = { Text("N هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                         OutlinedTextField(value = alignBaseZ, onValueChange = { alignBaseZ = it }, label = { Text("Z هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                     }
-                    Text("نقطه جهت (چرخش؛ مقیاس/میانگین اختیاری)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
-                    OutlinedTextField(
-                        value = alignDirName,
-                        onValueChange = { alignDirName = it },
-                        label = { Text("نام جهت در فایل") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Text("نقطه جهت (چرخش)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
+                    OutlinedTextField(value = alignDirName, onValueChange = { alignDirName = it }, label = { Text("نام جهت در فایل") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedTextField(value = alignDirE, onValueChange = { alignDirE = it }, label = { Text("E هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                         OutlinedTextField(value = alignDirN, onValueChange = { alignDirN = it }, label = { Text("N هدف") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
@@ -417,7 +289,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(alignScale, { alignScale = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                        Text("مقیاس (طول افقی و ارتفاع نسبی)", color = Color.White, fontSize = 13.sp)
+                        Text("مقیاس (افقی و ارتفاع نسبی)", color = Color.White, fontSize = 13.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(alignAverage, { alignAverage = it }, colors = CheckboxDefaults.colors(checkedColor = color))
@@ -434,18 +306,17 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                     val dn = alignDirN.replace(',', '.').toDoubleOrNull()
                     val dz = alignDirZ.replace(',', '.').toDoubleOrNull()
                     if (alignBaseName.isBlank() || alignDirName.isBlank() ||
-                        be == null || bn == null || bz == null ||
-                        de == null || dn == null || dz == null
+                        be == null || bn == null || bz == null || de == null || dn == null || dz == null
                     ) {
                         status = "مختصات یا نام نامعتبر"
                         return@TextButton
                     }
-                    val src = if (selectAll) points else points.filter { it.id in selectedIds }
+                    val src = selectedPoints()
                     if (src.isEmpty()) {
                         status = "نقطه‌ای انتخاب نشده"
                         return@TextButton
                     }
-                    val res = AlignTransform.align(
+                    val res = AlignTransform.alignSimple(
                         points = src,
                         baseName = alignBaseName.trim(),
                         dirName = alignDirName.trim(),
@@ -454,9 +325,8 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                         useScale = alignScale,
                         useAverage = alignAverage
                     )
-                    if (selectAll) {
-                        points = res.points
-                    } else {
+                    if (selectAll) points = res.points
+                    else {
                         val map = res.points.associateBy { it.id }
                         points = points.map { map[it.id] ?: it }
                     }
@@ -465,11 +335,10 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                     showAlign = false
                 }) { Text("اعمال", color = color) }
             },
-            dismissButton = {
-                TextButton(onClick = { showAlign = false }) { Text("انصراف") }
-            }
+            dismissButton = { TextButton(onClick = { showAlign = false }) { Text("انصراف") } }
         )
     }
+}
 
 private fun fmt(v: Double): String =
     String.format(java.util.Locale.US, "%.3f", v)
