@@ -86,12 +86,6 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 maxLines = 20
             )
 
-            Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
-            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
