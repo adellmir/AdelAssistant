@@ -84,10 +84,10 @@ fun AppNavigation() {
             TunnelPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_EXCAVATION) {
-            ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() }
+            ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+        }
         composable(Routes.SURVEY_TUNNEL_MAP) {
             TunnelExcavationMapScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
-        })
         }
         composable(Routes.SURVEY_TUNNEL_STATUS) {
             TunnelStatusScreen(color = WorkPrimary, onBack = { navController.popBackStack() })

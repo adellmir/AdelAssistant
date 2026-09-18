@@ -198,11 +198,12 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun exportDxf() {
+        // DXF گزارش: id=تاریخ(مثل 050627) ، z=ارتفاع ، km=کیلومتراژ — سه ردیف سمت چپ ضربدر
         val fromReport = reportPts.map {
             MapOverlayPoint(
                 id = it.dateLabel,
                 x = it.x, y = it.y, z = it.z,
-                d = "شفت${it.shaft}-${it.side}",
+                d = formatEn("%.3f", it.km),
                 km = it.km,
                 source = "report"
             )
@@ -392,12 +393,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
 
-                // نقاط گزارش روزانه
+                // نقاط گزارش روزانه — ضربدر + (در زوم مناسب قابل تشخیص)
                 if (showReport) {
                     reportPts.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
-                        drawCircle(Color(0xFF81C995), radius = 7f, center = c)
-                        drawCircle(Color.White, radius = 3f, center = c)
+                        val arm = 8f
+                        val col = Color(0xFF81C995)
+                        drawLine(col, Offset(c.x - arm, c.y - arm), Offset(c.x + arm, c.y + arm), strokeWidth = 2.5f)
+                        drawLine(col, Offset(c.x - arm, c.y + arm), Offset(c.x + arm, c.y - arm), strokeWidth = 2.5f)
                     }
                 }
 

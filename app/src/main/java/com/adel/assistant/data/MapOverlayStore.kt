@@ -79,27 +79,32 @@ object MapOverlayStore {
             append("0\r\nLAYER\r\n2\r\n$layer\r\n70\r\n0\r\n62\r\n7\r\n6\r\nCONTINUOUS\r\n")
         }
         append("0\r\nENDTAB\r\n0\r\nENDSEC\r\n0\r\nSECTION\r\n2\r\nENTITIES\r\n")
-        val h = 0.05
-        val gap = 0.08
+        val h = 0.05 // ۵ سانتی‌متر
+        // متن در سمت چپ نقطه (X کمتر)
+        val gapX = 0.12
         points.forEach { p ->
             val s = 0.10
+            // ضربدر
             append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
             append("10\r\n${f(p.x - s)}\r\n20\r\n${f(p.y - s)}\r\n30\r\n0\r\n")
             append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y + s)}\r\n31\r\n0\r\n")
             append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
             append("10\r\n${f(p.x - s)}\r\n20\r\n${f(p.y + s)}\r\n30\r\n0\r\n")
             append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y - s)}\r\n31\r\n0\r\n")
+            // سه ردیف سمت چپ: شماره / ارتفاع / کیلومتراژ
+            val tx = p.x - gapX
+            val labelTop = p.id // مثل 050627
+            val labelMid = f(p.z)
+            val labelBot = f(p.km)
             append("0\r\nTEXT\r\n8\r\npoint-id\r\n62\r\n7\r\n")
-            append("10\r\n${f(p.x + gap)}\r\n20\r\n${f(p.y + h * 1.2)}\r\n30\r\n0\r\n")
-            append("40\r\n${f(h)}\r\n1\r\n${p.id}\r\n50\r\n0\r\n")
+            append("10\r\n${f(tx)}\r\n20\r\n${f(p.y + h * 1.2)}\r\n30\r\n0\r\n")
+            append("40\r\n${f(h)}\r\n1\r\n$labelTop\r\n50\r\n0\r\n")
             append("0\r\nTEXT\r\n8\r\npoint-z\r\n62\r\n7\r\n")
-            append("10\r\n${f(p.x + gap)}\r\n20\r\n${f(p.y)}\r\n30\r\n0\r\n")
-            append("40\r\n${f(h)}\r\n1\r\n${f(p.z)}\r\n50\r\n0\r\n")
-            if (p.d.isNotBlank()) {
-                append("0\r\nTEXT\r\n8\r\npoint-d\r\n62\r\n7\r\n")
-                append("10\r\n${f(p.x + gap)}\r\n20\r\n${f(p.y - h * 1.2)}\r\n30\r\n0\r\n")
-                append("40\r\n${f(h)}\r\n1\r\n${p.d.replace("\n", " ")}\r\n50\r\n0\r\n")
-            }
+            append("10\r\n${f(tx)}\r\n20\r\n${f(p.y)}\r\n30\r\n0\r\n")
+            append("40\r\n${f(h)}\r\n1\r\n$labelMid\r\n50\r\n0\r\n")
+            append("0\r\nTEXT\r\n8\r\npoint-d\r\n62\r\n7\r\n")
+            append("10\r\n${f(tx)}\r\n20\r\n${f(p.y - h * 1.2)}\r\n30\r\n0\r\n")
+            append("40\r\n${f(h)}\r\n1\r\n$labelBot\r\n50\r\n0\r\n")
         }
         append("0\r\nENDSEC\r\n0\r\nEOF\r\n")
     }
