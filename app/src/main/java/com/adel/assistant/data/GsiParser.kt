@@ -76,23 +76,35 @@ object GsiParser {
         text.lineSequence().forEach { raw ->
             val line = raw.trim()
             if (line.isEmpty() || line.startsWith("#")) return@forEach
-            val p = line.split(Regex("""[\s,;\t]+""")).filter { it.isNotEmpty() }
+            val low = line.lowercase()
+            if (low.startsWith("x,y") || low.startsWith("id,") || low.contains("easting")) return@forEach
+            val p = line.split(Regex("[,;\\t]+")).map { it.trim() }.filter { it.isNotEmpty() }
             if (p.size < 3) return@forEach
             try {
+                fun d(i: Int) = p.getOrNull(i)?.replace(',', '.')?.toDoubleOrNull()
                 when {
-                    p.size >= 4 && p[1].toDoubleOrNull() != null && p[0].toDoubleOrNull() == null -> {
-                        out.add(GsiPoint(name = p[0], e = p[1].toDouble(), n = p[2].toDouble(), z = p[3].toDouble()))
+                    // ID,X,Y,Z[,D]
+                    p.size >= 4 && d(1) != null && d(2) != null && d(3) != null &&
+                        (d(0) == null || p[0].any { it.isLetter() } || p.size >= 5) -> {
+                        out.add(
+                            GsiPoint(
+                                name = p[0],
+                                e = d(1)!!,
+                                n = d(2)!!,
+                                z = d(3)!!,
+                                code = p.drop(4).joinToString(" ")
+                            )
+                        )
                     }
-                    p.size >= 4 && p[0].toDoubleOrNull() != null -> {
-                        out.add(GsiPoint(name = p[3], e = p[0].toDouble(), n = p[1].toDouble(), z = p[2].toDouble()))
-                    }
-                    p.size == 3 && p[0].toDoubleOrNull() != null -> {
+                    // X,Y,Z,D  یا  X,Y,Z
+                    d(0) != null && d(1) != null && d(2) != null -> {
                         out.add(
                             GsiPoint(
                                 name = (out.size + 1).toString(),
-                                e = p[0].toDouble(),
-                                n = p[1].toDouble(),
-                                z = p[2].toDouble()
+                                e = d(0)!!,
+                                n = d(1)!!,
+                                z = d(2)!!,
+                                code = p.drop(3).joinToString(" ")
                             )
                         )
                     }
@@ -131,8 +143,10 @@ object GsiParser {
     }
 
     fun toTxt(points: List<GsiPoint>): String = buildString {
+        // فرمت X,Y,Z,D
         points.forEach { p ->
-            appendLine("${p.name}\t${fmt(p.e)}\t${fmt(p.n)}\t${fmt(p.z)}")
+            val d = p.code.ifBlank { p.name }
+            appendLine("${fmt(p.e)},${fmt(p.n)},${fmt(p.z)},$d")
         }
     }
 
@@ -165,8 +179,9 @@ object GsiParser {
         appendLine("""</Document></kml>""")
     }
 
-    /** DXF R12 (AC1009) — سازگار با AutoCAD */
+    /** DXF R12 — لایه‌های point-id / point-z / point-d ، ارتفاع متن ۵ سانتی‌متر */
     fun toDxf(points: List<GsiPoint>): String = buildString {
+        val layers = listOf("POINTS", "point-id", "point-z", "point-d")
         append("0\r\nSECTION\r\n2\r\nHEADER\r\n")
         append("9\r\n\$ACADVER\r\n1\r\nAC1009\r\n")
         append("0\r\nENDSEC\r\n")
@@ -174,23 +189,37 @@ object GsiParser {
         append("0\r\nTABLE\r\n2\r\nLTYPE\r\n70\r\n1\r\n")
         append("0\r\nLTYPE\r\n2\r\nCONTINUOUS\r\n70\r\n0\r\n3\r\nSolid line\r\n72\r\n65\r\n73\r\n0\r\n40\r\n0.0\r\n")
         append("0\r\nENDTAB\r\n")
-        append("0\r\nTABLE\r\n2\r\nLAYER\r\n70\r\n1\r\n")
-        append("0\r\nLAYER\r\n2\r\nPOINTS\r\n70\r\n0\r\n62\r\n7\r\n6\r\nCONTINUOUS\r\n")
+        append("0\r\nTABLE\r\n2\r\nLAYER\r\n70\r\n${layers.size}\r\n")
+        layers.forEach { layer ->
+            append("0\r\nLAYER\r\n2\r\n$layer\r\n70\r\n0\r\n62\r\n7\r\n6\r\nCONTINUOUS\r\n")
+        }
         append("0\r\nENDTAB\r\n")
         append("0\r\nENDSEC\r\n")
         append("0\r\nSECTION\r\n2\r\nENTITIES\r\n")
+        val h = 0.05
+        val gap = 0.08
         points.forEach { p ->
-            // صلیب به‌جای POINT (استایل POINT در اتوکد متغیر است)
-            val s = 0.15
+            val s = 0.10
             append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
             append("10\r\n${fmt(p.e - s)}\r\n20\r\n${fmt(p.n - s)}\r\n30\r\n${fmt(p.z)}\r\n")
             append("11\r\n${fmt(p.e + s)}\r\n21\r\n${fmt(p.n + s)}\r\n31\r\n${fmt(p.z)}\r\n")
             append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
             append("10\r\n${fmt(p.e - s)}\r\n20\r\n${fmt(p.n + s)}\r\n30\r\n${fmt(p.z)}\r\n")
             append("11\r\n${fmt(p.e + s)}\r\n21\r\n${fmt(p.n - s)}\r\n31\r\n${fmt(p.z)}\r\n")
-            append("0\r\nTEXT\r\n8\r\nPOINTS\r\n62\r\n7\r\n")
-            append("10\r\n${fmt(p.e + 0.3)}\r\n20\r\n${fmt(p.n + 0.3)}\r\n30\r\n${fmt(p.z)}\r\n")
-            append("40\r\n0.5\r\n1\r\n${p.name.replace("\n", " ")}\r\n50\r\n0\r\n")
+            // بالا شماره
+            append("0\r\nTEXT\r\n8\r\npoint-id\r\n62\r\n7\r\n")
+            append("10\r\n${fmt(p.e + gap)}\r\n20\r\n${fmt(p.n + h * 1.2)}\r\n30\r\n${fmt(p.z)}\r\n")
+            append("40\r\n${fmt(h)}\r\n1\r\n${p.name.replace("\n", " ")}\r\n50\r\n0\r\n")
+            // وسط ارتفاع
+            append("0\r\nTEXT\r\n8\r\npoint-z\r\n62\r\n7\r\n")
+            append("10\r\n${fmt(p.e + gap)}\r\n20\r\n${fmt(p.n)}\r\n30\r\n${fmt(p.z)}\r\n")
+            append("40\r\n${fmt(h)}\r\n1\r\n${fmt(p.z)}\r\n50\r\n0\r\n")
+            // پایین توضیح
+            if (p.code.isNotBlank()) {
+                append("0\r\nTEXT\r\n8\r\npoint-d\r\n62\r\n7\r\n")
+                append("10\r\n${fmt(p.e + gap)}\r\n20\r\n${fmt(p.n - h * 1.2)}\r\n30\r\n${fmt(p.z)}\r\n")
+                append("40\r\n${fmt(h)}\r\n1\r\n${p.code.replace("\n", " ")}\r\n50\r\n0\r\n")
+            }
         }
         append("0\r\nENDSEC\r\n0\r\nEOF\r\n")
     }

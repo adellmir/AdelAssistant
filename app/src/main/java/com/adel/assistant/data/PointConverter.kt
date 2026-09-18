@@ -25,8 +25,13 @@ object PointConverter {
     }
 
     fun write(points: List<SurveyPoint>, extension: String): String = when (extension.lowercase()) {
-        "csv" -> points.joinToString("\n", "ID,X,Y,Z,CODE\n") { p -> "${p.id},${f(p.x)},${f(p.y)},${f(p.z)},${p.code}" }
-        "txt", "dat" -> points.joinToString("\n") { p -> listOf(p.id, f(p.x), f(p.y), f(p.z), p.code).joinToString("\t") }
+        "csv" -> points.joinToString("\n", "X,Y,Z,D\n") { p ->
+            listOf(f(p.x), f(p.y), f(p.z), p.code.ifBlank { p.id }).joinToString(",")
+        }
+        "txt", "dat" -> points.joinToString("\n") { p ->
+            // فرمت دوربین/برداشت: X,Y,Z,D
+            listOf(f(p.x), f(p.y), f(p.z), p.code.ifBlank { p.id }).joinToString(",")
+        }
         "dxf" -> dxf(points)
         "gsi" -> gsi(points)
         "idx" -> idx(points)
@@ -34,16 +39,42 @@ object PointConverter {
         else -> throw IllegalArgumentException("فرمت خروجی پشتیبانی نمی‌شود")
     }
 
-    private fun parseDelimited(text: String): List<SurveyPoint> = text.lineSequence().mapNotNull { line ->
-        val s = line.trim()
-        if (s.isBlank() || s.startsWith("#") || s.lowercase().contains("id,x,y,z")) return@mapNotNull null
-        val a = s.split(Regex("[,;\\t ]+")).filter { it.isNotBlank() }
-        if (a.size < 4) return@mapNotNull null
-        val x = a.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        val y = a.getOrNull(2)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        val z = a.getOrNull(3)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        SurveyPoint(a[0].trim('"'), x, y, z, a.drop(4).joinToString(" "))
-    }.toList()
+        private fun parseDelimited(text: String): List<SurveyPoint> {
+        var autoId = 1
+        return text.lineSequence().mapNotNull { line ->
+            val s = line.trim()
+            if (s.isBlank() || s.startsWith("#")) return@mapNotNull null
+            val low = s.lowercase()
+            if (low.startsWith("id,") || low.startsWith("x,y") || low.startsWith("e,n") ||
+                low.contains("easting") || low.contains("northing")) return@mapNotNull null
+            val a = s.split(Regex("[,;\t]+")).map { it.trim().trim('"') }.filter { it.isNotBlank() }
+            if (a.size < 3) return@mapNotNull null
+            fun num(i: Int) = a.getOrNull(i)?.replace(',', '.')?.toDoubleOrNull()
+            val n0 = num(0); val n1 = num(1); val n2 = num(2); val n3 = num(3)
+            // ID,X,Y,Z[,D] — ستون اول نام/شماره (حتی اگر عدد باشد وقتی ۵ ستون داریم ترجیح ID)
+            if (a.size >= 5 && n1 != null && n2 != null && n3 != null) {
+                return@mapNotNull SurveyPoint(a[0], n1, n2, n3, a.drop(4).joinToString(" "))
+            }
+            // ID,X,Y,Z — ستون اول غیرمختصات واضح یا ۴ ستون با الگوی id
+            if (a.size == 4 && n1 != null && n2 != null && n3 != null && n0 != null &&
+                (a[0].any { it.isLetter() } || a[0].length > 8)) {
+                return@mapNotNull SurveyPoint(a[0], n1, n2, n3, "")
+            }
+            // X,Y,Z,D  یا  X,Y,Z
+            if (n0 != null && n1 != null) {
+                val z = n2 ?: 0.0
+                val code = a.drop(3).joinToString(" ")
+                val id = autoId++.toString()
+                return@mapNotNull SurveyPoint(id, n0, n1, z, code)
+            }
+            // ID,X,Y,Z
+            if (n1 != null && n2 != null) {
+                val z = n3 ?: 0.0
+                return@mapNotNull SurveyPoint(a[0], n1, n2, z, a.drop(4).joinToString(" "))
+            }
+            null
+        }.toList()
+    }
 
     private fun parseIdx(text: String): List<SurveyPoint> {
         val r = Regex("^\\s*\\d+\\s*,\\s*\\\"([^\\\"]+)\\\"\\s*,\\s*\\\"([^\\\"]*)\\\"\\s*,\\s*([-+0-9.]+)\\s*,\\s*([-+0-9.]+)\\s*,\\s*([-+0-9.]+)")
@@ -135,11 +166,9 @@ object PointConverter {
         return out
     }
 
-    /** DXF R12 (AC1009) معتبر برای اتوکد */
+    /** DXF R12 — صلیب + سه متن در لایه‌های point-id / point-z / point-d با ارتفاع ۵ سانتی‌متر */
     private fun dxf(points: List<SurveyPoint>) = buildString {
-        fun layerOf(p: SurveyPoint) =
-            p.code.ifBlank { "POINTS" }.replace(Regex("[^A-Za-z0-9_-]"), "_").take(31).ifBlank { "POINTS" }
-        val layers = points.map { layerOf(it) }.distinct()
+        val layers = listOf("POINTS", "point-id", "point-z", "point-d")
         append("0\r\nSECTION\r\n2\r\nHEADER\r\n9\r\n\$ACADVER\r\n1\r\nAC1009\r\n0\r\nENDSEC\r\n")
         append("0\r\nSECTION\r\n2\r\nTABLES\r\n")
         append("0\r\nTABLE\r\n2\r\nLTYPE\r\n70\r\n1\r\n")
@@ -150,19 +179,26 @@ object PointConverter {
         }
         append("0\r\nENDTAB\r\n0\r\nENDSEC\r\n")
         append("0\r\nSECTION\r\n2\r\nENTITIES\r\n")
+        val h = 0.05 // ۵ سانتی‌متر
+        val gap = 0.08
         points.forEach { p ->
-            val layer = layerOf(p)
             val s = 0.10
-            val gap = 0.15
-            append("0\r\nLINE\r\n8\r\n$layer\r\n")
+            // صلیب
+            append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
             append("10\r\n${f(p.x - s)}\r\n20\r\n${f(p.y - s)}\r\n30\r\n${f(p.z)}\r\n")
             append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y + s)}\r\n31\r\n${f(p.z)}\r\n")
-            append("0\r\nLINE\r\n8\r\n$layer\r\n")
+            append("0\r\nLINE\r\n8\r\nPOINTS\r\n")
             append("10\r\n${f(p.x - s)}\r\n20\r\n${f(p.y + s)}\r\n30\r\n${f(p.z)}\r\n")
             append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y - s)}\r\n31\r\n${f(p.z)}\r\n")
-            textEntity(layer, p.x + gap, p.y + 0.10, p.z, p.id, 0.10)
-            textEntity(layer, p.x + gap, p.y, p.z, "Z=${f(p.z)}", 0.10)
-            if (p.code.isNotBlank()) textEntity(layer, p.x + gap, p.y - 0.10, p.z, p.code, 0.10)
+            // بالا: شماره نقطه — لایه point-id
+            textEntity("point-id", p.x + gap, p.y + h * 1.2, p.z, p.id, h)
+            // وسط: ارتفاع — لایه point-z
+            textEntity("point-z", p.x + gap, p.y, p.z, f(p.z), h)
+            // پایین: اطلاعات/نوع — لایه point-d
+            val desc = p.code.ifBlank { "" }
+            if (desc.isNotBlank()) {
+                textEntity("point-d", p.x + gap, p.y - h * 1.2, p.z, desc, h)
+            }
         }
         append("0\r\nENDSEC\r\n0\r\nEOF\r\n")
     }

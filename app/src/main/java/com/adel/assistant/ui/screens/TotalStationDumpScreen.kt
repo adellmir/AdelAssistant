@@ -48,11 +48,7 @@ import java.util.UUID
  */
 @SuppressLint("MissingPermission")
 @Composable
-fun TotalStationDumpScreen(
-    color: Color,
-    onBack: () -> Unit,
-    onOpenConverter: () -> Unit = {}
-) {
+fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sppUuid = remember { UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") }
@@ -380,20 +376,8 @@ fun TotalStationDumpScreen(
                     disconnect()
                     status = "قطع شد"
                 },
-                modifier = Modifier.weight(0.55f)
+                modifier = Modifier.weight(0.6f)
             ) { Text("قطع") }
-
-            OutlinedButton(
-                onClick = {
-                    if (points.isEmpty()) {
-                        status = "اول فایل را تخلیه یا وارد کن، بعد مبدل"
-                        return@OutlinedButton
-                    }
-                    onOpenConverter()
-                },
-                enabled = points.isNotEmpty(),
-                modifier = Modifier.weight(0.7f)
-            ) { Text("مبدل") }
         }
     }
 }

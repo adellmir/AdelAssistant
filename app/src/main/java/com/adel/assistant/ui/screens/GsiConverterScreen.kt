@@ -24,8 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
+import com.adel.assistant.data.XlsxPointReader
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -65,16 +67,21 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         } catch (_: Exception) {
         }
         try {
-            val text = context.contentResolver.openInputStream(uri)?.use { ins ->
-                BufferedReader(InputStreamReader(ins, Charsets.UTF_8)).readText()
-            } ?: ""
             val name = uri.lastPathSegment?.lowercase() ?: ""
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
             val parsed = when {
-                name.endsWith(".gsi") ||
-                    text.trimStart().startsWith("*11") ||
-                    text.contains("81..") ||
-                    text.contains("81.") -> GsiParser.parse(text)
-                else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
+                name.endsWith(".xlsx") || name.endsWith(".xls") ->
+                    XlsxPointReader.parse(bytes)
+                else -> {
+                    val text = bytes.toString(Charsets.UTF_8)
+                    when {
+                        name.endsWith(".gsi") ||
+                            text.trimStart().startsWith("*11") ||
+                            text.contains("81..") ||
+                            text.contains("81.") -> GsiParser.parse(text)
+                        else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
+                    }
+                }
             }
             points = parsed
             selectedIds = parsed.map { it.id }.toSet()
@@ -88,34 +95,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun saveFile(fileName: String, body: String, mime: String = "text/plain"): Boolean {
-        return try {
-            val bytes = body.toByteArray(Charsets.UTF_8)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val values = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                    put(
-                        MediaStore.MediaColumns.RELATIVE_PATH,
-                        Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant"
-                    )
-                }
-                val outUri = context.contentResolver.insert(
-                    MediaStore.Files.getContentUri("external"), values
-                ) ?: return false
-                context.contentResolver.openOutputStream(outUri)?.use { it.write(bytes) } ?: return false
-                true
-            } else {
-                val dir = File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                    "AdelAssistant"
-                )
-                if (!dir.exists()) dir.mkdirs()
-                FileOutputStream(File(dir, fileName)).use { it.write(bytes) }
-                true
-            }
-        } catch (_: Exception) {
-            false
-        }
+        return FileExport.exportTextToDocuments(context, fileName, body, mime) != null
     }
 
     fun export(kind: String) {
@@ -182,7 +162,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream")) },
+                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel")) },
                     colors = ButtonDefaults.buttonColors(containerColor = color)
                 ) { Text("باز کردن") }
 

@@ -106,7 +106,7 @@ object FileExport {
             n.endsWith(".gsi") -> "gsi"
             n.endsWith(".kml") || n.endsWith(".kmz") || mime.contains("google-earth") -> "kml"
             n.endsWith(".pdf") || mime.contains("pdf") -> "pdf"
-            n.endsWith(".txt") -> "txt"
+            n.endsWith(".txt") || n.endsWith(".csv") || n.endsWith(".dat") -> "txt"
             else -> ""
         }
     }
