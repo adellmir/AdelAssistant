@@ -14,6 +14,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Deselect
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,6 +55,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     var editE by remember { mutableStateOf("") }
     var editN by remember { mutableStateOf("") }
     var editZ by remember { mutableStateOf("") }
+    var editCode by remember { mutableStateOf("") }
 
     val displayList = remember(points, newestFirst) {
         if (newestFirst) points.asReversed() else points
@@ -128,7 +137,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             return
         }
         points = points.map {
-            if (it.id == t.id) it.copy(name = editName.trim(), e = e, n = n, z = z) else it
+            if (it.id == t.id) it.copy(name = editName.trim(), e = e, n = n, z = z, code = editCode.trim()) else it
         }
         editTarget = null
         status = "ویرایش شد"
@@ -160,38 +169,46 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel")) },
-                    colors = ButtonDefaults.buttonColors(containerColor = color)
-                ) { Text("باز کردن") }
-
-                OutlinedButton(
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        picker.launch(
+                            arrayOf(
+                                "*/*", "text/*", "application/octet-stream",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "application/vnd.ms-excel"
+                            )
+                        )
+                    }
+                ) { Icon(Icons.Outlined.FolderOpen, "باز کردن", tint = color) }
+                IconButton(
                     onClick = { newestFirst = !newestFirst },
                     enabled = points.isNotEmpty()
                 ) {
-                    Text(if (newestFirst) "جدید→قدیم" else "قدیم→جدید")
+                    Icon(
+                        if (newestFirst) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward,
+                        if (newestFirst) "جدید به قدیم" else "قدیم به جدید",
+                        tint = color
+                    )
                 }
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
+                IconButton(
                     onClick = {
                         selectAll = true
                         selectedIds = points.map { it.id }.toSet()
                     },
                     enabled = points.isNotEmpty()
-                ) { Text("انتخاب همه") }
-
-                OutlinedButton(
+                ) { Icon(Icons.Outlined.Checklist, "انتخاب همه", tint = color) }
+                IconButton(
                     onClick = {
                         selectAll = false
                         selectedIds = emptySet()
                     },
                     enabled = points.isNotEmpty()
-                ) { Text("گزینش") }
+                ) { Icon(Icons.Outlined.Close, "گزینش", tint = color) }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -251,6 +268,13 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                                 color = Color(0xFFB0B8A8),
                                 fontSize = 12.sp
                             )
+                            if (p.code.isNotBlank()) {
+                                Text(
+                                    "D: ${p.code}",
+                                    color = Color(0xFF90CAF9),
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
                         TextButton(
                             onClick = {
@@ -259,6 +283,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                                 editE = fmt(p.e)
                                 editN = fmt(p.n)
                                 editZ = fmt(p.z)
+                                editCode = p.code
                             }
                         ) { Text("ویرایش", color = color, fontSize = 12.sp) }
                         TextButton(
@@ -306,6 +331,12 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                         label = { Text("Z") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    OutlinedTextField(
+                        value = editCode,
+                        onValueChange = { editCode = it },
+                        label = { Text("D (اطلاعات / نوع)") },
+                        singleLine = true
                     )
                 }
             },

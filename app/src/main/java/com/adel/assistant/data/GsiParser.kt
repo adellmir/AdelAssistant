@@ -143,10 +143,9 @@ object GsiParser {
     }
 
     fun toTxt(points: List<GsiPoint>): String = buildString {
-        // فرمت X,Y,Z,D
+        // فرمت: نام,E,N,Z,D
         points.forEach { p ->
-            val d = p.code.ifBlank { p.name }
-            appendLine("${fmt(p.e)},${fmt(p.n)},${fmt(p.z)},$d")
+            appendLine("${p.name},${fmt(p.e)},${fmt(p.n)},${fmt(p.z)},${p.code}")
         }
     }
 
@@ -157,7 +156,8 @@ object GsiParser {
             append(serial)
             append("+")
             append(encodeName16(p.name))
-            append(" 71....+0000000000000000")
+            append(" 71....+")
+            append(encodeName16(p.code.ifBlank { "0" }))
             append(" 81..10+")
             append(encodeCoord16(p.e))
             append(" 82..10+")
@@ -173,6 +173,7 @@ object GsiParser {
         appendLine("""<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>$name</name>""")
         points.forEach { p ->
             appendLine("""<Placemark><name>${esc(p.name)}</name>""")
+            if (p.code.isNotBlank()) appendLine("""<description>${esc(p.code)}</description>""")
             appendLine("""<Point><coordinates>${fmt(p.e)},${fmt(p.n)},${fmt(p.z)}</coordinates></Point>""")
             appendLine("""</Placemark>""")
         }
