@@ -26,6 +26,8 @@ import com.adel.assistant.ai.AgentReply
 import com.adel.assistant.ai.AssistantAgent
 import com.adel.assistant.ai.OnlineAiClient
 import com.adel.assistant.data.AssistantChatStore
+import com.adel.assistant.data.AssistantMemoryStore
+import com.adel.assistant.data.AssistantPermissionStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -110,7 +112,8 @@ fun AssistantScreen(
                     val history = messages.dropLast(1).map {
                         (if (it.fromUser) "user" else "assistant") to it.text
                     }
-                    val answer = OnlineAiClient.chat(history)
+                    val memory = AssistantMemoryStore.load(context).take(20).joinToString("\n") { "- $it" }
+                    val answer = OnlineAiClient.chat(history, memory)
                     messages = messages.dropLast(1) + ChatLine(false, answer)
                     AssistantChatStore.addMessage(context, activeChat.id, false, answer)
                 } catch (e: Exception) {
@@ -151,7 +154,9 @@ fun AssistantScreen(
         "کارهای باز تونل چیه؟",
         "آمار کلی",
         "برو درون‌یابی",
-        "وضعیت مالی پروژه‌ها"
+        "وضعیت مالی پروژه‌ها",
+        "نمای کلی داده‌های برنامه",
+        "در همه اطلاعات جستجو کن"
     )
 
     Column(
@@ -180,7 +185,11 @@ fun AssistantScreen(
                 )
                 Switch(
                     checked = onlineMode,
-                    onCheckedChange = { onlineMode = it },
+                    onCheckedChange = {
+                        if (!it || AssistantPermissionStore.get(context, "online_ai") != com.adel.assistant.data.AssistantPermission.FORBIDDEN) {
+                            onlineMode = it
+                        }
+                    },
                     enabled = !sending
                 )
             }

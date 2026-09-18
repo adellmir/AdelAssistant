@@ -20,7 +20,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -265,11 +264,29 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = 76.dp)
-                    .pointerInput(Unit) {
+                    .pointerInput(pickCoordinateMode, editingPointId, scale) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
-                            // Keep the original smooth map gesture. While editing a point,
-                            // the map must stay still so the point can move independently.
-                            if (editingPointId != null || pickCoordinateMode) return@detectTransformGestures
+                            if (editingPointId != null) {
+                                val id = editingPointId
+                                val s = scale.toDouble().coerceAtLeast(1e-9)
+                                val dxv = pan.x.toDouble() / s
+                                val dyv = (-pan.y).toDouble() / s
+                                if (dxv != 0.0 || dyv != 0.0) {
+                                    pickedPoints = pickedPoints.map { p ->
+                                        if (p.id != id) p
+                                        else {
+                                            val e = p.easting + dxv
+                                            val n = p.northing + dyv
+                                            val ll = UtmGeo.toLatLon(e, n, zone)
+                                            p.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
+                                        }
+                                    }
+                                }
+                                message = "موقعیت نقطه تغییر کرد؛ برای پایان ویرایش دکمه تأیید را بزن"
+                                return@detectTransformGestures
+                            }
+                            if (pickCoordinateMode) return@detectTransformGestures
+
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -279,31 +296,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                     centroid.y - (centroid.y - offset.y) * factor + pan.y
                                 )
                                 scale = newScale
-                            } else offset += pan
-                        }
-                    }
-                    .pointerInput(editingPointId, scale) {
-                        val id = editingPointId ?: return@pointerInput
-                        detectDragGestures(
-                            onDrag = { change: PointerInputChange, dragAmount: Offset ->
-                                change.consume()
-                                val s = scale.toDouble().coerceAtLeast(1e-9)
-                                val dxv = dragAmount.x.toDouble() / s
-                                val dyv = (-dragAmount.y).toDouble() / s
-                                pickedPoints = pickedPoints.map { p ->
-                                    if (p.id != id) p
-                                    else {
-                                        val e = p.easting + dxv
-                                        val n = p.northing + dyv
-                                        val ll = UtmGeo.toLatLon(e, n, zone)
-                                        p.copy(easting = e, northing = n, lat = ll.first, lon = ll.second)
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                message = "موقعیت نقطه تغییر کرد؛ برای پایان ویرایش دکمه تأیید را بزن"
+                            } else {
+                                offset += pan
                             }
-                        )
+                        }
                     }
                     .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId) {
                         if (editingPointId == null) {

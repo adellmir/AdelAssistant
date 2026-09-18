@@ -2,6 +2,9 @@ package com.adel.assistant.ai
 
 import android.content.Context
 import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.data.AssistantMemoryStore
+import com.adel.assistant.data.AssistantPermission
+import com.adel.assistant.data.AssistantPermissionStore
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.data.TunnelFinanceStore
@@ -9,6 +12,8 @@ import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.AppMenu
 import com.adel.assistant.navigation.Routes
+import com.adel.assistant.ai.tools.AssistantActionTools
+import com.adel.assistant.ai.tools.DatabaseTools
 import java.util.Locale
 
 data class AgentChoice(
@@ -28,12 +33,14 @@ data class AgentReply(
  * بدون API خارجی؛ درخواست محاوره‌ای را به Action واقعی برنامه تبدیل می‌کند.
  */
 object AssistantAgent {
-    private enum class PendingType { TASK_CATEGORY, TASK_DELETE_CONFIRM, MENU_CHOICE }
+    private enum class PendingType { TASK_CATEGORY, TASK_DELETE_CONFIRM, MENU_CHOICE, ACTION_CONFIRM }
     private data class Pending(
         val type: PendingType,
         val title: String = "",
         val store: String? = null,
         val index: Int = -1,
+        val actionId: String? = null,
+        val extra: String = "",
         val choices: List<AgentChoice> = emptyList()
     )
     private var pending: Pending? = null
@@ -59,6 +66,8 @@ object AssistantAgent {
         resolvePending(context, msg)?.let { return it }
         if (isHelp(msg)) return AgentReply(helpText())
         fileIntent(msg)?.let { return it }
+        databaseIntent(context, msg)?.let { return it }
+        actionIntent(context, msg)?.let { return it }
 
         // «برو» یک فرمان صریح برای ناوبری است؛ در غیر این صورت کار را داخل چت انجام می‌دهیم.
         if (hasNavigationVerb(msg)) {
@@ -90,6 +99,108 @@ object AssistantAgent {
         }
         return AgentReply("فایل فعال: «$name». می‌توانی بگویی «به DXF تبدیل کن» یا صفحهٔ مربوط را باز کن.")
     }
+
+    private fun databaseIntent(context: Context, msg: String): AgentReply? {
+        val mentionsDb = hasAny(msg, listOf("پایگاه داده", "دیتابیس", "بانک اطلاعات", "اطلاعات برنامه", "داده های برنامه", "داده‌های برنامه", "سوابق برنامه", "کل اطلاعات"))
+        val asksSearch = hasAny(msg, listOf("جستجو", "پیدا کن", "بگرد", "پیدا", "بررسی کن"))
+        val asksOverview = hasAny(msg, listOf("نمای کلی", "خلاصه", "چند رکورد", "چه اطلاعاتی", "همه دیتابیس", "همه داده"))
+        val asksRead = hasAny(msg, listOf("اطلاعات", "سوابق", "رکورد", "لیست", "نمایش", "بخوان"))
+        val datasetMention = DatabaseTools.resolveDataset(msg) != null
+        if (!mentionsDb && !asksSearch && !asksOverview && !datasetMention) return null
+        if (AssistantPermissionStore.get(context, "data_read") == AssistantPermission.FORBIDDEN) {
+            return AgentReply("دسترسی دستیار به داده‌های برنامه در تنظیمات مجوزها بسته است.")
+        }
+        if (asksOverview || (mentionsDb && !asksSearch && !asksRead)) return AgentReply(DatabaseTools.overview(context))
+        if (asksSearch) {
+            val q = extractDatabaseSearch(msg)
+            if (q.isBlank()) return AgentReply("عبارت مورد جستجو را بعد از «جستجو کن» بگو؛ مثلاً «در همه اطلاعات جستجو کن 280». ")
+            return AgentReply(DatabaseTools.search(context, q))
+        }
+        val dataset = DatabaseTools.resolveDataset(msg)
+        if (dataset != null) return AgentReply(DatabaseTools.read(context, dataset))
+        return AgentReply(DatabaseTools.listDatasets())
+    }
+
+    private fun extractDatabaseSearch(msg: String): String {
+        var q = msg
+        listOf(
+            "در همه اطلاعات جستجو کن", "در همه اطلاعات جستجو", "در پایگاه داده جستجو کن",
+            "در دیتابیس جستجو کن", "جستجو کن", "جستجو", "پیدا کن", "پیدا", "بگرد", "بررسی کن"
+        ).forEach { q = q.replace(it, " ", ignoreCase = true) }
+        return q.replace(Regex("\\s+"), " ").trim().trim(':', '-', '،', ' ')
+    }
+
+    private fun actionIntent(context: Context, msg: String): AgentReply? {
+        // حافظه: عملیات کم‌خطر و بدون تأیید جداگانه انجام می‌شود.
+        if (hasAny(msg, listOf("یادت باشه", "به خاطر بسپار", "ذخیره کن در حافظه", "به حافظه اضافه کن"))) {
+            val text = msg.replace(Regex("(?i)یادت باشه|به خاطر بسپار|ذخیره کن در حافظه|به حافظه اضافه کن"), " ")
+                .replace(Regex("\\s+"), " ").trim().take(300)
+            if (text.isBlank()) return AgentReply("چه چیزی را در حافظه ذخیره کنم؟")
+            if (AssistantPermissionStore.get(context, "memory_write") == AssistantPermission.FORBIDDEN) return AgentReply("دسترسی نوشتن حافظه بسته است.")
+            return AgentReply(AssistantActionTools.remember(context, text))
+        }
+
+        if (hasAny(msg, listOf("تسویه پروژه", "پروژه را تسویه", "تسویه کن"))) {
+            if (!permissionAllows(context, "finance_write")) return AgentReply("دسترسی عملیات مالی بسته است.")
+            val p = findProject(context, msg) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن؛ مثلاً «پروژه ردیف 12 را تسویه کن». ")
+            pending = Pending(PendingType.ACTION_CONFIRM, title = "تسویه پروژه «${p.name}»", store = p.row, actionId = AssistantActionTools.SETTLE_PROJECT)
+            return AgentReply("⚠️ پروژه «${p.name}» تسویه شود؟", choices = confirmChoices())
+        }
+
+        if (hasAny(msg, listOf("برگردان تسویه", "لغو تسویه", "تسویه را برگرد"))) {
+            if (!permissionAllows(context, "finance_write")) return AgentReply("دسترسی عملیات مالی بسته است.")
+            val p = findProject(context, msg) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن.")
+            pending = Pending(PendingType.ACTION_CONFIRM, title = "برگرداندن تسویه «${p.name}»", store = p.row, actionId = AssistantActionTools.UNSETTLE_PROJECT)
+            return AgentReply("⚠️ تسویه پروژه «${p.name}» برگردانده شود؟", choices = confirmChoices())
+        }
+
+        if (hasAny(msg, listOf("حذف پروژه", "پروژه را حذف", "پاک کردن پروژه"))) {
+            if (!permissionAllows(context, "delete")) return AgentReply("دسترسی حذف داده‌ها بسته است.")
+            val p = findProject(context, msg) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن.")
+            pending = Pending(PendingType.ACTION_CONFIRM, title = "حذف پروژه «${p.name}»", store = p.row, actionId = AssistantActionTools.DELETE_PROJECT)
+            return AgentReply("⚠️ این عملیات دائمی است. پروژه «${p.name}» حذف شود؟", choices = confirmChoices())
+        }
+
+        if (hasAny(msg, listOf("ثبت دریافت تونل", "دریافت تونل", "مبلغ دریافت تونل"))) {
+            if (!permissionAllows(context, "finance_write")) return AgentReply("دسترسی عملیات مالی بسته است.")
+            val amount = extractAmount(msg) ?: return AgentReply("مبلغ دریافت را مشخص کن؛ مثلاً «ثبت دریافت تونل 5000000». ")
+            val date = extractDate(msg)
+            pending = Pending(
+                PendingType.ACTION_CONFIRM,
+                title = "ثبت دریافت تونل ${"%.0f".format(amount)}",
+                actionId = AssistantActionTools.ADD_TUNNEL_RECEIPT,
+                extra = "$amount|${date.orEmpty()}"
+            )
+            return AgentReply("⚠️ دریافت ${"%.0f".format(amount)} برای تونل ثبت شود؟", choices = confirmChoices())
+        }
+        return null
+    }
+
+    private fun confirmChoices() = listOf(AgentChoice("تأیید", "بله"), AgentChoice("لغو", "لغو"))
+
+    private fun permissionAllows(context: Context, key: String): Boolean =
+        AssistantPermissionStore.get(context, key) != AssistantPermission.FORBIDDEN
+
+    private fun findProject(context: Context, msg: String): com.adel.assistant.data.ProjectEntry? {
+        val digits = Regex("\\d+").find(msg)?.value
+        if (digits != null) {
+            ProjectStore.all(context).firstOrNull { it.row == digits }?.let { return it }
+        }
+        val cleaned = msg.replace(Regex("(?i)تسویه پروژه|پروژه را تسویه|تسویه کن|برگردان تسویه|لغو تسویه|تسویه را برگرد|حذف پروژه|پروژه را حذف|پاک کردن پروژه"), " ")
+            .replace(Regex("\\s+"), " ").trim()
+        if (cleaned.isBlank()) return null
+        return ProjectStore.all(context).firstOrNull { it.name.contains(cleaned, true) || it.employer.contains(cleaned, true) }
+    }
+
+    private fun extractAmount(msg: String): Double? {
+        val raw = Regex("(?<![A-Za-z])(?:[0-9۰-۹][0-9۰-۹,،.]*)(?![A-Za-z])").findAll(msg)
+            .map { it.value.replace(",", "").replace("،", "").replace(".", "") }
+            .mapNotNull { it.replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9').toDoubleOrNull() }
+            .firstOrNull { it > 0 }
+        return raw
+    }
+
+    private fun extractDate(msg: String): String? = Regex("\\d{2,4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}").find(msg)?.value
 
     private fun resolvePending(context: Context, msg: String): AgentReply? {
         val p = pending ?: return null
@@ -152,6 +263,29 @@ object AssistantAgent {
                 if (isCancel(msg)) { pending = null; return AgentReply("عملیات لغو شد.") }
                 return choiceReply("یکی از گزینه‌ها را انتخاب کن:", p.choices)
             }
+            PendingType.ACTION_CONFIRM -> {
+                if (isCancel(msg)) {
+                    pending = null
+                    return AgentReply("عملیات لغو شد.")
+                }
+                if (!isConfirm(msg)) {
+                    return AgentReply("برای اجرای «${p.title}» تأیید یا لغو کن.", choices = listOf(AgentChoice("تأیید", "بله"), AgentChoice("لغو", "لغو")))
+                }
+                val result = when (p.actionId) {
+                    AssistantActionTools.SETTLE_PROJECT -> AssistantActionTools.settleProject(context, p.store.orEmpty())
+                    AssistantActionTools.UNSETTLE_PROJECT -> AssistantActionTools.unsettleProject(context, p.store.orEmpty())
+                    AssistantActionTools.DELETE_PROJECT -> AssistantActionTools.deleteProject(context, p.store.orEmpty())
+                    AssistantActionTools.ADD_TUNNEL_RECEIPT -> {
+                        val parts = p.extra.split("|", limit = 2)
+                        val amount = parts.getOrNull(0)?.toDoubleOrNull() ?: 0.0
+                        val date = parts.getOrNull(1).orEmpty().ifBlank { "" }
+                        AssistantActionTools.addTunnelReceipt(context, amount, date)
+                    }
+                    else -> "عملیات ناشناخته است."
+                }
+                pending = null
+                return AgentReply(result)
+            }
         }
     }
 
@@ -202,6 +336,7 @@ object AssistantAgent {
     private fun helpText() = """
 🤖 دستیار AdelAssistant
 می‌توانی محاوره‌ای درخواست بدهی. برای ناوبری صریح بگو «برو ...».
+دستیار می‌تواند داده‌های داخلی برنامه را بخواند و برای عملیات حساس قبل از تغییر داده تأیید می‌گیرد.
 اگر یک واژه چند معنی داشته باشد، گزینه‌های قابل کلیک می‌دهم و عدد هم به‌عنوان راه دوم پذیرفته می‌شود.
 مثلاً: «تسک»، «پروژه»، «برو پروژه»، «برو درون‌یابی»، «کارهای باز تونل».
 """.trimIndent()
@@ -313,6 +448,7 @@ object AssistantAgent {
         if (!mentionsTask && !create && !complete && !delete) return null
 
         if (delete) {
+            if (AssistantPermissionStore.get(context, "delete") == AssistantPermission.FORBIDDEN) return AgentReply("دسترسی حذف تسک‌ها بسته است.")
             val title = extractActionTitle(msg, listOf("تسک","حذف کن","پاک کن"))
             if (title.isBlank()) return AgentReply("نام تسکی که باید حذف شود را بگو.")
             val targets = if (store != null) listOf(store) else listOf("tunnel_tasks","project_tasks")
@@ -328,6 +464,7 @@ object AssistantAgent {
         }
 
         if (complete) {
+            if (AssistantPermissionStore.get(context, "tasks") == AssistantPermission.FORBIDDEN) return AgentReply("دسترسی تغییر تسک‌ها بسته است.")
             val title = extractActionTitle(msg, listOf("تسک","انجام شد","انجام‌شده","تیک بزن","تکمیل کن","تمام شد"))
             if (title.isBlank()) return AgentReply("نام تسکی که باید انجام شود را بگو.")
             val targets = if (store != null) listOf(store) else listOf("tunnel_tasks","project_tasks")
@@ -343,6 +480,7 @@ object AssistantAgent {
         }
 
         if (create) {
+            if (AssistantPermissionStore.get(context, "tasks") == AssistantPermission.FORBIDDEN) return AgentReply("دسترسی ثبت تسک‌ها بسته است.")
             val title = extractCreateTitle(msg)
             if (title.isBlank()) return AgentReply("عنوان تسک را بگو؛ مثلاً «برای تونل تسک برداشت مقطع ثبت کن». ")
             if (store == null) {
