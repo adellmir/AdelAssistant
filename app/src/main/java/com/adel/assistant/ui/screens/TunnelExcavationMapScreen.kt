@@ -2,9 +2,9 @@ package com.adel.assistant.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -25,11 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -47,16 +50,29 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.math.PI
+import kotlin.math.absoluteValue
+import kotlin.math.atan
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sinh
+import kotlin.math.tan
 
 /**
- * نقشه حفاری تونل:
- * - پس‌زمینه ثابت: محور و نقاط تونل از پایگاه (غیرقابل ویرایش)
- * - نقاط حفاری از گزارش روزانه (بروزرسانی خودکار)
- * - نقاط دستی/GPS قابل ویرایش و جابجایی
- * - خروجی DXF و CSV با فیلدهای X,Y,Z,D,KM
+ * نقشه تونل:
+ * پس‌زمینه ثابت محور تونل + نقاط گزارش + نقاط دستی/GPS
+ * پس‌زمینه ماهواره / شهری اختیاری
  */
 @Composable
 fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
@@ -70,14 +86,19 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var canvasSize by remember { mutableStateOf(Offset.Zero) }
-    var fitted by remember { mutableStateOf(false) }
+    var needFit by remember { mutableStateOf(true) }
+
+    var baseMap by remember { mutableStateOf(TunnelBaseMap.NONE) }
+    var showBaseDialog by remember { mutableStateOf(false) }
+    var tiles by remember { mutableStateOf<List<TunnelTileBmp>>(emptyList()) }
+    var zone by remember { mutableStateOf(40) }
 
     var showTunnel by remember { mutableStateOf(true) }
     var showReport by remember { mutableStateOf(true) }
     var showOverlay by remember { mutableStateOf(true) }
     var showLayers by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("نقشه محور تونل + نقاط حفاری") }
+    var status by remember { mutableStateOf("نقشه تونل") }
 
     var selectedId by remember { mutableStateOf<String?>(null) }
     var editMode by remember { mutableStateOf(false) }
@@ -98,11 +119,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
 
     fun reload() {
         tunnelPts = TunnelReportStore.allPoints(context)
-        // همهٔ گزارش‌ها با مختصات
         reportPts = TunnelReportStore.allEntries(context).map { TunnelReportStore.ensureCoords(context, it) }
             .filter { it.x != 0.0 || it.y != 0.0 }
         overlays = MapOverlayStore.all(context)
-        fitted = false
+        needFit = true
         status = "تونل ${tunnelPts.size} | گزارش ${reportPts.size} | دستی ${overlays.size}"
     }
 
@@ -128,16 +148,15 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         val ch = canvasSize.y.coerceAtLeast(1f)
         val sx = (cw * 0.88f) / w
         val sy = (ch * 0.88f) / h
-        scale = min(sx, sy)
-        // مرکز
+        scale = min(sx, sy).coerceIn(0.000001f, 5000f)
         val cx = (mn.x + mx.x) / 2f
         val cy = (mn.y + mx.y) / 2f
-        offset = Offset(cw / 2f - cx * scale, ch / 2f + cy * scale) // y معکوس صفحه
-        fitted = true
+        offset = Offset(cw / 2f - cx * scale, ch / 2f + cy * scale)
+        needFit = false
     }
 
     fun worldToScreen(x: Double, y: Double): Offset =
-        Offset(x.toFloat() * scale + offset.x, -y.toFloat() * scale + offset.y)
+        Offset((x * scale + offset.x).toFloat(), (-y * scale + offset.y).toFloat())
 
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> {
         val x = (sx - offset.x) / scale
@@ -145,16 +164,48 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         return x.toDouble() to y.toDouble()
     }
 
+    LaunchedEffect(needFit, canvasSize, tunnelPts, reportPts, overlays) {
+        if (needFit && canvasSize.x > 0f &&
+            (tunnelPts.isNotEmpty() || reportPts.isNotEmpty() || overlays.isNotEmpty())
+        ) {
+            fit()
+        }
+    }
+
+    // بارگذاری کاشی ماهواره/شهری
+    LaunchedEffect(baseMap, scale, offset, canvasSize, zone) {
+        if (baseMap == TunnelBaseMap.NONE || canvasSize.x <= 0f) {
+            tiles = emptyList()
+            return@LaunchedEffect
+        }
+        val (e0, n0) = screenToWorld(0f, canvasSize.y)
+        val (e1, n1) = screenToWorld(canvasSize.x, 0f)
+        val minE = min(e0, e1); val maxE = max(e0, e1)
+        val minN = min(n0, n1); val maxN = max(n0, n1)
+        val corners = listOf(
+            UtmGeo.toLatLon(minE, minN, zone),
+            UtmGeo.toLatLon(minE, maxN, zone),
+            UtmGeo.toLatLon(maxE, minN, zone),
+            UtmGeo.toLatLon(maxE, maxN, zone)
+        )
+        val minLat = corners.minOf { it.first }
+        val maxLat = corners.maxOf { it.first }
+        val minLon = corners.minOf { it.second }
+        val maxLon = corners.maxOf { it.second }
+        val z = estimateTunnelZoom(minLat, maxLat, minLon, maxLon, canvasSize.x)
+        tiles = withContext(Dispatchers.IO) {
+            loadTunnelTiles(minLat, maxLat, minLon, maxLon, z, baseMap)
+        }
+    }
+
     fun fillFromNearest(x: Double, y: Double) {
         val n = TunnelReportStore.findNearestByXy(context, x, y)
         if (n != null) {
             draftKm = formatEn("%.3f", n.km)
-            // z = اختلاف تراز کف خیابان از نزدیک‌ترین نقطه
             val elev = n.elevDiff.toDoubleOrNullFa()
-            draftZ = if (elev != null) formatEn("%.3f", elev) else formatEn("%.3f", 0.0)
+            draftZ = if (elev != null) formatEn("%.3f", elev) else "0"
         } else {
-            draftKm = "0"
-            draftZ = "0"
+            draftKm = "0"; draftZ = "0"
         }
         draftX = formatEn("%.3f", x)
         draftY = formatEn("%.3f", y)
@@ -174,13 +225,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         val km = draftKm.toDoubleOrNullFa() ?: 0.0
         val d = draftD.trim()
         if (d.isBlank()) {
-            status = "فیلد D (توضیح/نوع) الزامی است"
-            return
+            status = "فیلد D (توضیح/نوع) الزامی است"; return
         }
-        // بعد از ویرایش دستی XY دوباره نزدیک‌ترین را برای km/z پیشنهاد نکن مگر کاربر عوض کرده
         val id = draftId ?: MapOverlayStore.nextId(context)
-        val p = MapOverlayPoint(id, x, y, z, d, km, if (draftId != null) "manual" else "manual")
-        MapOverlayStore.upsert(context, p)
+        MapOverlayStore.upsert(context, MapOverlayPoint(id, x, y, z, d, km, "manual"))
         overlays = MapOverlayStore.all(context)
         selectedId = id
         showAddDialog = false
@@ -189,53 +237,40 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
 
     fun exportCsv() {
         val pts = overlays
-        if (pts.isEmpty()) {
-            status = "نقطهٔ دستی برای CSV نیست"; return
-        }
-        val body = MapOverlayStore.toCsvBody(pts)
-        val ok = FileExport.exportTextToDocuments(context, "tunnel_map_points.csv", body, "text/csv") != null
-        status = if (ok) "CSV ذخیره شد (Documents/AdelAssistant/txt)" else "خطا در CSV"
+        if (pts.isEmpty()) { status = "نقطهٔ دستی برای CSV نیست"; return }
+        val ok = FileExport.exportTextToDocuments(
+            context, "tunnel_map_points.csv", MapOverlayStore.toCsvBody(pts), "text/csv"
+        ) != null
+        status = if (ok) "CSV ذخیره شد" else "خطا در CSV"
     }
 
     fun exportDxf() {
-        // DXF گزارش: id=تاریخ(مثل 050627) ، z=ارتفاع ، km=کیلومتراژ — سه ردیف سمت چپ ضربدر
         val fromReport = reportPts.map {
-            MapOverlayPoint(
-                id = it.dateLabel,
-                x = it.x, y = it.y, z = it.z,
-                d = formatEn("%.3f", it.km),
-                km = it.km,
-                source = "report"
-            )
+            MapOverlayPoint(it.dateLabel, it.x, it.y, it.z, formatEn("%.3f", it.km), it.km, "report")
         }
         val all = overlays + fromReport
-        if (all.isEmpty()) {
-            status = "نقطه‌ای برای DXF نیست"; return
-        }
-        val body = MapOverlayStore.toDxf(all)
-        val ok = FileExport.exportTextToDocuments(context, "tunnel_map_excavation.dxf", body, "application/dxf") != null
-        status = if (ok) "DXF ذخیره شد (Documents/AdelAssistant/dxf)" else "خطا در DXF"
+        if (all.isEmpty()) { status = "نقطه‌ای برای DXF نیست"; return }
+        val ok = FileExport.exportTextToDocuments(
+            context, "tunnel_map.dxf", MapOverlayStore.toDxf(all), "application/dxf"
+        ) != null
+        status = if (ok) "DXF ذخیره شد" else "خطا در DXF"
     }
 
     fun readGps() {
         try {
             val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
-            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
             var best: Location? = null
-            for (pr in providers) {
+            for (pr in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
                 if (!lm.isProviderEnabled(pr)) continue
                 @Suppress("MissingPermission")
                 val loc = lm.getLastKnownLocation(pr) ?: continue
                 if (best == null || loc.accuracy < best!!.accuracy) best = loc
             }
-            if (best == null) {
-                status = "موقعیت GPS در دسترس نیست"; return
-            }
-            val zone = 40 // پیش‌فرض ایران مرکزی؛ در صورت نیاز قابل تغییر
+            if (best == null) { status = "موقعیت GPS در دسترس نیست"; return }
             val (e, n) = UtmGeo.fromLatLon(best.latitude, best.longitude, zone)
             openAddAt(e, n, d0 = "GPS")
-            status = "موقعیت GPS خوانده شد — توضیح (D) را وارد کن"
-        } catch (e: SecurityException) {
+            status = "GPS خوانده شد — توضیح (D) را وارد کن"
+        } catch (_: SecurityException) {
             status = "مجوز موقعیت لازم است"
         } catch (e: Exception) {
             status = "خطا GPS: ${e.message}"
@@ -249,25 +284,18 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         if (granted) readGps() else status = "مجوز موقعیت رد شد"
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Background)
-    ) {
-        ScreenTopBar(title = "نقشه حفاری تونل", color = color, onBack = onBack)
+    Column(Modifier.fillMaxSize().background(Background)) {
+        ScreenTopBar(title = "نقشه تونل", color = color, onBack = onBack)
 
-        // نوار ابزار
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { reload(); fit() }) {
+            IconButton(onClick = { reload() }) {
                 Icon(Icons.Outlined.Refresh, "بروزرسانی", tint = color)
             }
-            IconButton(onClick = { fit() }) {
+            IconButton(onClick = { needFit = true; fit() }) {
                 Icon(Icons.Outlined.ZoomOutMap, "Fit", tint = color)
             }
             IconButton(onClick = {
@@ -290,6 +318,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     tint = if (editMode) color else TextSecondary
                 )
             }
+            IconButton(onClick = { showBaseDialog = true }) {
+                Icon(Icons.Outlined.Map, "پس‌زمینه", tint = color)
+            }
             IconButton(onClick = { showLayers = true }) {
                 Icon(Icons.Outlined.Layers, "لایه‌ها", tint = color)
             }
@@ -298,42 +329,51 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             }
         }
 
-        Text(
-            status,
-            color = TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
+        Text(status, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
 
-        // نقشه
         Box(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(8.dp)
-                .background(Color(0xFF1A1C1E), RoundedCornerShape(12.dp))
+                .background(
+                    when (baseMap) {
+                        TunnelBaseMap.SATELLITE -> Color(0xFF111111)
+                        TunnelBaseMap.STREET -> Color(0xFF202124)
+                        else -> Color(0xFF1A1C1E)
+                    },
+                    RoundedCornerShape(12.dp)
+                )
         ) {
             Canvas(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(editMode, selectedId, scale) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(0.0001f, 500f)
-                            offset += pan
+                    .pointerInput(Unit) {
+                        // زوم حول نقطهٔ تماس — بدون پرش
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val oldScale = scale
+                            val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
+                            if (kotlin.math.abs(newScale - oldScale) > 1e-12f) {
+                                val factor = newScale / oldScale
+                                offset = Offset(
+                                    centroid.x - (centroid.x - offset.x) * factor + pan.x,
+                                    centroid.y - (centroid.y - offset.y) * factor + pan.y
+                                )
+                                scale = newScale
+                            } else {
+                                offset += pan
+                            }
                         }
                     }
                     .pointerInput(editMode, overlays, scale, offset) {
                         detectTapGestures(
                             onTap = { pos ->
-                                // انتخاب نزدیک‌ترین نقطهٔ overlay
                                 var best: MapOverlayPoint? = null
                                 var bestD = 40f
                                 overlays.forEach { p ->
                                     val s = worldToScreen(p.x, p.y)
                                     val d = hypot(s.x - pos.x, s.y - pos.y)
-                                    if (d < bestD) {
-                                        bestD = d; best = p
-                                    }
+                                    if (d < bestD) { bestD = d; best = p }
                                 }
                                 if (best != null) {
                                     selectedId = best!!.id
@@ -355,25 +395,48 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             change.consume()
                             val id = selectedId ?: return@detectDragGestures
                             val cur = overlays.firstOrNull { it.id == id } ?: return@detectDragGestures
-                            val (wx, wy) = screenToWorld(
-                                worldToScreen(cur.x, cur.y).x + drag.x,
-                                worldToScreen(cur.x, cur.y).y + drag.y
-                            )
+                            val scr = worldToScreen(cur.x, cur.y)
+                            val (wx, wy) = screenToWorld(scr.x + drag.x, scr.y + drag.y)
                             val n = TunnelReportStore.findNearestByXy(context, wx, wy)
                             val km = n?.km ?: cur.km
                             val z = n?.elevDiff?.toDoubleOrNullFa() ?: cur.z
-                            val updated = cur.copy(x = wx, y = wy, km = km, z = z)
-                            MapOverlayStore.upsert(context, updated)
+                            MapOverlayStore.upsert(context, cur.copy(x = wx, y = wy, km = km, z = z))
                             overlays = MapOverlayStore.all(context)
                         }
                     }
             ) {
                 canvasSize = Offset(size.width, size.height)
-                if (!fitted && canvasSize.x > 0 && (tunnelPts.isNotEmpty() || overlays.isNotEmpty() || reportPts.isNotEmpty())) {
-                    fit()
+
+                // کاشی‌های پس‌زمینه
+                if (baseMap != TunnelBaseMap.NONE) {
+                    tiles.forEach { tile ->
+                        val (eNW, nNW) = UtmGeo.fromLatLon(tile.latNorth, tile.lonWest, zone)
+                        val (eNE, nNE) = UtmGeo.fromLatLon(tile.latNorth, tile.lonEast, zone)
+                        val (eSW, nSW) = UtmGeo.fromLatLon(tile.latSouth, tile.lonWest, zone)
+                        val (eSE, nSE) = UtmGeo.fromLatLon(tile.latSouth, tile.lonEast, zone)
+                        val cNW = worldToScreen(eNW, nNW)
+                        val cNE = worldToScreen(eNE, nNE)
+                        val cSW = worldToScreen(eSW, nSW)
+                        val cSE = worldToScreen(eSE, nSE)
+                        val left = minOf(cNW.x, cNE.x, cSW.x, cSE.x)
+                        val right = maxOf(cNW.x, cNE.x, cSW.x, cSE.x)
+                        val top = minOf(cNW.y, cNE.y, cSW.y, cSE.y)
+                        val bottom = maxOf(cNW.y, cNE.y, cSW.y, cSE.y)
+                        val dstLeft = kotlin.math.floor(left.toDouble()).toInt() - 1
+                        val dstTop = kotlin.math.floor(top.toDouble()).toInt() - 1
+                        val dstRight = kotlin.math.ceil(right.toDouble()).toInt() + 1
+                        val dstBottom = kotlin.math.ceil(bottom.toDouble()).toInt() + 1
+                        val w = (dstRight - dstLeft).coerceAtLeast(2)
+                        val h = (dstBottom - dstTop).coerceAtLeast(2)
+                        drawImage(
+                            image = tile.image,
+                            dstOffset = IntOffset(dstLeft, dstTop),
+                            dstSize = IntSize(w, h),
+                            filterQuality = FilterQuality.Low
+                        )
+                    }
                 }
 
-                // محور تونل (ثابت)
                 if (showTunnel && tunnelPts.size >= 2) {
                     val sorted = tunnelPts.sortedBy { it.km }
                     for (i in 0 until sorted.lastIndex) {
@@ -388,12 +451,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
                 if (showTunnel) {
                     tunnelPts.forEach { p ->
-                        val c = worldToScreen(p.x, p.y)
-                        drawCircle(Color(0xFF5F6368), radius = 4f, center = c)
+                        drawCircle(Color(0xFF5F6368), radius = 4f, center = worldToScreen(p.x, p.y))
                     }
                 }
 
-                // نقاط گزارش روزانه — ضربدر + (در زوم مناسب قابل تشخیص)
                 if (showReport) {
                     reportPts.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
@@ -404,7 +465,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
 
-                // نقاط دستی/GPS
                 if (showOverlay) {
                     overlays.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
@@ -412,31 +472,17 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         drawCircle(col, radius = 10f, center = c)
                         drawCircle(Color.White, radius = 4f, center = c)
                         if (p.id == selectedId) {
-                            drawCircle(
-                                col.copy(alpha = 0.35f),
-                                radius = 18f,
-                                center = c,
-                                style = Stroke(width = 2f)
-                            )
+                            drawCircle(col.copy(alpha = 0.35f), radius = 18f, center = c, style = Stroke(width = 2f))
                         }
                     }
                 }
             }
         }
 
-        // لیست کوتاه نقاط دستی
         if (overlays.isNotEmpty()) {
-            Text(
-                "نقاط دستی/GPS (قابل ویرایش)",
-                color = TextPrimary,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            )
+            Text("نقاط دستی/GPS", color = TextPrimary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp))
             LazyColumn(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 140.dp)
-                    .padding(horizontal = 8.dp),
+                Modifier.fillMaxWidth().heightIn(max = 140.dp).padding(horizontal = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(overlays, key = { it.id }) { p ->
@@ -446,37 +492,49 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         onClick = { selectedId = p.id },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            Modifier.padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("${p.id} — ${p.d}", color = TextPrimary, fontSize = 13.sp)
                                 Text(
                                     formatEn("X=%.2f Y=%.2f Z=%.2f KM=%.3f", p.x, p.y, p.z, p.km),
-                                    color = TextSecondary,
-                                    fontSize = 11.sp
+                                    color = TextSecondary, fontSize = 11.sp
                                 )
                             }
                             IconButton(onClick = {
                                 openAddAt(p.x, p.y, p.id, p.d)
                                 draftZ = formatEn("%.3f", p.z)
                                 draftKm = formatEn("%.3f", p.km)
-                            }) {
-                                Icon(Icons.Outlined.Edit, null, tint = color)
-                            }
+                            }) { Icon(Icons.Outlined.Edit, null, tint = color) }
                             IconButton(onClick = {
                                 MapOverlayStore.delete(context, p.id)
                                 overlays = MapOverlayStore.all(context)
                                 if (selectedId == p.id) selectedId = null
-                            }) {
-                                Icon(Icons.Outlined.Delete, null, tint = Color(0xFFCF6679))
-                            }
+                            }) { Icon(Icons.Outlined.Delete, null, tint = Color(0xFFCF6679)) }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showBaseDialog) {
+        AlertDialog(
+            onDismissRequest = { showBaseDialog = false },
+            title = { Text("پس‌زمینه نقشه") },
+            text = {
+                Column {
+                    TunnelBaseMap.values().forEach { item ->
+                        TextButton(onClick = {
+                            baseMap = item
+                            showBaseDialog = false
+                        }) { Text(item.title) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBaseDialog = false }) { Text("بستن") }
+            }
+        )
     }
 
     if (showLayers) {
@@ -486,22 +544,17 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             text = {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showTunnel, { showTunnel = it })
-                        Text("محور و نقاط تونل (ثابت)")
+                        Checkbox(showTunnel, { showTunnel = it }); Text("محور و نقاط تونل (ثابت)")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showReport, { showReport = it })
-                        Text("نقاط حفاری گزارش روزانه")
+                        Checkbox(showReport, { showReport = it }); Text("نقاط حفاری گزارش")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showOverlay, { showOverlay = it })
-                        Text("نقاط دستی / GPS")
+                        Checkbox(showOverlay, { showOverlay = it }); Text("نقاط دستی / GPS")
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showLayers = false }) { Text("باشه") }
-            }
+            confirmButton = { TextButton(onClick = { showLayers = false }) { Text("باشه") } }
         )
     }
 
@@ -511,8 +564,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             title = { Text("خروجی") },
             text = {
                 Column {
-                    Text("CSV: فقط نقاط دستی/GPS با فیلد X,Y,Z,D,KM", color = TextSecondary, fontSize = 12.sp)
-                    Text("DXF: نقاط دستی + نقاط گزارش روزانه", color = TextSecondary, fontSize = 12.sp)
+                    Text("CSV: نقاط دستی X,Y,Z,D,KM", color = TextSecondary, fontSize = 12.sp)
+                    Text("DXF: دستی + گزارش (ضربدر و سه متن)", color = TextSecondary, fontSize = 12.sp)
                 }
             },
             confirmButton = {
@@ -522,9 +575,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     TextButton(onClick = { exportDxf(); showExport = false }) { Text("DXF") }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showExport = false }) { Text("بستن") }
-            }
+            dismissButton = { TextButton(onClick = { showExport = false }) { Text("بستن") } }
         )
     }
 
@@ -534,26 +585,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             title = { Text(if (draftId != null) "ویرایش نقطه" else "نقطه جدید") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(
-                        draftX, { draftX = filterNumericInput(it) },
-                        label = { Text("X") }, keyboardOptions = numKb, singleLine = true
-                    )
-                    OutlinedTextField(
-                        draftY, { draftY = filterNumericInput(it) },
-                        label = { Text("Y") }, keyboardOptions = numKb, singleLine = true
-                    )
-                    OutlinedTextField(
-                        draftZ, { draftZ = filterNumericInput(it) },
-                        label = { Text("Z (اختلاف تراز کف خیابان)") }, keyboardOptions = numKb, singleLine = true
-                    )
-                    OutlinedTextField(
-                        draftKm, { draftKm = filterNumericInput(it) },
-                        label = { Text("KM") }, keyboardOptions = numKb, singleLine = true
-                    )
-                    OutlinedTextField(
-                        draftD, { draftD = it },
-                        label = { Text("D (توضیح / نوع — الزامی)") }, singleLine = true
-                    )
+                    OutlinedTextField(draftX, { draftX = filterNumericInput(it) }, label = { Text("X") }, keyboardOptions = numKb, singleLine = true)
+                    OutlinedTextField(draftY, { draftY = filterNumericInput(it) }, label = { Text("Y") }, keyboardOptions = numKb, singleLine = true)
+                    OutlinedTextField(draftZ, { draftZ = filterNumericInput(it) }, label = { Text("Z (اختلاف تراز)") }, keyboardOptions = numKb, singleLine = true)
+                    OutlinedTextField(draftKm, { draftKm = filterNumericInput(it) }, label = { Text("KM") }, keyboardOptions = numKb, singleLine = true)
+                    OutlinedTextField(draftD, { draftD = it }, label = { Text("D (توضیح — الزامی)") }, singleLine = true)
                     TextButton(onClick = {
                         val x = draftX.toDoubleOrNullFa() ?: return@TextButton
                         val y = draftY.toDoubleOrNullFa() ?: return@TextButton
@@ -561,12 +597,115 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }) { Text("محاسبه Z و KM از نزدیک‌ترین نقطه تونل") }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { saveDraft() }) { Text("ذخیره") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("انصراف") }
-            }
+            confirmButton = { TextButton(onClick = { saveDraft() }) { Text("ذخیره") } },
+            dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("انصراف") } }
         )
     }
+}
+
+private enum class TunnelBaseMap(val title: String) {
+    NONE("پس‌زمینه ساده"),
+    SATELLITE("ماهواره‌ای"),
+    STREET("نقشه شهری / جاده‌ای")
+}
+
+private data class TunnelTileBmp(
+    val image: androidx.compose.ui.graphics.ImageBitmap,
+    val latNorth: Double, val latSouth: Double,
+    val lonWest: Double, val lonEast: Double
+)
+
+private object TunnelTileCache {
+    private const val MAX = 100
+    private val cache = object : LinkedHashMap<String, TunnelTileBmp>(MAX, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TunnelTileBmp>?): Boolean = size > MAX
+    }
+    fun get(key: String) = synchronized(cache) { cache[key] }
+    fun put(key: String, value: TunnelTileBmp) = synchronized(cache) { cache[key] = value }
+}
+
+private fun estimateTunnelZoom(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, screenW: Float): Int {
+    val lonDiff = (maxLon - minLon).absoluteValue.coerceAtLeast(1e-7)
+    val raw = ln((360.0 * screenW / 256.0) / lonDiff) / ln(2.0)
+    return raw.roundToInt().coerceIn(12, 20)
+}
+
+private fun tunnelLatLonToTile(lat: Double, lon: Double, zoom: Int): Pair<Int, Int> {
+    val n = 1 shl zoom
+    val x = ((lon + 180.0) / 360.0 * n).toInt().coerceIn(0, n - 1)
+    val latRad = Math.toRadians(lat.coerceIn(-85.0511, 85.0511))
+    val y = ((1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / PI) / 2.0 * n).toInt().coerceIn(0, n - 1)
+    return x to y
+}
+
+private fun tunnelTileToLatLon(x: Int, y: Int, zoom: Int): Pair<Double, Double> {
+    val n = 1 shl zoom
+    val lon = x.toDouble() / n * 360.0 - 180.0
+    val lat = Math.toDegrees(atan(sinh(PI * (1.0 - 2.0 * y / n))))
+    return lat to lon
+}
+
+private suspend fun fetchTunnelTile(
+    primary: String, fallback: String, x: Int, y: Int, zoom: Int, key: String
+): TunnelTileBmp? = withContext(Dispatchers.IO) {
+    TunnelTileCache.get(key)?.let { return@withContext it }
+    for (url in listOf(primary, fallback)) {
+        var conn: HttpURLConnection? = null
+        try {
+            conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("User-Agent", "AdelAssistant/1.0")
+            }
+            if (conn.responseCode !in 200..299) continue
+            val tile = conn.inputStream.use { input ->
+                val bmp = BitmapFactory.decodeStream(input) ?: return@use null
+                val (latN, lonW) = tunnelTileToLatLon(x, y, zoom)
+                val (latS, lonE) = tunnelTileToLatLon(x + 1, y + 1, zoom)
+                TunnelTileBmp(bmp.asImageBitmap(), latN, latS, lonW, lonE)
+            } ?: continue
+            TunnelTileCache.put(key, tile)
+            return@withContext tile
+        } catch (_: Exception) {
+        } finally {
+            conn?.disconnect()
+        }
+    }
+    null
+}
+
+private suspend fun loadTunnelTiles(
+    minLat: Double, maxLat: Double, minLon: Double, maxLon: Double,
+    zoom: Int, baseMap: TunnelBaseMap
+): List<TunnelTileBmp> = coroutineScope {
+    if (baseMap == TunnelBaseMap.NONE) return@coroutineScope emptyList()
+    val (aX, aY) = tunnelLatLonToTile(minLat, minLon, zoom)
+    val (bX, bY) = tunnelLatLonToTile(maxLat, maxLon, zoom)
+    val minX = (min(aX, bX) - 1).coerceAtLeast(0)
+    val maxX = max(aX, bX) + 1
+    val minY = (min(aY, bY) - 1).coerceAtLeast(0)
+    val maxY = max(aY, bY) + 1
+    val coords = buildList {
+        outer@ for (x in minX..maxX) for (y in minY..maxY) {
+            if (size >= 64) break@outer
+            add(x to y)
+        }
+    }
+    coords.map { (x, y) ->
+        async(Dispatchers.IO) {
+            val key = "${baseMap.name}/$zoom/$x/$y"
+            val primary = when (baseMap) {
+                TunnelBaseMap.SATELLITE -> "https://mt1.google.com/vt/lyrs=s&x=$x&y=$y&z=$zoom"
+                TunnelBaseMap.STREET -> "https://mt1.google.com/vt/lyrs=m&x=$x&y=$y&z=$zoom"
+                else -> "https://mt1.google.com/vt/lyrs=s&x=$x&y=$y&z=$zoom"
+            }
+            val fallback = when (baseMap) {
+                TunnelBaseMap.SATELLITE ->
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x"
+                else ->
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/$zoom/$y/$x"
+            }
+            fetchTunnelTile(primary, fallback, x, y, zoom, key)
+        }
+    }.awaitAll().filterNotNull()
 }
