@@ -11,7 +11,14 @@ import android.location.Location
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -26,6 +33,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -68,10 +76,11 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("برای شروع یک یا چند فایل DXF/KML/KMZ انتخاب کن") }
     var zoneText by remember { mutableStateOf("40") }
-    var baseMap by remember { mutableStateOf(BaseMap.NONE) }
+    var baseMap by remember { mutableStateOf(BaseMap.SATELLITE) }
     var emptyMapColor by remember { mutableStateOf(Color(0xFF202124)) }
     var showEmptyColorPalette by remember { mutableStateOf(false) }
     var showBaseMapDialog by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
@@ -156,7 +165,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 val (e, n) = UtmGeo.fromLatLon(loc.latitude, loc.longitude, zone)
                 myLoc = e to n
                 centerOnUtm(e, n, 17)
-                // پس‌زمینه ساده پیش‌فرض می‌ماند؛ کاربر خودش ماهواره/ترافیک را انتخاب می‌کند
+                if (baseMap == BaseMap.NONE) baseMap = BaseMap.STREET
                 message = "مرکز نقشه روی موقعیت من قرار گرفت"
             }
 
@@ -479,29 +488,73 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }
         }
 
-        NavigationBar(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            NavigationBarItem(selected = false, onClick = { openFile.launch(arrayOf("*/*")) },
-                icon = { Icon(Icons.Filled.FolderOpen, null) }, label = { Text("فایل") })
-            NavigationBarItem(selected = showDrawings, onClick = { showDrawings = true },
-                icon = { Icon(Icons.Filled.Map, null) }, label = { Text("نقشه‌ها") })
-            NavigationBarItem(selected = showLayers, onClick = { showLayers = true },
-                icon = { Icon(Icons.Filled.Layers, null) }, label = { Text("لایه‌ها") }, enabled = drawings.isNotEmpty())
-            NavigationBarItem(selected = baseMap != BaseMap.NONE, onClick = { showBaseMapDialog = true },
-                icon = { Icon(Icons.Filled.Map, null) }, label = { Text("پس‌زمینه") })
-            NavigationBarItem(selected = pickCoordinateMode || showPointsDialog, onClick = {
-                if (pickedPoints.isEmpty()) {
-                    pickCoordinateMode = true
-                    message = "نشانگر بزرگ وسط نقشه را روی نقطه موردنظر قرار بده و لمس کن"
-                } else showPointsDialog = true
-            }, icon = { Icon(Icons.Filled.LocationOn, null) }, label = { Text("مختصات") })
-            NavigationBarItem(selected = false, onClick = { fitAll(canvasSize.x, canvasSize.y) },
-                icon = { Icon(Icons.Filled.ZoomOutMap, null) }, label = { Text("Fit") })
-            NavigationBarItem(selected = measureMode, onClick = {
-                measureMode = !measureMode
-                measureA = null; measureB = null
-                distanceMsg = if (measureMode) "حالت اندازه‌گیری: نقطه اول را لمس کن" else null
-            }, icon = { Icon(Icons.Filled.Straighten, null) }, label = { Text("اندازه") })
+        
+        // منوی شیشه‌ای کرکره‌ای — گوشه بالا راست
+        Column(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .zIndex(20f)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0x66FFFFFF),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                modifier = Modifier.size(40.dp)
+            ) {
+                IconButton(onClick = { menuOpen = !menuOpen }, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        if (menuOpen) Icons.Filled.Close else Icons.Filled.Menu,
+                        contentDescription = "منو",
+                        tint = Color.White
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = menuOpen,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xAA1B1B1B),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                    modifier = Modifier.padding(top = 6.dp).width(52.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        IconButton(onClick = { openFile.launch(arrayOf("*/*")) }) {
+                            Icon(Icons.Filled.FolderOpen, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { showDrawings = true }) {
+                            Icon(Icons.Filled.Map, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { showLayers = true }) {
+                            Icon(Icons.Filled.Layers, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { showBaseMapDialog = true }) {
+                            Icon(Icons.Filled.Public, null, tint = Color.White)
+                        }
+                        IconButton(onClick = {
+                            pickCoordinateMode = true
+                            showPointsDialog = true
+                            message = "نقطه را روی نقشه انتخاب کن"
+                        }) {
+                            Icon(Icons.Filled.MyLocation, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { fitAll(canvasSize.x, canvasSize.y) }) {
+                            Icon(Icons.Filled.ZoomOutMap, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { measureMode = !measureMode }) {
+                            Icon(Icons.Filled.Straighten, null, tint = if (measureMode) Color(0xFF81C995) else Color.White)
+                        }
+                    }
+                }
+            }
         }
+
 
         FloatingActionButton(
             onClick = {
