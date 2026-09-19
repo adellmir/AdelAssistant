@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,15 +32,20 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.XlsxPointReader
+import com.adel.assistant.data.OnlineDwgConverter
+import com.adel.assistant.data.DwgDxfConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var selectAll by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
+    var convertingDwg by remember { mutableStateOf(false) }
+    var lastDxfName by remember { mutableStateOf<String?>(null) }
     var newestFirst by remember { mutableStateOf(true) }
     var editTarget by remember { mutableStateOf<GsiPoint?>(null) }
     var editName by remember { mutableStateOf("") }
@@ -61,6 +67,43 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
 
     val displayList = remember(points, newestFirst) {
         if (newestFirst) points.asReversed() else points
+    }
+
+
+    val dwgPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+        }
+        convertingDwg = true
+        status = "در حال تبدیل DWG (محلی/آنلاین)…"
+        scope.launch {
+            try {
+                val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "drawing.dwg"
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IllegalStateException("خواندن فایل ممکن نشد")
+                val res = OnlineDwgConverter.convert(bytes, name)
+                if (!res.ok || res.dxf.isBlank()) {
+                    status = res.message.ifBlank { "تبدیل ناموفق" }
+                } else {
+                    val outName = name.substringBeforeLast('.').ifBlank { "converted" } + "_online.dxf"
+                    val ok = FileExport.exportTextToDocuments(
+                        context, outName, res.dxf, "application/dxf"
+                    ) != null
+                    lastDxfName = outName
+                    status = if (ok) {
+                        "✅ ${res.message}\nذخیره: Documents/AdelAssistant/dxf/$outName\nمنبع: ${res.source}"
+                    } else {
+                        "${res.message}\nاما ذخیره فایل شکست خورد"
+                    }
+                }
+            } catch (e: Exception) {
+                status = "خطا DWG: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                convertingDwg = false
+            }
+        }
     }
 
     fun selectedPoints(): List<GsiPoint> =
@@ -159,7 +202,27 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = {
+                Icon
+            Button(
+                onClick = {
+                    dwgPicker.launch(
+                        arrayOf(
+                            "application/acad",
+                            "application/x-dwg",
+                            "application/octet-stream",
+                            "image/vnd.dwg",
+                            "*/*"
+                        )
+                    )
+                },
+                enabled = !convertingDwg,
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (convertingDwg) "در حال تبدیل DWG…" else "DWG → DXF (آنلاین/محلی)")
+            }
+
+Button(onClick = {
                     picker.launch(arrayOf("*/*", "text/*", "application/octet-stream",
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 }) { Icon(Icons.Outlined.FolderOpen, "باز کردن", tint = color) }
