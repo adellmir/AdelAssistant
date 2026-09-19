@@ -32,12 +32,15 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.XlsxPointReader
+import com.adel.assistant.data.PendingMapOpen
+import com.adel.assistant.navigation.Routes
+import com.adel.assistant.ui.PointsSpreadsheet
 import com.adel.assistant.data.OnlineDwgConverter
 import com.adel.assistant.data.DwgDxfConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
+fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
@@ -54,6 +57,9 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     var editZ by remember { mutableStateOf("") }
     var editCode by remember { mutableStateOf("") }
     var showAlign by remember { mutableStateOf(false) }
+    var showViewDxf by remember { mutableStateOf(false) }
+    var lastDxfBody by remember { mutableStateOf<String?>(null) }
+    var lastDxfName by remember { mutableStateOf("gsi_export.dxf") }
     var alignBaseName by remember { mutableStateOf("B1") }
     var alignDirName by remember { mutableStateOf("B2") }
     var alignBaseE by remember { mutableStateOf("") }
@@ -157,7 +163,14 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             "dat" -> saveFile("gsi_export.dat", GsiParser.toDat(list))
             "gsi" -> saveFile("gsi_export.gsi", GsiParser.toGsi(list))
             "kml" -> saveFile("gsi_export.kml", GsiParser.toKml(list), "application/vnd.google-earth.kml+xml")
-            "dxf" -> saveFile("gsi_export.dxf", GsiParser.toDxf(list), "application/dxf")
+            "dxf" -> {
+                val body = GsiParser.toDxf(list)
+                lastDxfBody = body
+                lastDxfName = "gsi_export.dxf"
+                val saved = saveFile("gsi_export.dxf", body, "application/dxf")
+                if (saved) showViewDxf = true
+                saved
+            }
             else -> false
         }
         status = if (ok) "ذخیره شد: $kind (${list.size} نقطه)" else "خطا در ذخیره $kind"
@@ -264,50 +277,27 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = color)
             ) { Text("الاین / هم‌مختصات") }
             Spacer(Modifier.height(8.dp))
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(displayList, key = { it.id }) { p ->
-                    val checked = selectAll || p.id in selectedIds
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1E241A), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = checked,
-                            onCheckedChange = { on ->
-                                selectAll = false
-                                selectedIds = if (on) selectedIds + p.id else selectedIds - p.id
-                            },
-                            colors = CheckboxDefaults.colors(checkedColor = color)
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                "E ${fmt(p.e)}  N ${fmt(p.n)}  Z ${fmt(p.z)}",
-                                color = Color(0xFFB0B8A8), fontSize = 12.sp
-                            )
-                            if (p.code.isNotBlank()) {
-                                Text("D: ${p.code}", color = Color(0xFF90CAF9), fontSize = 12.sp)
-                            }
-                        }
-                        TextButton(onClick = {
-                            editTarget = p
-                            editName = p.name
-                            editE = fmt(p.e)
-                            editN = fmt(p.n)
-                            editZ = fmt(p.z)
-                            editCode = p.code
-                        }) { Text("ویرایش", color = color, fontSize = 12.sp) }
-                        TextButton(onClick = {
-                            points = points.filter { it.id != p.id }
-                            selectedIds = selectedIds - p.id
-                            status = "حذف شد"
-                        }) { Text("حذف", color = Color(0xFFE57373), fontSize = 12.sp) }
-                    }
+            Text("جدول نقاط (سلول را بزن و ویرایش کن)", color = Color(0xFFB0B8A8), fontSize = 12.sp)
+            PointsSpreadsheet(
+                points = displayList,
+                color = color,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                selectedIds = selectedIds,
+                selectAll = selectAll,
+                showCheckbox = true,
+                onToggleSelect = { id, on ->
+                    selectAll = false
+                    selectedIds = if (on) selectedIds + id else selectedIds - id
+                },
+                onChange = { updated ->
+                    points = points.map { if (it.id == updated.id) updated else it }
+                },
+                onDelete = { p ->
+                    points = points.filter { it.id != p.id }
+                    selectedIds = selectedIds - p.id
+                    status = "حذف شد"
                 }
-            }
+            )
         }
     }
 
@@ -400,7 +390,25 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { showAlign = false }) { Text("انصراف") } }
         )
     }
+
+    if (showViewDxf && lastDxfBody != null) {
+        AlertDialog(
+            onDismissRequest = { showViewDxf = false },
+            title = { Text("خروجی DXF") },
+            text = { Text("فایل ذخیره شد. می‌خواهی در نمایش نقشه باز شود؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    PendingMapOpen.setDxf(lastDxfBody!!, lastDxfName)
+                    showViewDxf = false
+                    onNavigate(Routes.TOOL_DXF_PREVIEW)
+                }) { Text("نمایش", color = color) }
+            },
+            dismissButton = { TextButton(onClick = { showViewDxf = false }) { Text("بعداً") } }
+        )
+    }
+
 }
+
 
 private fun fmt(v: Double): String =
     String.format(java.util.Locale.US, "%.3f", v)

@@ -209,7 +209,7 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
             TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_GSI) {
-            GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+            GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() }, onNavigate = { route -> navController.navigate(route) })
         }
         composable(Routes.TOOL_LOCATION) {
             LocationScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

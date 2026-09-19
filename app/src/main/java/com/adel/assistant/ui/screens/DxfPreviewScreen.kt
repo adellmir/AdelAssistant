@@ -1,6 +1,9 @@
 package com.adel.assistant.ui.screens
 
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.PendingMapOpen
+import com.adel.assistant.ui.PointsSpreadsheet
+import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.GsiParser
 
@@ -134,7 +137,25 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     val activeDrawings = drawings.filter { it.visible }
     val allModels = activeDrawings.map { it.model }
 
-    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+    LaunchedEffect(Unit) {
+        PendingMapOpen.consume()?.let { (text, name) ->
+            try {
+                val model = DxfParser.parse(text)
+                if (!model.isEmpty) {
+                    drawings = drawings + ViewerDrawing(nextDrawingId, name, model)
+                    nextDrawingId++
+                    fitTrigger++
+                    message = "از خروجی: $name بارگذاری شد"
+                } else {
+                    message = "DXF خالی یا نامعتبر بود"
+                }
+            } catch (e: Exception) {
+                message = "خطا باز کردن DXF: ${e.message}"
+            }
+        }
+    }
+
+        val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
         try {
             val added = mutableListOf<ViewerDrawing>()
@@ -296,6 +317,18 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun worldToScreen(x: Double, y: Double) = Offset((x * scale + offset.x).toFloat(), (-y * scale + offset.y).toFloat())
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
+
+    fun pickedAsGsi(): List<GsiPoint> = pickedPoints.map { p ->
+        GsiPoint(id = p.id.toLong(), name = "P${p.id}", e = p.easting, n = p.northing, z = 0.0, code = "")
+    }
+    fun applyGsiToPicked(list: List<GsiPoint>) {
+        val byId = list.associateBy { it.id }
+        pickedPoints = pickedPoints.map { p ->
+            val g = byId[p.id.toLong()] ?: return@map p
+            val ll = UtmGeo.toLatLon(g.e, g.n, zone)
+            p.copy(easting = g.e, northing = g.n, lat = ll.first, lon = ll.second)
+        }
+    }
 
     fun snapWorld(rawX: Double, rawY: Double): Pair<Double, Double> {
         val maxW = (28f / scale.coerceAtLeast(1e-6f)).toDouble()
@@ -814,35 +847,33 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 }
             },
             text = {
-                if (pickedPoints.isEmpty()) Text("هنوز نقطه‌ای ثبت نشده است.")
-                else LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    itemsIndexed(pickedPoints, key = { _, p -> p.id }) { _, p ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Checkbox(checked = true, onCheckedChange = { })
-                            Column(Modifier.weight(1f)) {
-                                Text("${p.id}: ${formatEn("X=%.3f  Y=%.3f", p.easting, p.northing)}", style = MaterialTheme.typography.bodySmall)
+                if (pickedPoints.isEmpty()) {
+                    Text("هنوز نقطه‌ای ثبت نشده است.")
+                } else {
+                    PointsSpreadsheet(
+                        points = pickedAsGsi(),
+                        color = color,
+                        showCheckbox = false,
+                        onChange = { g ->
+                            val ll = UtmGeo.toLatLon(g.e, g.n, zone)
+                            pickedPoints = pickedPoints.map {
+                                if (it.id.toLong() == g.id)
+                                    it.copy(easting = g.e, northing = g.n, lat = ll.first, lon = ll.second)
+                                else it
                             }
-                            IconButton(onClick = {
-                                try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UtmGeo.neshanIntentUri(p.lat, p.lon)))) } catch (_: Exception) {
-                                    try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(formatEn("https://nshn.ir/?lat=%.6f&lng=%.6f", p.lat, p.lon)))) } catch (_: Exception) {}
-                                }
-                            }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.Navigation, "نمایش در نشان", modifier = Modifier.size(18.dp)) }
-                            IconButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(formatEn("X=%.3f  Y=%.3f", p.easting, p.northing))); message = "مختصات کپی شد" }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.ContentCopy, "کپی", modifier = Modifier.size(18.dp)) }
-                            IconButton(onClick = {
-                                editingPointId = p.id
-                                editTarget = p.easting to p.northing
-                                showPointsDialog = false
-                                message = "ویرایش نقطه ${p.id}: انگشت را هرجای صفحه بگذار و بکش؛ نقطه همان فاصله حرکت می‌کند"
-                            }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.Edit, "ویرایش", modifier = Modifier.size(18.dp)) }
-                            IconButton(onClick = { pickedPoints = pickedPoints.filterNot { it.id == p.id } }, modifier = Modifier.size(34.dp)) { Icon(Icons.Filled.Delete, "حذف", modifier = Modifier.size(18.dp)) }
-                        }
-                    }
+                        },
+                        onDelete = { g ->
+                            pickedPoints = pickedPoints.filterNot { it.id.toLong() == g.id }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp)
+                    )
+                    Text("سلول را بزن و ویرایش کن؛ ✕ = حذف. برای جابجایی روی نقشه از آیکن ویرایش قبلی استفاده کن.", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 }
+
             },
-            confirmButton = {
+                        confirmButton = {
                 TextButton(onClick = { showPointsDialog = false }) { Text("بستن") }
             }
         )
