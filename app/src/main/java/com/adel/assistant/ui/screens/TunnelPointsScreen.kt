@@ -289,22 +289,22 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(6.dp))
         Text("نتایج", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            
             if (kmContextText.isNotBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = color.copy(alpha = 0.10f),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                ) {
-                    Text(
-                        kmContextText,
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFCFD8C8)
-                    )
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = color.copy(alpha = 0.10f),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            kmContextText,
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFCFD8C8)
+                        )
+                    }
                 }
             }
-
             items(results) { p ->
                 val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
                 val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)
