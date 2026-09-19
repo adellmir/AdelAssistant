@@ -69,7 +69,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
             .background(Background)
             .padding(horizontal = 20.dp)
     ) {
-        ScreenTopBar(title = "تقویم کاری", color = color, onBack = onBack)
+        ScreenTopBar(title = "تقویم کار", color = color, onBack = onBack)
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {

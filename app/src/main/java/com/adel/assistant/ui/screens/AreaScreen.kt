@@ -93,7 +93,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 16.dp)
     ) {
-        ScreenTopBar(title = "مساحت و محیط", color = color, onBack = onBack)
+        ScreenTopBar(title = "محیط و مساحت", color = color, onBack = onBack)
         Text(
             "نقاط را به ترتیب دور زمین وارد یا از فایل CSV / TXT / DAT / IDX بخوان.",
             style = MaterialTheme.typography.bodySmall,

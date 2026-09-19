@@ -37,18 +37,18 @@ object AppMenu {
         color = WorkPrimary,
         tabs = listOf(
             MenuTab("تونل", listOf(
-                MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
-                MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
-                MenuItem("نقشه تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
+                MenuItem("گزارش تونل", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
                 MenuItem("نقاط تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
-                MenuItem("پیشرفت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
+                MenuItem("نقشه تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
+                MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
+                MenuItem("پیشرفت تونل", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
             )),
             MenuTab("پروژه‌ها", listOf(
                 MenuItem("ثبت پروژه", Icons.Filled.AddLocationAlt, Routes.SURVEY_PROJECT_REGISTER),
                 MenuItem("کارفرمایان و پروژه‌ها", Icons.Filled.People, Routes.SURVEY_PROJECT_CLIENTS),
+                MenuItem("تقویم کار", Icons.Filled.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR),
                 MenuItem("ثبت وقایع پروژه", Icons.Filled.EventNote, Routes.SURVEY_PROJECT_EVENTS),
-                MenuItem("تقویم کاری", Icons.Filled.CalendarMonth, Routes.SURVEY_PROJECT_CALENDAR),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_PROJECT_TASKS)
             ))
         )
@@ -80,16 +80,16 @@ object AppMenu {
         tabs = listOf(
             MenuTab("", listOf(
                 MenuItem("ترسیم نقشه", Icons.Filled.Architecture, Routes.TOOL_DXF),
-                MenuItem("الاین", Icons.Filled.CompareArrows, Routes.TOOL_ALIGN),
                 MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
+                MenuItem("الاین", Icons.Filled.CompareArrows, Routes.TOOL_ALIGN),
+                MenuItem("مبدل", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
                 MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
-                MenuItem("مبدل GSI", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
-                MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
-                MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
-                MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
-                MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
                 MenuItem("نامه‌نگاری", Icons.Filled.Mail, Routes.TOOL_LETTER),
-                MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
+                MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
+                MenuItem("محیط و مساحت", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
+                MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
+                MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
+                MenuItem("پشتیبان‌گیری", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))
         )
     )

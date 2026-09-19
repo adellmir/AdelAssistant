@@ -108,7 +108,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             .background(Background)
             .padding(horizontal = 20.dp)
     ) {
-        ScreenTopBar(title = "پشتیبان پایگاه داده", color = color, onBack = onBack)
+        ScreenTopBar(title = "پشتیبان‌گیری", color = color, onBack = onBack)
         Spacer(Modifier.height(12.dp))
         Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

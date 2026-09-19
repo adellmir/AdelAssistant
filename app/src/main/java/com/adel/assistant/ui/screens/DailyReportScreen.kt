@@ -180,7 +180,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             .padding(horizontal = 20.dp)
     ) {
         Box {
-            ScreenTopBar(title = "گزارش روزانه", color = color, onBack = onBack)
+            ScreenTopBar(title = "گزارش تونل", color = color, onBack = onBack)
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
                 Icon(Icons.Outlined.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
             }
