@@ -1,5 +1,9 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.GsiPoint
+import com.adel.assistant.data.GsiParser
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -105,7 +109,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
 
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var measureDragTarget by remember { mutableStateOf<String?>(null) } // "A" | "B"
     var distanceMsg by remember { mutableStateOf<String?>(null) }
+    var showExportPickedDialog by remember { mutableStateOf(false) }
+    // انتخاب از نقشه برای الاین: rowIndex, side "src"|"dst"
+    var mapAlignPick by remember { mutableStateOf<Pair<Int, String>?>(null) }
+
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -288,6 +297,30 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
         ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
+    fun snapWorld(rawX: Double, rawY: Double): Pair<Double, Double> {
+        val maxW = (28f / scale.coerceAtLeast(1e-6f)).toDouble()
+        var bestD = maxW
+        var best: Pair<Double, Double>? = null
+        fun consider(x: Double, y: Double) {
+            val d = kotlin.math.hypot(x - rawX, y - rawY)
+            if (d < bestD) { bestD = d; best = x to y }
+        }
+        allModels.forEach { m ->
+            m.lines.forEach { consider(it.x1, it.y1); consider(it.x2, it.y2) }
+            m.circles.forEach { consider(it.x, it.y) }
+            m.texts.forEach { consider(it.x, it.y) }
+        }
+        return best ?: (rawX to rawY)
+    }
+
+    fun updateMeasureDistance() {
+        val a = measureA; val b = measureB
+        if (a != null && b != null) {
+            val d = DxfParser.horizontalDistance(a.first, a.second, b.first, b.second)
+            distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر — لمس نزدیک نقطه = کشیدن"
+        }
+    }
+
     // فقط وقتی پس‌زمینه نقشه روشن است؛ debounce تا زوم لگ ندهد
     val tileScaleKey = ((kotlin.math.ln(scale.toDouble().coerceAtLeast(1e-9)) / kotlin.math.ln(1.15)).toInt())
     val tileOffsetKey = Offset((offset.x / 48f).toInt() * 48f, (offset.y / 48f).toInt() * 48f)
@@ -331,7 +364,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
                             // Keep the original smooth map gesture. While editing a point,
                             // the map must stay still so the point can move independently.
-                            if (editingPointId != null || pickCoordinateMode) return@detectTransformGestures
+                            if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -379,7 +412,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 },
                                 onTap = { tap ->
                                     if (pickCoordinateMode) {
-                                        val p = screenToWorld(tap.x, tap.y)
+                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val p = snapWorld(raw.first, raw.second)
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
                                         pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
                                         nextPointId++
@@ -388,21 +422,75 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         message = "نقطه ثبت شد؛ برای ثبت نقطه بعدی + را بزن"
                                         return@detectTapGestures
                                     }
+                                    if (!measureMode && mapAlignPick == null) return@detectTapGestures
+                                    val raw = screenToWorld(tap.x, tap.y)
+                                    val p = snapWorld(raw.first, raw.second)
+                                    // الاین از روی نقشه
+                                    mapAlignPick?.let { (rowIdx, side) ->
+                                        val e = String.format(java.util.Locale.US, "%.3f", p.first)
+                                        val n = String.format(java.util.Locale.US, "%.3f", p.second)
+                                        val rows = mapAlignRows.toMutableList()
+                                        if (rowIdx in rows.indices) {
+                                            val r = rows[rowIdx].toMutableList()
+                                            if (side == "src") {
+                                                r[1] = e; r[2] = n
+                                                if (r[0].isBlank()) r[0] = "S${rowIdx + 1}"
+                                            } else {
+                                                r[5] = e; r[6] = n
+                                                if (r[4].isBlank()) r[4] = "T${rowIdx + 1}"
+                                            }
+                                            rows[rowIdx] = r
+                                            mapAlignRows = rows
+                                        }
+                                        mapAlignPick = null
+                                        showMapAlignDialog = true
+                                        message = "مختصات از نقشه ثبت شد"
+                                        return@detectTapGestures
+                                    }
                                     if (!measureMode) return@detectTapGestures
-                                    val p = screenToWorld(tap.x, tap.y)
-                                    if (measureA == null || measureB != null) {
-                                        measureA = p; measureB = null
-                                        distanceMsg = "نقطه اول انتخاب شد؛ نقطه دوم را لمس کن"
-                                    } else {
+                                    // اگر هر دو نقطه هست و نزدیک یکی لمس شد → انتخاب برای کشیدن
+                                    if (measureA != null && measureB != null) {
+                                        val pa = worldToScreen(measureA!!.first, measureA!!.second)
+                                        val pb = worldToScreen(measureB!!.first, measureB!!.second)
+                                        val da = kotlin.math.hypot(tap.x - pa.x, tap.y - pa.y)
+                                        val db = kotlin.math.hypot(tap.x - pb.x, tap.y - pb.y)
+                                        if (da < 36f || db < 36f) {
+                                            measureDragTarget = if (da <= db) "A" else "B"
+                                            distanceMsg = "نقطه ${measureDragTarget} را بکش؛ برای نقطه جدید دوباره اندازه را بزن"
+                                            return@detectTapGestures
+                                        }
+                                    }
+                                    if (measureA == null || (measureB != null && measureDragTarget == null)) {
+                                        measureA = p; measureB = null; measureDragTarget = null
+                                        distanceMsg = "نقطه اول (حساس به عارضه)؛ نقطه دوم را لمس کن"
+                                    } else if (measureB == null) {
                                         measureB = p
-                                        val d = DxfParser.horizontalDistance(measureA!!.first, measureA!!.second, p.first, p.second)
-                                        distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
-                                        measureMode = false
+                                        updateMeasureDistance()
                                     }
                                 }
                             )
                         }
                     }
+                    .pointerInput(measureMode, measureDragTarget, scale, offset) {
+                        if (!measureMode || measureDragTarget == null) return@pointerInput
+                        detectDragGestures(
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val raw = screenToWorld(change.position.x, change.position.y)
+                                val p = snapWorld(raw.first, raw.second)
+                                when (measureDragTarget) {
+                                    "A" -> measureA = p
+                                    "B" -> measureB = p
+                                }
+                                updateMeasureDistance()
+                            },
+                            onDragEnd = {
+                                measureDragTarget = null
+                                message = "نقطه اندازه جابجا شد"
+                            }
+                        )
+                    }
+
             ) {
                 canvasSize = Offset(size.width, size.height)
 
@@ -622,7 +710,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 tint = Color.White
                             )
                         }
-                        IconButton(onClick = { measureMode = !measureMode }) {
+                        IconButton(onClick = {
+                            measureMode = !measureMode
+                            measureDragTarget = null
+                            if (measureMode) {
+                                if (measureA == null) distanceMsg = "اندازه‌گذاری: نقطه اول را لمس کن (حساس به عارضه)"
+                                else updateMeasureDistance()
+                            } else {
+                                distanceMsg = null
+                            }
+                        }) {
                             Icon(Icons.Filled.Straighten, null, tint = if (measureMode) Color(0xFF81C995) else Color.White)
                         }
                     }
@@ -705,6 +802,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("مختصات (${pickedPoints.size})", Modifier.weight(1f))
+                    IconButton(onClick = {
+                        if (pickedPoints.isEmpty()) message = "نقطه‌ای برای خروجی نیست"
+                        else showExportPickedDialog = true
+                    }) {
+                        Icon(Icons.Filled.UploadFile, "خروجی")
+                    }
                     IconButton(onClick = { pickCoordinateMode = true; showPointsDialog = false; message = "نقطه بعدی را روی نقشه انتخاب کن" }) {
                         Icon(Icons.Filled.Add, "نقطه جدید")
                     }
@@ -804,6 +907,59 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             confirmButton = { TextButton(onClick = { showLayers = false }) { Text("بستن") } }
         )
     }
+
+    if (showExportPickedDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportPickedDialog = false },
+            title = { Text("خروجی مختصات") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${pickedPoints.size} نقطه — فرمت را انتخاب کن")
+                    listOf("txt", "gsi", "dxf", "kml").forEach { fmt ->
+                        Button(
+                            onClick = {
+                                try {
+                                    val gsiPts = pickedPoints.mapIndexed { i, p ->
+                                        GsiPoint(
+                                            id = p.id.toLong(),
+                                            name = "P${p.id}",
+                                            e = p.easting,
+                                            n = p.northing,
+                                            z = 0.0,
+                                            code = ""
+                                        )
+                                    }
+                                    val body = when (fmt) {
+                                        "txt" -> GsiParser.toTxt(gsiPts)
+                                        "gsi" -> GsiParser.toGsi(gsiPts)
+                                        "dxf" -> GsiParser.toDxf(gsiPts)
+                                        "kml" -> GsiParser.toKml(gsiPts, "picked")
+                                        else -> GsiParser.toTxt(gsiPts)
+                                    }
+                                    val mime = when (fmt) {
+                                        "dxf" -> "application/dxf"
+                                        "kml" -> "application/vnd.google-earth.kml+xml"
+                                        else -> "text/plain"
+                                    }
+                                    val name = "picked_coords.$fmt"
+                                    val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
+                                    message = if (ok) "ذخیره شد: Documents/AdelAssistant/…/$name" else "خطا در ذخیره"
+                                } catch (e: Exception) {
+                                    message = "خطا خروجی: ${e.message}"
+                                }
+                                showExportPickedDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = color)
+                        ) { Text(fmt.uppercase()) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showExportPickedDialog = false }) { Text("بستن") } }
+        )
+    }
+
     if (showMapAlignDialog) {
         AlertDialog(
             onDismissRequest = { showMapAlignDialog = false },
@@ -836,7 +992,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     mapAlignRows.forEachIndexed { idx, row ->
                         Text("جفت ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         // مبدا
-                        Text("مبدا", fontSize = 11.sp, color = TextSecondary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("مبدا", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                mapAlignPick = idx to "src"
+                                showMapAlignDialog = false
+                                message = "نقطه مبدا جفت ${idx + 1} را روی نقشه لمس کن (حساس به عارضه)"
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.MyLocation, "از نقشه", modifier = Modifier.size(18.dp), tint = color)
+                            }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             OutlinedTextField(row[0], { v ->
                                 val m = row.toMutableList(); m[0] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
@@ -851,7 +1016,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 val m = row.toMutableList(); m[3] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("Z") }, modifier = Modifier.weight(1f), singleLine = true)
                         }
-                        Text("مقصد", fontSize = 11.sp, color = TextSecondary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("مقصد", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                mapAlignPick = idx to "dst"
+                                showMapAlignDialog = false
+                                message = "نقطه مقصد جفت ${idx + 1} را روی نقشه لمس کن (حساس به عارضه)"
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.MyLocation, "از نقشه", modifier = Modifier.size(18.dp), tint = color)
+                            }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             OutlinedTextField(row[4], { v ->
                                 val m = row.toMutableList(); m[4] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
