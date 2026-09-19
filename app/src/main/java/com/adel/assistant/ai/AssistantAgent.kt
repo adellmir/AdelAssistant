@@ -119,7 +119,7 @@ object AssistantAgent {
                     ?: TunnelReportStore.allPoints(context).firstOrNull {
                         it.pointNo.equals(pn, true) || it.pointNo.equals(pn.uppercase(), true)
                     }
-                if (p != null) return formatPointReply(p, wantsMaps, "نقطهٔ $pn")
+                if (p != null) return formatPointReply(p, wantsMaps, "نقطهٔ $pn", context = context)
             }
 
         // ۲) کیلومتر مطلق: «کیلومتر ۱۲۳.۴۵» یا «km 123.45»
@@ -127,8 +127,8 @@ object AssistantAgent {
             .find(msg)?.groupValues?.getOrNull(1)?.let { kmStr ->
                 val km = kmStr.replace('/', '.').toEnglishDigits().toDoubleOrNull() ?: return@let
                 val p = TunnelReportStore.findByKm(context, km)
-                if (p != null) return formatPointReply(p, wantsMaps, "کیلومتراژ ${"%.3f".format(km)}")
-                return AgentReply("برای km=${"%.3f".format(km)} نقطه‌ای روی محور پیدا نشد. پایگاه tunnel_points را بررسی کن.")
+                if (p != null) return formatPointReply(p, wantsMaps, "کیلومتراژ ${"%.3f".format(km)}", targetKm = km, context = context)
+                return AgentReply(TunnelReportStore.kmContext(context, km).toText())
             }
 
         // ۳) شفت + متراژ: «۵۰ متر شفت ۱» / «شفت ۱ پنجاه متر» / «از شفت ۲ به سمت ۳ ، ۲۰ متر»
@@ -167,7 +167,7 @@ object AssistantAgent {
                 )
             }
             val title = if (meters > 0) "شفت $shaft + ${meters}m (سمت $side)" else "شفت $shaft (سمت $side)"
-            return formatPointReply(p, wantsMaps || meters > 0, title, baseKm = fixed, targetKm = targetKm)
+            return formatPointReply(p, wantsMaps || meters > 0, title, baseKm = fixed, targetKm = targetKm, context = context)
         }
 
         // ۴) فقط «مسیریاب» بدون هدف مشخص
@@ -182,11 +182,13 @@ object AssistantAgent {
         wantsMaps: Boolean,
         title: String,
         baseKm: Double? = null,
-        targetKm: Double? = null
+        targetKm: Double? = null,
+        context: android.content.Context? = null
     ): AgentReply {
         val (lat, lon) = runCatching {
             com.adel.assistant.data.UtmGeo.toLatLon(p.x, p.y, com.adel.assistant.data.UtmGeo.DEFAULT_ZONE)
         }.getOrNull() ?: (0.0 to 0.0)
+        val kmForCtx = targetKm ?: p.km
         val text = buildString {
             appendLine("📍 $title")
             baseKm?.let { appendLine("km پایه شفت: ${"%.3f".format(it)}") }
@@ -199,8 +201,13 @@ object AssistantAgent {
             if (lat != 0.0 || lon != 0.0) {
                 appendLine("Lat=${"%.7f".format(lat)}  Lon=${"%.7f".format(lon)}")
             }
+            if (context != null) {
+                appendLine()
+                append(TunnelReportStore.kmContext(context, kmForCtx).toText())
+            }
             if (wantsMaps && (lat != 0.0 || lon != 0.0)) {
-                append("مسیریاب آماده است — دکمهٔ نقشه را بزن یا لینک geo را باز کن.")
+                appendLine()
+                append("مسیریاب آماده است.")
             }
         }
         val maps = if (wantsMaps && (lat != 0.0 || lon != 0.0)) lat to lon else null

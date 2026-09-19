@@ -61,6 +61,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
 
     var isEditMode by remember { mutableStateOf(false) }
     var editingOriginalNo by remember { mutableStateOf<String?>(null) }
+    var kmContextText by remember { mutableStateOf("") }
     var results by remember { mutableStateOf(listOf<TunnelPoint>()) }
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
@@ -159,10 +160,22 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
 
 
     fun search() {
+        kmContextText = ""
         val byNo = if (pointNo.isNotBlank()) TunnelReportStore.findByPointNo(context, pointNo) else null
-        if (byNo != null) { autofillFromPoint(byNo); results = listOf(byNo); return }
-        val byKm = km.toDoubleOrNullFa()?.let { TunnelReportStore.findByKm(context, it) }
-        if (byKm != null) { autofillFromPoint(byKm); results = listOf(byKm); return }
+        if (byNo != null) {
+            autofillFromPoint(byNo)
+            results = listOf(byNo)
+            kmContextText = TunnelReportStore.kmContext(context, byNo.km).toText()
+            return
+        }
+        val kmVal = km.toDoubleOrNullFa()
+        if (kmVal != null) {
+            val byKm = TunnelReportStore.findByKm(context, kmVal)
+            if (byKm != null) autofillFromPoint(byKm)
+            results = listOfNotNull(byKm)
+            kmContextText = TunnelReportStore.kmContext(context, kmVal).toText()
+            return
+        }
         if (description.isNotBlank()) {
             results = TunnelReportStore.searchByKeyword(context, description)
             return
@@ -276,6 +289,22 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(6.dp))
         Text("نتایج", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            
+            if (kmContextText.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = color.copy(alpha = 0.10f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        kmContextText,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFCFD8C8)
+                    )
+                }
+            }
+
             items(results) { p ->
                 val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
                 val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)

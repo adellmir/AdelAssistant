@@ -324,4 +324,102 @@ object TunnelReportStore {
         while (existing.contains("$baseNo.$n")) n++
         return "$baseNo.$n"
     }
+
+
+    data class KmNeighbor(
+        val label: String,
+        val pointNo: String,
+        val km: Double,
+        val distanceM: Double,
+        val extra: String = ""
+    )
+
+    data class KmContext(
+        val km: Double,
+        val nearest: TunnelPoint?,
+        val prevShaft: KmNeighbor?,
+        val nextShaft: KmNeighbor?,
+        val prevReport: KmNeighbor?,
+        val nextReport: KmNeighbor?,
+        val prevCoded: KmNeighbor?,
+        val nextCoded: KmNeighbor?
+    ) {
+        fun toText(): String = buildString {
+            appendLine("📍 کیلومتر ${"%.3f".format(km)}")
+            nearest?.let {
+                appendLine("نزدیک‌ترین نقطه محور: ${it.pointNo} (km=${"%.3f".format(it.km)}, type=${it.type})")
+                appendLine("X=${"%.3f".format(it.x)} Y=${"%.3f".format(it.y)} Z=${"%.3f".format(it.z)}")
+            }
+            fun line(title: String, a: KmNeighbor?, b: KmNeighbor?) {
+                appendLine(title)
+                if (a != null) appendLine("  قبل: ${a.pointNo} @${"%.3f".format(a.km)} — فاصله ${"%.1f".format(a.distanceM)} m ${a.extra}".trimEnd())
+                else appendLine("  قبل: —")
+                if (b != null) appendLine("  بعد: ${b.pointNo} @${"%.3f".format(b.km)} — فاصله ${"%.1f".format(b.distanceM)} m ${b.extra}".trimEnd())
+                else appendLine("  بعد: —")
+            }
+            line("شفت قبل / بعد:", prevShaft, nextShaft)
+            line("آخرین گزارش حفاری قبل / بعد:", prevReport, nextReport)
+            line("نقطه کددار (sump/ch/tah/…) قبل / بعد:", prevCoded, nextCoded)
+        }.trimEnd()
+    }
+
+    private fun isShaftType(type: String): Boolean {
+        val t = type.trim().lowercase()
+        return t.startsWith("sh") || t == "start" || t == "end" || t.startsWith("shaft")
+    }
+
+    private fun isCodedType(type: String): Boolean {
+        val t = type.trim().lowercase()
+        if (t.isBlank()) return false
+        if (isShaftType(t)) return false
+        // کدهای رایج + هر type غیرعددی
+        val keys = listOf("sump", "ch", "tah", "manhole", "mh", "station", "ستگاه", "چاه", "ته", "شمع")
+        if (keys.any { t == it || t.contains(it) }) return true
+        // type حروفی کوتاه (نه فقط عدد)
+        return t.any { it.isLetter() } && t.length <= 24
+    }
+
+    /** اطلاعات فاصله‌ای حول یک کیلومتراژ */
+    fun kmContext(context: Context, km: Double): KmContext {
+        val pts = allPoints(context).sortedBy { it.km }
+        val nearest = findByKm(context, km)
+        fun neigh(label: String, p: TunnelPoint) =
+            KmNeighbor(label, p.pointNo, p.km, kotlin.math.abs(p.km - km), p.type)
+
+        val shafts = pts.filter { isShaftType(it.type) }
+        val prevShaft = shafts.filter { it.km <= km }.maxByOrNull { it.km }?.let { neigh("شفت", it) }
+        val nextShaft = shafts.filter { it.km >= km }.minByOrNull { it.km }?.let { neigh("شفت", it) }
+        // اگر دقیقاً روی شفت است، قبل را یکی عقب‌تر بگیر
+        val prevShaft2 = if (prevShaft != null && nextShaft != null && prevShaft.pointNo == nextShaft.pointNo) {
+            shafts.filter { it.km < km }.maxByOrNull { it.km }?.let { neigh("شفت", it) }
+        } else prevShaft
+        val nextShaft2 = if (prevShaft != null && nextShaft != null && prevShaft.pointNo == nextShaft.pointNo) {
+            shafts.filter { it.km > km }.minByOrNull { it.km }?.let { neigh("شفت", it) }
+        } else nextShaft
+
+        val reports = allEntries(context).map { ensureCoords(context, it) }.sortedBy { it.km }
+        fun repNeigh(e: ReportEntry) =
+            KmNeighbor("گزارش", e.pointNo.ifBlank { e.dateLabel }, e.km, kotlin.math.abs(e.km - km), "شفت${e.shaft}/${e.side} ${e.dateLabel}")
+        val prevRep = reports.filter { it.km <= km }.maxByOrNull { it.km }?.let { repNeigh(it) }
+        val nextRep = reports.filter { it.km >= km }.minByOrNull { it.km }?.let { repNeigh(it) }
+        val prevRep2 = if (prevRep != null && nextRep != null && prevRep.km == nextRep.km && prevRep.pointNo == nextRep.pointNo) {
+            reports.filter { it.km < km }.maxByOrNull { it.km }?.let { repNeigh(it) }
+        } else prevRep
+        val nextRep2 = if (prevRep != null && nextRep != null && prevRep.km == nextRep.km && prevRep.pointNo == nextRep.pointNo) {
+            reports.filter { it.km > km }.minByOrNull { it.km }?.let { repNeigh(it) }
+        } else nextRep
+
+        val coded = pts.filter { isCodedType(it.type) }
+        val prevC = coded.filter { it.km <= km }.maxByOrNull { it.km }?.let { neigh("کد", it) }
+        val nextC = coded.filter { it.km >= km }.minByOrNull { it.km }?.let { neigh("کد", it) }
+        val prevC2 = if (prevC != null && nextC != null && prevC.pointNo == nextC.pointNo) {
+            coded.filter { it.km < km }.maxByOrNull { it.km }?.let { neigh("کد", it) }
+        } else prevC
+        val nextC2 = if (prevC != null && nextC != null && prevC.pointNo == nextC.pointNo) {
+            coded.filter { it.km > km }.minByOrNull { it.km }?.let { neigh("کد", it) }
+        } else nextC
+
+        return KmContext(km, nearest, prevShaft2, nextShaft2, prevRep2, nextRep2, prevC2, nextC2)
+    }
+
 }
