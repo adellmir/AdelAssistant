@@ -2,14 +2,11 @@ package com.adel.assistant.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,17 +27,40 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
-import java.io.File
 
 @Composable
 fun AlignScreen(color: Color, onBack: () -> Unit) {
+    var tab by remember { mutableStateOf(0) } // 0 مختصاتی 1 نقشه
+
+    Column(Modifier.fillMaxSize().background(Background)) {
+        ScreenTopBar(title = "الاین / هم‌مختصات", color = color, onBack = onBack)
+        TabRow(
+            selectedTabIndex = tab,
+            containerColor = SurfaceColor,
+            contentColor = color
+        ) {
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("مختصاتی") })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("نقشه") })
+        }
+        when (tab) {
+            0 -> AlignCoordinateTab(color)
+            else -> Box(Modifier.fillMaxSize()) {
+                // همان فضای نمایش نقشه — الاین نقشه از آیکن داخل آن
+                DxfPreviewScreen(color = color, onBack = onBack)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlignCoordinateTab(color: Color) {
     val context = LocalContext.current
-    var controlPts by remember { mutableStateOf<List<GsiPoint>>(emptyList()) } // نقاط کنترل مشترک (هدف)
-    var surveyPts by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }  // نقاطی که باید الاین شوند
+    var controlPts by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
+    var surveyPts by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var useScale by remember { mutableStateOf(true) }
     var useAverage by remember { mutableStateOf(false) }
-    var baseName by remember { mutableStateOf<String?>(null) } // نقطه مرجع اولیه از مشترک‌ها
+    var baseName by remember { mutableStateOf<String?>(null) }
 
     fun parseFile(uri: Uri): List<GsiPoint> {
         val name = uri.lastPathSegment?.lowercase() ?: ""
@@ -49,15 +69,6 @@ fun AlignScreen(color: Color, onBack: () -> Unit) {
             name.endsWith(".dat") -> GsiParser.parseDat(text)
             name.endsWith(".gsi") || text.trimStart().startsWith("*11") -> GsiParser.parse(text)
             else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
-        }
-    }
-
-    fun adelInitialUri(): Uri? {
-        return try {
-            val path = "primary:Documents/AdelAssistant"
-            DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", path)
-        } catch (_: Exception) {
-            null
         }
     }
 
@@ -96,7 +107,6 @@ fun AlignScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun openPicker(launcher: androidx.activity.result.ActivityResultLauncher<Array<String>>) {
-        // EXTRA_INITIAL_URI از طریق OpenDocument مستقیم نیست؛ با Intent سفارشی:
         launcher.launch(arrayOf("*/*", "text/*", "application/octet-stream"))
     }
 
@@ -152,86 +162,84 @@ fun AlignScreen(color: Color, onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Background)
             .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ScreenTopBar(title = "الاین / هم‌مختصات", color = color, onBack = onBack)
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (status.isNotBlank()) Text(status, color = TextSecondary, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        if (status.isNotBlank()) Text(status, color = TextSecondary, fontSize = 13.sp)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = { openPicker(pickControl) },
-                    colors = ButtonDefaults.buttonColors(containerColor = color),
-                    modifier = Modifier.weight(1f)
-                ) { Text("فایل کنترل\n(${controlPts.size})", fontSize = 12.sp) }
-                Button(
-                    onClick = { openPicker(pickSurvey) },
-                    colors = ButtonDefaults.buttonColors(containerColor = color),
-                    modifier = Modifier.weight(1f)
-                ) { Text("فایل برداشت\n(${surveyPts.size})", fontSize = 12.sp) }
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { openPicker(pickControl) },
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                modifier = Modifier.weight(1f)
+            ) { Text("فایل کنترل\n(${controlPts.size})", fontSize = 12.sp) }
+            Button(
+                onClick = { openPicker(pickSurvey) },
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                modifier = Modifier.weight(1f)
+            ) { Text("فایل برداشت\n(${surveyPts.size})", fontSize = 12.sp) }
+        }
 
-            Text("نقاط مشترک — نقطه مرجع اولیه را تیک بزن", color = TextPrimary, fontSize = 13.sp)
-            if (commonNames.isEmpty()) {
-                Text("هنوز نقطه مشترکی نیست", color = TextSecondary, fontSize = 12.sp)
-            } else {
-                Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(8.dp)) {
-                        commonNames.forEach { name ->
-                            val ctrl = controlPts.find { it.name.equals(name, true) }
-                            val srv = surveyPts.find { it.name.equals(name, true) }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                            ) {
-                                Checkbox(
-                                    checked = baseName?.equals(name, true) == true,
-                                    onCheckedChange = { on -> baseName = if (on) name else null },
-                                    colors = CheckboxDefaults.colors(checkedColor = color)
-                                )
-                                Column(Modifier.weight(1f)) {
-                                    Text(name, color = TextPrimary)
-                                    if (ctrl != null && srv != null) {
-                                        Text(
-                                            String.format(java.util.Locale.US, "کنترل E%.1f  |  برداشت E%.1f", ctrl.e, srv.e),
-                                            color = TextSecondary,
-                                            fontSize = 11.sp
-                                        )
-                                    }
+        Text("نقاط مشترک — نقطه مرجع اولیه را تیک بزن", color = TextPrimary, fontSize = 13.sp)
+        if (commonNames.isEmpty()) {
+            Text("هنوز نقطه مشترکی نیست", color = TextSecondary, fontSize = 12.sp)
+        } else {
+            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(8.dp)) {
+                    commonNames.forEach { name ->
+                        val ctrl = controlPts.find { it.name.equals(name, true) }
+                        val srv = surveyPts.find { it.name.equals(name, true) }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = baseName?.equals(name, true) == true,
+                                onCheckedChange = { on -> baseName = if (on) name else null },
+                                colors = CheckboxDefaults.colors(checkedColor = color)
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(name, color = TextPrimary)
+                                if (ctrl != null && srv != null) {
+                                    Text(
+                                        String.format(
+                                            java.util.Locale.US,
+                                            "کنترل E%.1f  |  برداشت E%.1f",
+                                            ctrl.e, srv.e
+                                        ),
+                                        color = TextSecondary,
+                                        fontSize = 11.sp
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(useScale, { useScale = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                Text("مقیاس", color = TextPrimary)
-                Spacer(Modifier.width(12.dp))
-                Checkbox(useAverage, { useAverage = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                Text("میانگین‌گیری", color = TextPrimary)
-            }
-
-            Button(
-                onClick = { applyAlign() },
-                enabled = surveyPts.isNotEmpty() && controlPts.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("اعمال الاین") }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { export("txt") }, enabled = surveyPts.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("TXT") }
-                OutlinedButton(onClick = { export("dat") }, enabled = surveyPts.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("DAT") }
-                OutlinedButton(onClick = { export("dxf") }, enabled = surveyPts.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("DXF") }
-            }
-            Spacer(Modifier.height(20.dp))
         }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(useScale, { useScale = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+            Text("مقیاس", color = TextPrimary)
+            Spacer(Modifier.width(12.dp))
+            Checkbox(useAverage, { useAverage = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+            Text("میانگین‌گیری", color = TextPrimary)
+        }
+
+        Button(
+            onClick = { applyAlign() },
+            enabled = surveyPts.isNotEmpty() && controlPts.isNotEmpty(),
+            colors = ButtonDefaults.buttonColors(containerColor = color),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("اعمال الاین") }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { export("txt") }, enabled = surveyPts.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("TXT") }
+            OutlinedButton(onClick = { export("dat") }, enabled = surveyPts.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("DAT") }
+            OutlinedButton(onClick = { export("dxf") }, enabled = surveyPts.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("DXF") }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }

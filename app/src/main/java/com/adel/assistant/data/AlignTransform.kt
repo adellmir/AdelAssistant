@@ -125,6 +125,86 @@ object AlignTransform {
      * الاین ساده: مبنا A→A' (XYZ)، دوران AB→A'B'، مقیاس و میانگین اختیاری.
      * ارتفاع اول با مبنا مچ می‌شود؛ مقیاس/میانگین فقط در صورت فعال بودن روی Z هم اثر دارد.
      */
+
+
+    /** اعمال پارامترهای تشابه روی مدل DXF (خط/دایره/متن) */
+    fun transformModel(model: DxfModel, params: AlignParams): DxfModel {
+        fun xy(x: Double, y: Double) = params.transform(x, y)
+        val lines = model.lines.map {
+            val (x1, y1) = xy(it.x1, it.y1)
+            val (x2, y2) = xy(it.x2, it.y2)
+            DxfLine(x1, y1, x2, y2, it.layer, it.color)
+        }
+        val circles = model.circles.map {
+            val (x, y) = xy(it.x, it.y)
+            // شعاع با مقیاس
+            DxfCircle(x, y, it.r * params.scale, it.layer, it.color)
+        }
+        val texts = model.texts.map {
+            val (x, y) = xy(it.x, it.y)
+            DxfText(x, y, it.height * params.scale, it.text, it.layer, it.color)
+        }
+        var minX = Double.POSITIVE_INFINITY
+        var minY = Double.POSITIVE_INFINITY
+        var maxX = Double.NEGATIVE_INFINITY
+        var maxY = Double.NEGATIVE_INFINITY
+        fun ext(x: Double, y: Double) {
+            if (x < minX) minX = x
+            if (y < minY) minY = y
+            if (x > maxX) maxX = x
+            if (y > maxY) maxY = y
+        }
+        lines.forEach { ext(it.x1, it.y1); ext(it.x2, it.y2) }
+        circles.forEach {
+            ext(it.x - it.r, it.y - it.r)
+            ext(it.x + it.r, it.y + it.r)
+        }
+        texts.forEach { ext(it.x, it.y) }
+        if (minX == Double.POSITIVE_INFINITY) {
+            minX = model.minX; minY = model.minY; maxX = model.maxX; maxY = model.maxY
+        }
+        return DxfModel(lines, circles, texts, model.layers, minX, minY, maxX, maxY)
+    }
+
+    /**
+     * الاین نقشه با جفت‌های مبدا→مقصد.
+     * useAverage: بعد از تبدیل تشابه، نصف میانگین باقیمانده به همه نقاط اضافه می‌شود.
+     */
+    fun alignMapPairs(
+        pairs: List<AlignPair>,
+        useScale: Boolean,
+        useAverage: Boolean
+    ): Pair<AlignParams, String> {
+        require(pairs.size >= 2) { "حداقل ۲ جفت نقطه لازم است" }
+        var params = compute(pairs, useScale)
+        if (useAverage) {
+            var sx = 0.0; var sy = 0.0
+            pairs.forEach { pr ->
+                val (x, y) = params.transform(pr.source.x, pr.source.y)
+                sx += pr.target.x - x
+                sy += pr.target.y - y
+            }
+            val n = pairs.size.toDouble()
+            val hx = sx / (2.0 * n)
+            val hy = sy / (2.0 * n)
+            params = params.copy(tx = params.tx + hx, ty = params.ty + hy)
+            // recalc rms
+            var sse = 0.0
+            pairs.forEach { pr ->
+                val (x, y) = params.transform(pr.source.x, pr.source.y)
+                val dx = x - pr.target.x; val dy = y - pr.target.y
+                sse += dx * dx + dy * dy
+            }
+            params = params.copy(residualRms = kotlin.math.sqrt(sse / pairs.size))
+        }
+        val msg = formatEn(
+            "نقشه الاین شد: %d جفت | s=%.6f θ=%.4f° | RMS=%.4f m%s",
+            params.pairCount, params.scale, params.rotationDeg, params.residualRms,
+            if (useAverage) " | میانگین" else ""
+        )
+        return params to msg
+    }
+
     fun alignSimple(
         points: List<GsiPoint>,
         baseName: String,

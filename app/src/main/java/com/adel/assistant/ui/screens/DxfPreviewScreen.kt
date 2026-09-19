@@ -25,6 +25,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.*
 import com.adel.assistant.ui.theme.Background
@@ -84,10 +87,24 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
+    var showMapAlignDialog by remember { mutableStateOf(false) }
+    var mapAlignUseScale by remember { mutableStateOf(true) }
+    var mapAlignUseAverage by remember { mutableStateOf(false) }
+    // هر ردیف: مبدا (name,e,n,z) + مقصد (name,e,n,z)
+    var mapAlignRows by remember {
+        mutableStateOf(
+            listOf(
+                listOf("", "", "", "", "", "", "", ""),
+                listOf("", "", "", "", "", "", "", "")
+            )
+        )
+    }
+    var mapAlignManual by remember { mutableStateOf(true) }
+    var mapAlignLoadTarget by remember { mutableStateOf("src") } // src | dst
+
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var distanceMsg by remember { mutableStateOf<String?>(null) }
-    var editingMeasureEnd by remember { mutableStateOf<Int?>(null) } // 1=A 2=B
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -212,6 +229,46 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         if (granted) readGps()
     }
 
+
+    val mapAlignFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val pts = GsiParser.parseTxt(text).ifEmpty {
+                GsiParser.parseDat(text).ifEmpty { GsiParser.parse(text) }
+            }
+            if (pts.isEmpty()) {
+                message = "فایل نقطه خالی بود"
+                return@rememberLauncherForActivityResult
+            }
+            // پر کردن ردیف‌ها از فایل — مبدا یا مقصد
+            val rows = mapAlignRows.toMutableList()
+            while (rows.size < pts.size) {
+                rows += listOf("", "", "", "", "", "", "", "")
+            }
+            pts.forEachIndexed { i, p ->
+                val r = rows[i].toMutableList()
+                if (mapAlignLoadTarget == "src") {
+                    r[0] = p.name
+                    r[1] = String.format(java.util.Locale.US, "%.3f", p.e)
+                    r[2] = String.format(java.util.Locale.US, "%.3f", p.n)
+                    r[3] = String.format(java.util.Locale.US, "%.3f", p.z)
+                } else {
+                    r[4] = p.name
+                    r[5] = String.format(java.util.Locale.US, "%.3f", p.e)
+                    r[6] = String.format(java.util.Locale.US, "%.3f", p.n)
+                    r[7] = String.format(java.util.Locale.US, "%.3f", p.z)
+                }
+                rows[i] = r
+            }
+            mapAlignRows = rows
+            message = "بارگذاری ${pts.size} نقطه در " + if (mapAlignLoadTarget == "src") "مبدا" else "مقصد"
+            showMapAlignDialog = true
+        } catch (e: Exception) {
+            message = "خطا خواندن فایل: ${e.message}"
+        }
+    }
+
     fun fitAll(w: Float, h: Float) {
         if (w <= 0f || h <= 0f || allModels.isEmpty()) return
         var minX = Double.POSITIVE_INFINITY; var minY = Double.POSITIVE_INFINITY
@@ -309,41 +366,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             }
                         )
                     }
-                    .pointerInput(measureMode, measureA, measureB, scale, offset) {
-                        // ویرایش اندازه با کشیدن فاصله‌دار: نزدیک‌ترین سر اندازه را جابجا کن
-                        if (!measureMode || measureA == null || measureB == null) return@pointerInput
-                        detectDragGestures(
-                            onDragStart = { off ->
-                                val a = worldToScreen(measureA!!.first, measureA!!.second)
-                                val b = worldToScreen(measureB!!.first, measureB!!.second)
-                                val da = (off - a).getDistance()
-                                val db = (off - b).getDistance()
-                                editingMeasureEnd = when {
-                                    da < 48f && da <= db -> 1
-                                    db < 48f -> 2
-                                    else -> null
-                                }
-                            },
-                            onDrag = { change, dragAmount ->
-                                val end = editingMeasureEnd ?: return@detectDragGestures
-                                change.consume()
-                                val s = scale.toDouble().coerceAtLeast(1e-9)
-                                val dxv = dragAmount.x.toDouble() / s
-                                val dyv = (-dragAmount.y).toDouble() / s
-                                if (end == 1) {
-                                    measureA = (measureA!!.first + dxv) to (measureA!!.second + dyv)
-                                } else {
-                                    measureB = (measureB!!.first + dxv) to (measureB!!.second + dyv)
-                                }
-                                val d = DxfParser.horizontalDistance(
-                                    measureA!!.first, measureA!!.second,
-                                    measureB!!.first, measureB!!.second
-                                )
-                                distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
-                            },
-                            onDragEnd = { editingMeasureEnd = null }
-                        )
-                    }
                     .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId) {
                         if (editingPointId == null) {
                             detectTapGestures(
@@ -356,32 +378,25 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                 },
                                 onTap = { tap ->
                                     if (pickCoordinateMode) {
-                                        val raw = screenToWorld(tap.x, tap.y)
-                                        val snapped = snapToFeature(raw.first, raw.second, allModels, scale)
-                                        val p = snapped ?: raw
+                                        val p = screenToWorld(tap.x, tap.y)
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
                                         pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
                                         nextPointId++
-                                        // حالت باز می‌ماند تا با ضربدر تمام شود؛ لیست حفظ می‌شود
-                                        message = "نقطه ${nextPointId - 1} ثبت شد (${pickedPoints.size} نقطه) — ضربدر = اتمام"
+                                        pickCoordinateMode = false
+                                        showPointsDialog = true
+                                        message = "نقطه ثبت شد؛ برای ثبت نقطه بعدی + را بزن"
                                         return@detectTapGestures
                                     }
                                     if (!measureMode) return@detectTapGestures
-                                    val raw = screenToWorld(tap.x, tap.y)
-                                    val p = snapToFeature(raw.first, raw.second, allModels, scale) ?: raw
-                                    if (measureA == null || (measureB != null && editingMeasureEnd == null)) {
-                                        measureA = p; measureB = null; editingMeasureEnd = null
-                                        distanceMsg = "نقطه اول (حساس به عارضه) — نقطه دوم را لمس کن"
-                                    } else if (measureB == null) {
+                                    val p = screenToWorld(tap.x, tap.y)
+                                    if (measureA == null || measureB != null) {
+                                        measureA = p; measureB = null
+                                        distanceMsg = "نقطه اول انتخاب شد؛ نقطه دوم را لمس کن"
+                                    } else {
                                         measureB = p
                                         val d = DxfParser.horizontalDistance(measureA!!.first, measureA!!.second, p.first, p.second)
-                                        distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر — برای ویرایش نقطه را لمس و بکش"
-                                        // حالت را باز نگه می‌داریم تا ویرایش ممکن باشد
-                                    } else if (editingMeasureEnd != null) {
-                                        if (editingMeasureEnd == 1) measureA = p else measureB = p
-                                        val d = DxfParser.horizontalDistance(measureA!!.first, measureA!!.second, measureB!!.first, measureB!!.second)
                                         distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
-                                        editingMeasureEnd = null
+                                        measureMode = false
                                     }
                                 }
                             )
@@ -584,7 +599,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             Icon(Icons.Filled.Public, null, tint = Color.White)
                         }
                         IconButton(onClick = {
-                            pickCoordinateMode = true // نقاط قبلی حفظ می‌شوند
+                            pickCoordinateMode = true
                             showPointsDialog = true
                             message = "نقطه را روی نقشه انتخاب کن"
                         }) {
@@ -594,16 +609,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             Icon(Icons.Filled.ZoomOutMap, null, tint = Color.White)
                         }
                         IconButton(onClick = {
-                            if (pickCoordinateMode) {
-                                pickCoordinateMode = false
-                                message = if (pickedPoints.isEmpty()) "" else "${pickedPoints.size} نقطه ثبت‌شده — از لیست ببین"
-                                if (pickedPoints.isNotEmpty()) showPointsDialog = true
+                            if (drawings.isEmpty()) message = "اول یک نقشه DXF/KML باز کن"
+                            else {
+                                showMapAlignDialog = true
+                                mapAlignManual = true
                             }
                         }) {
                             Icon(
-                                Icons.Filled.Close,
-                                contentDescription = "اتمام مختصات‌یابی",
-                                tint = if (pickCoordinateMode) Color(0xFFFF8A80) else Color.White.copy(alpha = 0.35f)
+                                Icons.Filled.OpenWith,
+                                contentDescription = "الاین نقشه",
+                                tint = Color.White
                             )
                         }
                         IconButton(onClick = { measureMode = !measureMode }) {
@@ -689,7 +704,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("مختصات (${pickedPoints.size})", Modifier.weight(1f))
-                    IconButton(onClick = { pickCoordinateMode = true; showPointsDialog = false; message = if (pickedPoints.isEmpty()) "نقطه را روی نقشه لمس کن (حساس به عارضه)" else "ادامه مختصات‌یابی — ${pickedPoints.size} نقطه قبلی حفظ شد" }) {
+                    IconButton(onClick = { pickCoordinateMode = true; showPointsDialog = false; message = "نقطه بعدی را روی نقشه انتخاب کن" }) {
                         Icon(Icons.Filled.Add, "نقطه جدید")
                     }
                 }
@@ -788,6 +803,121 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             confirmButton = { TextButton(onClick = { showLayers = false }) { Text("بستن") } }
         )
     }
+    if (showMapAlignDialog) {
+        AlertDialog(
+            onDismissRequest = { showMapAlignDialog = false },
+            title = { Text("الاین نقشه") },
+            text = {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("حداقل ۲ جفت مبدا → مقصد (پشت‌سرهم). شماره نقطه اختیاری است.", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        IconButton(onClick = {
+                            mapAlignRows = mapAlignRows + listOf(listOf("", "", "", "", "", "", "", ""))
+                        }) { Icon(Icons.Filled.Add, "جفت بیشتر") }
+                        IconButton(onClick = {
+                            mapAlignLoadTarget = "src"
+                            mapAlignFilePicker.launch(arrayOf("*/*", "text/*"))
+                        }) { Icon(Icons.Filled.FolderOpen, "فایل مبدا") }
+                        IconButton(onClick = {
+                            mapAlignLoadTarget = "dst"
+                            mapAlignFilePicker.launch(arrayOf("*/*", "text/*"))
+                        }) { Icon(Icons.Filled.UploadFile, "فایل مقصد") }
+                        IconButton(onClick = { mapAlignManual = true }) {
+                            Icon(Icons.Filled.Edit, "دستی", tint = if (mapAlignManual) color else LocalContentColor.current)
+                        }
+                    }
+                    mapAlignRows.forEachIndexed { idx, row ->
+                        Text("جفت ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        // مبدا
+                        Text("مبدا", fontSize = 11.sp, color = TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedTextField(row[0], { v ->
+                                val m = row.toMutableList(); m[0] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(row[1], { v ->
+                                val m = row.toMutableList(); m[1] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("E") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(row[2], { v ->
+                                val m = row.toMutableList(); m[2] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(row[3], { v ->
+                                val m = row.toMutableList(); m[3] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("Z") }, modifier = Modifier.weight(1f), singleLine = true)
+                        }
+                        Text("مقصد", fontSize = 11.sp, color = TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedTextField(row[4], { v ->
+                                val m = row.toMutableList(); m[4] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(row[5], { v ->
+                                val m = row.toMutableList(); m[5] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("E") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(row[6], { v ->
+                                val m = row.toMutableList(); m[6] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
+                            OutlinedTextField(row[7], { v ->
+                                val m = row.toMutableList(); m[7] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
+                            }, label = { Text("Z") }, modifier = Modifier.weight(1f), singleLine = true)
+                        }
+                        if (mapAlignRows.size > 2) {
+                            TextButton(onClick = {
+                                mapAlignRows = mapAlignRows.filterIndexed { i, _ -> i != idx }
+                            }) { Text("حذف جفت") }
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(mapAlignUseScale, { mapAlignUseScale = it })
+                        Text("مقیاس")
+                        Spacer(Modifier.width(12.dp))
+                        Checkbox(mapAlignUseAverage, { mapAlignUseAverage = it })
+                        Text("میانگین‌گیری")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        fun d(s: String) = s.replace(',', '.').toDoubleOrNull()
+                        val pairs = mutableListOf<AlignPair>()
+                        mapAlignRows.forEachIndexed { i, r ->
+                            val se = d(r[1]); val sn = d(r[2]); val sz = d(r[3]) ?: 0.0
+                            val de = d(r[5]); val dn = d(r[6]); val dz = d(r[7]) ?: 0.0
+                            if (se == null || sn == null || de == null || dn == null) return@forEachIndexed
+                            val snName = r[0].ifBlank { "S${i + 1}" }
+                            val dnName = r[4].ifBlank { "T${i + 1}" }
+                            pairs += AlignPair(
+                                AlignPoint(snName, se, sn, sz),
+                                AlignPoint(dnName, de, dn, dz)
+                            )
+                        }
+                        if (pairs.size < 2) {
+                            message = "حداقل ۲ جفت با مختصات کامل لازم است"
+                            return@TextButton
+                        }
+                        val (params, msg) = AlignTransform.alignMapPairs(pairs, mapAlignUseScale, mapAlignUseAverage)
+                        drawings = drawings.map { dr ->
+                            dr.copy(model = AlignTransform.transformModel(dr.model, params))
+                        }
+                        message = msg
+                        showMapAlignDialog = false
+                        fitTrigger++
+                    } catch (e: Exception) {
+                        message = "خطا الاین: ${e.message}"
+                    }
+                }) { Text("اعمال") }
+            },
+            dismissButton = { TextButton(onClick = { showMapAlignDialog = false }) { Text("بستن") } }
+        )
+    }
+
+
+
 }
 
 @Composable
@@ -809,30 +939,6 @@ private fun LayerColorButton(current: Color, onColor: (Color) -> Unit) {
     }
 }
 
-
-/** نزدیک‌ترین رأس خط / مرکز دایره در آستانهٔ پیکسلی صفحه */
-private fun snapToFeature(
-    e: Double, n: Double,
-    models: List<DxfModel>,
-    scale: Float,
-    maxPx: Float = 28f
-): Pair<Double, Double>? {
-    val maxWorld = (maxPx / scale.coerceAtLeast(1e-6f)).toDouble()
-    var best: Pair<Double, Double>? = null
-    var bestD = maxWorld
-    fun consider(x: Double, y: Double) {
-        val d = kotlin.math.hypot(x - e, y - n)
-        if (d < bestD) { bestD = d; best = x to y }
-    }
-    models.forEach { m ->
-        m.lines.forEach {
-            consider(it.x1, it.y1); consider(it.x2, it.y2)
-        }
-        m.circles.forEach { consider(it.x, it.y) }
-        m.texts.forEach { consider(it.x, it.y) }
-    }
-    return best
-}
 
 private enum class BaseMap(val title: String, val service: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     SATELLITE("ماهواره‌ای", "World_Imagery", Icons.Filled.Map),
