@@ -1096,14 +1096,14 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         val s = worldToScreen(e, n)
                         drawCircle(Color(0xFF4FC3F7), 10f, s, style = Stroke(3f))
                         drawContext.canvas.nativeCanvas.drawText("S${idx+1}", s.x + 12f, s.y, android.graphics.Paint().apply {
-                            color = android.graphics.Color.CYAN; textSize = 28f; isAntiAlias = true
+                            this.color = android.graphics.Color.CYAN; textSize = 28f; isAntiAlias = true
                         })
                     }
                     pt(5, 6)?.let { (e, n) ->
                         val s = worldToScreen(e, n)
                         drawCircle(Color(0xFFFF8A65), 10f, s, style = Stroke(3f))
                         drawContext.canvas.nativeCanvas.drawText("T${idx+1}", s.x + 12f, s.y, android.graphics.Paint().apply {
-                            color = android.graphics.Color.rgb(255,138,101); textSize = 28f; isAntiAlias = true
+                            this.color = android.graphics.Color.rgb(255, 138, 101); textSize = 28f; isAntiAlias = true
                         })
                     }
                 }

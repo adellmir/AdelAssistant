@@ -23,16 +23,16 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
-
-private fun moneyM(v: Double): String {
-    val m = v / 1_000_000.0
-    return String.format(java.util.Locale.US, "%,.1f م", m)
-}
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
+
+private fun moneyM(v: Double): String {
+    val m = v / 1_000_000.0
+    return String.format(java.util.Locale.US, "%,.1f م", m)
+}
 
 /**
  * کارفرمایان و پروژه‌ها — پروفایل از پایگاه ثبت پروژه
