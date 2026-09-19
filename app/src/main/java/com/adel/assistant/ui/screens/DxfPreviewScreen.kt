@@ -4,7 +4,6 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PendingMapOpen
 import com.adel.assistant.ui.PointsSpreadsheet
 import com.adel.assistant.data.GsiPoint
-import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.GsiParser
 
 import android.Manifest
@@ -148,6 +147,20 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var fitTrigger by remember { mutableStateOf(0) }
     var mapInitialized by remember { mutableStateOf(false) }
     var pickCoordinateMode by remember { mutableStateOf(false) }
+
+    // اندازه‌گذاری و مختصات‌گذاری (زیر مجموعه مختصات)
+    var showCoordMenu by remember { mutableStateOf(false) }
+    var annotMode by remember { mutableStateOf("") } // dim | coord_beside | coord_table | ""
+    var annotTextSize by remember { mutableStateOf("0.5") }
+    var annotPointNo by remember { mutableStateOf("1") }
+    var lastAnnotPointNo by remember { mutableStateOf(0) }
+    var showAnnotSizeDialog by remember { mutableStateOf(false) }
+    var showAnnotPointNoDialog by remember { mutableStateOf(false) }
+    var pendingAnnotWorld by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var dimDraft by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
+    var tablePoints by remember { mutableStateOf<List<Triple<String, Double, Double>>>(emptyList()) }
+    var tablePlaceMode by remember { mutableStateOf(false) }
+
     var pickedPoints by remember { mutableStateOf<List<PickedPoint>>(emptyList()) }
     var nextPointId by remember { mutableStateOf(1) }
     var showPointsDialog by remember { mutableStateOf(false) }
@@ -560,6 +573,101 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
+    
+    fun textH(): Double = annotTextSize.replace(',', '.').toDoubleOrNull()?.coerceIn(0.01, 50.0) ?: 0.5
+
+    fun placeDimension(a: Pair<Double, Double>, b: Pair<Double, Double>) {
+        val d = CadEngine.hypot(b.first - a.first, b.second - a.second)
+        val mx = (a.first + b.first) / 2.0
+        val my = (a.second + b.second) / 2.0
+        val label = String.format(java.util.Locale.US, "%.3f", d)
+        val h = textH()
+        mutateCad { m ->
+            m.copy(
+                lines = m.lines + DxfLine(a.first, a.second, b.first, b.second, "DIM", 1),
+                texts = m.texts + DxfText(mx, my + h * 0.3, h, label, "DIM", 1)
+            )
+        }
+        message = "اندازه $label ثبت شد"
+    }
+
+    fun placeCoordBeside(wx: Double, wy: Double, no: String) {
+        val h = textH()
+        val line1 = no
+        val line2 = String.format(java.util.Locale.US, "X=%.3f Y=%.3f", wx, wy)
+        mutateCad { m ->
+            m.copy(
+                circles = m.circles + DxfCircle(wx, wy, h * 0.15, "COORD", 1),
+                texts = m.texts + listOf(
+                    DxfText(wx + h * 0.4, wy + h * 1.2, h, line1, "COORD", 1),
+                    DxfText(wx + h * 0.4, wy + h * 0.2, h, line2, "COORD", 1)
+                )
+            )
+        }
+        // also track as picked for export
+        val idNum = no.filter { it.isDigit() }.toIntOrNull() ?: (lastAnnotPointNo + 1)
+        lastAnnotPointNo = idNum
+        annotPointNo = (idNum + 1).toString()
+        val ll = UtmGeo.toLatLon(wx, wy, zone)
+        pickedPoints = pickedPoints + PickedPoint(nextPointId, wx, wy, ll.first, ll.second)
+        nextPointId++
+        message = "مختصات نقطه $no کنار نقطه ثبت شد"
+    }
+
+    fun placeCoordTable(origin: Pair<Double, Double>) {
+        if (tablePoints.isEmpty()) {
+            message = "جدولی خالی است"
+            return
+        }
+        val h = textH()
+        val rowH = h * 1.6
+        val col1 = h * 8
+        val col2 = h * 22
+        val ox = origin.first
+        val oy = origin.second
+        mutateCad { m ->
+            val newLines = m.lines.toMutableList()
+            val newTexts = m.texts.toMutableList()
+            // header
+            newTexts += DxfText(ox + h * 0.3, oy - h * 0.3, h, "N", "COORD_TBL", 1)
+            newTexts += DxfText(ox + col1 + h * 0.3, oy - h * 0.3, h, "X,Y", "COORD_TBL", 1)
+            val n = tablePoints.size + 1
+            // outer box
+            val totalH = rowH * n
+            val totalW = col1 + col2
+            newLines += DxfLine(ox, oy, ox + totalW, oy, "COORD_TBL", 1)
+            newLines += DxfLine(ox, oy - totalH, ox + totalW, oy - totalH, "COORD_TBL", 1)
+            newLines += DxfLine(ox, oy, ox, oy - totalH, "COORD_TBL", 1)
+            newLines += DxfLine(ox + totalW, oy, ox + totalW, oy - totalH, "COORD_TBL", 1)
+            newLines += DxfLine(ox + col1, oy, ox + col1, oy - totalH, "COORD_TBL", 1)
+            for (i in 1 until n) {
+                val y = oy - rowH * i
+                newLines += DxfLine(ox, y, ox + totalW, y, "COORD_TBL", 1)
+            }
+            tablePoints.forEachIndexed { idx, tp ->
+                val y = oy - rowH * (idx + 1) - h * 0.2
+                val xy = String.format(java.util.Locale.US, "%.3f, %.3f", tp.second, tp.third)
+                newTexts += DxfText(ox + h * 0.3, y, h, tp.first, "COORD_TBL", 1)
+                newTexts += DxfText(ox + col1 + h * 0.3, y, h, xy, "COORD_TBL", 1)
+                // mark point on map
+                newLines // keep
+            }
+            // markers at points
+            val markers = tablePoints.map { DxfCircle(it.second, it.third, h * 0.12, "COORD", 1) }
+            m.copy(lines = newLines, texts = newTexts, circles = m.circles + markers)
+        }
+        // export list
+        tablePoints.forEach { tp ->
+            val ll = UtmGeo.toLatLon(tp.second, tp.third, zone)
+            pickedPoints = pickedPoints + PickedPoint(nextPointId, tp.second, tp.third, ll.first, ll.second)
+            nextPointId++
+        }
+        tablePoints = emptyList()
+        tablePlaceMode = false
+        annotMode = ""
+        message = "جدول مختصات ترسیم شد"
+    }
+
     fun updateMeasureDistance() {
         val a = measureA; val b = measureB
         if (a != null && b != null) {
@@ -671,7 +779,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         message = "نقطه ثبت شد؛ برای ثبت نقطه بعدی + را بزن"
                                         return@detectTapGestures
                                     }
-                                    if (!measureMode && mapAlignPick == null && cadTool == CadTool.None && !zoomWindowMode) return@detectTapGestures
+                                    if (!measureMode && mapAlignPick == null && cadTool == CadTool.None && !zoomWindowMode && annotMode.isEmpty()) return@detectTapGestures
                                     val raw = screenToWorld(tap.x, tap.y)
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
@@ -696,6 +804,36 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         message = "مختصات از نقشه ثبت شد"
                                         return@detectTapGestures
                                     }
+                                    
+                                    // اندازه‌گذاری / مختصات‌گذاری
+                                    if (annotMode == "dim") {
+                                        dimDraft = dimDraft + p
+                                        if (dimDraft.size >= 2) {
+                                            showAnnotSizeDialog = true
+                                            pendingAnnotWorld = null
+                                            message = "سایز نوشته اندازه را وارد کن"
+                                        } else {
+                                            message = "نقطه دوم اندازه"
+                                        }
+                                        return@detectTapGestures
+                                    }
+                                    if (annotMode == "coord_beside") {
+                                        pendingAnnotWorld = p
+                                        annotPointNo = (lastAnnotPointNo + 1).toString()
+                                        showAnnotPointNoDialog = true
+                                        return@detectTapGestures
+                                    }
+                                    if (annotMode == "coord_table") {
+                                        if (tablePlaceMode) {
+                                            placeCoordTable(p)
+                                            return@detectTapGestures
+                                        }
+                                        pendingAnnotWorld = p
+                                        annotPointNo = (lastAnnotPointNo + 1).toString()
+                                        showAnnotPointNoDialog = true
+                                        return@detectTapGestures
+                                    }
+
                                     if (zoomWindowMode) {
                                         if (zoomWindowFirst == null) {
                                             zoomWindowFirst = p
@@ -861,6 +999,14 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         y += step; n++
                     }
                 }
+                dimDraft.forEachIndexed { i, pt ->
+                    val s = worldToScreen(pt.first, pt.second)
+                    drawCircle(Color(0xFF69F0AE), 7f, s)
+                    if (i > 0) {
+                        val prev = worldToScreen(dimDraft[i-1].first, dimDraft[i-1].second)
+                        drawLine(Color(0xFF69F0AE), prev, s, 2f)
+                    }
+                }
                 // پیش‌نمایش ترسیم
                 draftPts.forEachIndexed { i, pt ->
                     val s = worldToScreen(pt.first, pt.second)
@@ -1021,11 +1167,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             Icon(Icons.Filled.Public, null, tint = Color.White)
                         }
                         IconButton(onClick = {
-                            pickCoordinateMode = true
-                            showPointsDialog = true
-                            message = "نقطه را روی نقشه انتخاب کن"
+                            showCoordMenu = true
+                            menuOpen = false
                         }) {
-                            Icon(Icons.Filled.MyLocation, null, tint = Color.White)
+                            Icon(Icons.Filled.MyLocation, null, tint = if (annotMode.isNotEmpty()) Color(0xFF81C995) else Color.White)
                         }
                         IconButton(onClick = { fitAll(canvasSize.x, canvasSize.y) }) {
                             Icon(Icons.Filled.ZoomOutMap, null, tint = Color.White)
@@ -1071,6 +1216,32 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             containerColor = color,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp)
         ) { Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White) }
+
+        // نوار مختصات و ابزار فعال
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
+            color = Color(0xCC1A1F18),
+            shape = RoundedCornerShape(10.dp)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    statusXY + (if (cadTool != CadTool.None) "  |  ${cadTool.name}" else "") +
+                        (if (orthoOn) "  ORTHO" else "") + (if (gridOn) "  GRID" else ""),
+                    color = Color(0xFFE0E0E0),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (undoStack.isNotEmpty()) {
+                    TextButton(onClick = { doUndo() }) { Text("Undo", fontSize = 11.sp) }
+                }
+            }
+        }
 
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
             Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
@@ -1133,31 +1304,6 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     }
 
 
-        // نوار مختصات و ابزار فعال
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
-            color = Color(0xCC1A1F18),
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    statusXY + (if (cadTool != CadTool.None) "  |  ${cadTool.name}" else "") +
-                        (if (orthoOn) "  ORTHO" else "") + (if (gridOn) "  GRID" else ""),
-                    color = Color(0xFFE0E0E0),
-                    fontSize = 11.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                if (undoStack.isNotEmpty()) {
-                    TextButton(onClick = { doUndo() }) { Text("Undo", fontSize = 11.sp) }
-                }
-            }
-        }
 
     if (showPointsDialog) {
         AlertDialog(
@@ -1279,6 +1425,107 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
+
+
+    if (showCoordMenu) {
+        AlertDialog(
+            onDismissRequest = { showCoordMenu = false },
+            title = { Text("مختصات و اندازه") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("سایز پیش‌فرض نوشته (متر نقشه):")
+                    OutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("سایز") }, singleLine = true)
+                    Button(onClick = {
+                        annotMode = "dim"; dimDraft = emptyList(); showCoordMenu = false
+                        message = "دو سر خط را برای اندازه‌گذاری لمس کن"
+                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = color)) {
+                        Text("اندازه‌گذاری خط")
+                    }
+                    Button(onClick = {
+                        annotMode = "coord_beside"; showCoordMenu = false
+                        message = "نقطه را لمس کن — شماره و سایز پرسیده می‌شود"
+                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = color)) {
+                        Text("مختصات کنار نقطه")
+                    }
+                    Button(onClick = {
+                        annotMode = "coord_table"; tablePoints = emptyList(); tablePlaceMode = false
+                        showCoordMenu = false
+                        message = "نقاط جدول را یکی‌یکی لمس کن؛ در پایان «جابجایی جدول» را از منوی مختصات بزن"
+                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = color)) {
+                        Text("جدول مختصات")
+                    }
+                    if (annotMode == "coord_table" && tablePoints.isNotEmpty()) {
+                        Button(onClick = {
+                            tablePlaceMode = true; showCoordMenu = false
+                            message = "جای گوشه بالای جدول را روی نقشه لمس کن"
+                        }, modifier = Modifier.fillMaxWidth()) { Text("قرار دادن جدول (${tablePoints.size} نقطه)") }
+                    }
+                    Button(onClick = {
+                        showPointsDialog = true; showCoordMenu = false
+                    }, modifier = Modifier.fillMaxWidth()) { Text("لیست / خروجی مختصات") }
+                    TextButton(onClick = {
+                        annotMode = ""; dimDraft = emptyList(); tablePlaceMode = false
+                        showCoordMenu = false; message = "ابزار مختصات خاموش"
+                    }) { Text("خاموش کردن ابزار") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showCoordMenu = false }) { Text("بستن") } }
+        )
+    }
+
+    if (showAnnotSizeDialog) {
+        AlertDialog(
+            onDismissRequest = { showAnnotSizeDialog = false; dimDraft = emptyList() },
+            title = { Text("سایز نوشته") },
+            text = {
+                OutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("ارتفاع متن") }, singleLine = true)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (dimDraft.size >= 2) {
+                        placeDimension(dimDraft[0], dimDraft[1])
+                    }
+                    dimDraft = emptyList()
+                    showAnnotSizeDialog = false
+                    // keep annotMode dim for more
+                }) { Text("ثبت") }
+            },
+            dismissButton = { TextButton(onClick = { showAnnotSizeDialog = false; dimDraft = emptyList() }) { Text("لغو") } }
+        )
+    }
+
+    if (showAnnotPointNoDialog && pendingAnnotWorld != null) {
+        AlertDialog(
+            onDismissRequest = { showAnnotPointNoDialog = false; pendingAnnotWorld = null },
+            title = { Text("شماره نقطه") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(annotPointNo, { annotPointNo = it }, label = { Text("شماره (پیش‌فرض +۱)") }, singleLine = true)
+                    OutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("سایز نوشته") }, singleLine = true)
+                    if (annotMode == "coord_table") {
+                        Text("بعد از چند نقطه، از منوی مختصات «قرار دادن جدول» را بزن")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val pt = pendingAnnotWorld!!
+                    val no = annotPointNo.ifBlank { (lastAnnotPointNo + 1).toString() }
+                    if (annotMode == "coord_beside") {
+                        placeCoordBeside(pt.first, pt.second, no)
+                    } else if (annotMode == "coord_table") {
+                        lastAnnotPointNo = no.filter { it.isDigit() }.toIntOrNull() ?: (lastAnnotPointNo + 1)
+                        annotPointNo = (lastAnnotPointNo + 1).toString()
+                        tablePoints = tablePoints + Triple(no, pt.first, pt.second)
+                        message = "نقطه $no به جدول اضافه شد (${tablePoints.size}) — نقطه بعدی یا قرار دادن جدول"
+                    }
+                    showAnnotPointNoDialog = false
+                    pendingAnnotWorld = null
+                }) { Text("تأیید") }
+            },
+            dismissButton = { TextButton(onClick = { showAnnotPointNoDialog = false; pendingAnnotWorld = null }) { Text("لغو") } }
+        )
+    }
 
     if (showCadPanel) {
         AlertDialog(

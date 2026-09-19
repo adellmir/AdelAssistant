@@ -48,7 +48,6 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
     var selectAll by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
     var convertingDwg by remember { mutableStateOf(false) }
-    var lastDxfName by remember { mutableStateOf<String?>(null) }
     var newestFirst by remember { mutableStateOf(true) }
     var editTarget by remember { mutableStateOf<GsiPoint?>(null) }
     var editName by remember { mutableStateOf("") }
