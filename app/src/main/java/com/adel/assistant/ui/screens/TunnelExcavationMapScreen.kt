@@ -1,6 +1,5 @@
 package com.adel.assistant.ui.screens
 
-import androidx.compose.material.icons.filled.Straighten
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -116,10 +115,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showLayers by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("نقشه تونل") }
-    var measureMode by remember { mutableStateOf(false) }
-    var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var distanceMsg by remember { mutableStateOf<String?>(null) }
 
     var selectedId by remember { mutableStateOf<String?>(null) }
     var editMode by remember { mutableStateOf(false) }
@@ -310,7 +305,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     val mapUploadLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
@@ -394,13 +389,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = { editMode = !editMode }) {
                                 Icon(if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit, null, tint = if (editMode) color else Color.White)
                             }
-                            IconButton(onClick = {
-                                measureMode = !measureMode
-                                if (!measureMode) { measureA = null; measureB = null; distanceMsg = null }
-                                else status = "اندازه‌گذاری: دو نقطه لمس کن"
-                            }) {
-                                Icon(Icons.Filled.Straighten, null, tint = if (measureMode) Color(0xFF81C995) else Color.White)
-                            }
                             IconButton(onClick = { showBaseDialog = true }) { Icon(Icons.Outlined.Map, null, tint = Color.White) }
                             IconButton(onClick = {
                                 mapUploadLauncher.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream"))
@@ -466,36 +454,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                 }
                             }
                         )
-                    }
-                    .pointerInput(measureMode, scale, offset, measureA, measureB, bgModel, tunnelPts, reportPts, overlays) {
-                        detectTapGestures { tap ->
-                            if (!measureMode) return@detectTapGestures
-                            val raw = screenToWorld(tap.x, tap.y)
-                            fun consider(x: Double, y: Double, best: Array<Any?>) {
-                                val d = kotlin.math.hypot(x - raw.first, y - raw.second)
-                                val maxW = (28f / scale.coerceAtLeast(1e-6f)).toDouble()
-                                if (d < maxW && (best[0] == null || d < (best[0] as Double))) {
-                                    best[0] = d; best[1] = x; best[2] = y
-                                }
-                            }
-                            val best = arrayOfNulls<Any?>(3)
-                            bgModel?.lines?.forEach {
-                                consider(it.x1, it.y1, best); consider(it.x2, it.y2, best)
-                            }
-                            bgModel?.circles?.forEach { consider(it.x, it.y, best) }
-                            tunnelPts.forEach { consider(it.x, it.y, best) }
-                            reportPts.forEach { consider(it.x, it.y, best) }
-                            overlays.forEach { consider(it.x, it.y, best) }
-                            val pt = if (best[1] != null) (best[1] as Double) to (best[2] as Double) else raw
-                            if (measureA == null || measureB != null) {
-                                measureA = pt; measureB = null
-                                distanceMsg = "نقطه اول — نقطه دوم را لمس کن"
-                            } else {
-                                measureB = pt
-                                val d = kotlin.math.hypot(measureA!!.first - pt.first, measureA!!.second - pt.second)
-                                distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
-                            }
-                        }
                     }
                     .pointerInput(editMode, selectedId, scale) {
                         if (!editMode || selectedId == null) return@pointerInput

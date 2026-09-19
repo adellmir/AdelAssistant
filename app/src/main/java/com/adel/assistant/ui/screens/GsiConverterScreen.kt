@@ -75,7 +75,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
     }
 
 
-    val dwgPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val dwgPicker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -114,7 +114,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
     fun selectedPoints(): List<GsiPoint> =
         if (selectAll) points else points.filter { it.id in selectedIds }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val picker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)

@@ -245,7 +245,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     }
 
     val openFile = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {

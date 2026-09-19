@@ -63,7 +63,7 @@ fun TaskScreen(
     }
 
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
     ) { uri ->
         if (uri != null) {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->

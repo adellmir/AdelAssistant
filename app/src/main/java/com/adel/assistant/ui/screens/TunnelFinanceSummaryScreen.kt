@@ -32,7 +32,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 
     fun refresh() { summary = TunnelFinanceStore.summary(context) }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->

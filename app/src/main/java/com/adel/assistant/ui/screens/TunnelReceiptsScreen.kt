@@ -52,7 +52,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
 
     val nextEmpty = list.firstOrNull { it.receiveAmount == null }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->

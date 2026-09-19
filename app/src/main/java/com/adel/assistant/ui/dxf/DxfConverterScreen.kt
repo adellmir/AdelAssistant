@@ -49,7 +49,7 @@ fun DxfConverterScreen(onBack: () -> Unit) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
