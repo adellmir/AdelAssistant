@@ -187,7 +187,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {
                     showMenu = false
-                    importLauncher.launch(arrayOf("text/*", "*/*"))
+                    importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false

@@ -135,7 +135,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن CSV") }, onClick = {
-                    showMenu = false; importLauncher.launch(arrayOf("text/*", "*/*"))
+                    showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false

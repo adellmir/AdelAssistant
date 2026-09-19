@@ -125,7 +125,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                 Icon(Icons.Outlined.Add, null); Spacer(Modifier.width(4.dp)); Text("افزودن")
             }
             OutlinedButton(
-                onClick = { filePicker.launch(arrayOf("text/*", "application/octet-stream", "*/*")) },
+                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/octet-stream", "*/*")) },
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Outlined.FolderOpen, null); Spacer(Modifier.width(4.dp)); Text("خواندن فایل")
@@ -194,7 +194,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
             )
             // باز کردن | جدید→قدیم | انتخاب همه | گزینش(لغو)
             IconButton(
-                onClick = { filePicker.launch(arrayOf("text/*", "application/octet-stream", "*/*")) }
+                onClick = { filePicker.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "application/octet-stream", "*/*")) }
             ) { Icon(Icons.Outlined.FolderOpen, "بازکردن", tint = color) }
             IconButton(onClick = { newestFirst = !newestFirst }, enabled = points.isNotEmpty()) {
                 Icon(
