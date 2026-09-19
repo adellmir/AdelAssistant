@@ -697,6 +697,6 @@ object AssistantAgent {
         }.trimEnd()
     }
 
-    private fun projectStats(context: Context)=try { val all=ProjectStore.all(context); val open=all.filter{it.remaining>0.0001}; buildString { appendLine("📁 پروژه‌ها"); appendLine("تعداد کل: ${all.size} | با مانده: ${open.size}"); appendLine("جمع درآمد: ${"%.1f م".format(all.sumOf{it.amount}/1e6)}"); appendLine("جمع دریافتی: ${"%.1f م".format(all.sumOf{it.settled}/1e6)}"); appendLine("جمع مانده: ${"%.1f م".format(all.sumOf{it.remaining.coerceAtLeast(0.0)}/1e6)}"); open.sortedByDescending{it.remaining}.take(5).forEachIndexed{i,p->appendLine("${i+1}. ${p.name} — مانده ${formatMoney(p.remaining)}")} } } catch(e:Exception){"📁 خطا در خواندن پروژه‌ها: ${e.message}"}
+    private fun projectStats(context: Context)=try { val all=ProjectStore.all(context); val open=all.filter{it.remaining>0.0001}; buildString { appendLine("📁 پروژه‌ها"); appendLine("تعداد کل: ${all.size} | با مانده: ${open.size}"); appendLine("جمع درآمد: ${"%.1f م".format(all.sumOf{it.amount})}"); appendLine("جمع دریافتی: ${"%.1f م".format(all.sumOf{it.settled})}"); appendLine("جمع مانده: ${"%.1f م".format(all.sumOf{it.remaining.coerceAtLeast(0.0)})}"); open.sortedByDescending{it.remaining}.take(5).forEachIndexed{i,p->appendLine("${i+1}. ${p.name} — مانده ${formatMoney(p.remaining)}")} } } catch(e:Exception){"📁 خطا در خواندن پروژه‌ها: ${e.message}"}
     private fun todayPlan(context: Context):String = "📅 برنامه فعلی\n\n${taskStats(context,"tunnel_tasks")}\n\n${taskStats(context,"project_tasks")}" 
 }

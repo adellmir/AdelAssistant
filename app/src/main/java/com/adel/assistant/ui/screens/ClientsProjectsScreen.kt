@@ -29,9 +29,12 @@ import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 
+/** مبلغ در پایگاه از قبل به «میلیون تومان» ذخیره می‌شود — دوباره تقسیم نشود */
 private fun moneyM(v: Double): String {
-    val m = v / 1_000_000.0
-    return String.format(java.util.Locale.US, "%,.1f م", m)
+    return if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9)
+        String.format(java.util.Locale.US, "%,.0f م", v)
+    else
+        String.format(java.util.Locale.US, "%,.1f م", v)
 }
 
 /**
