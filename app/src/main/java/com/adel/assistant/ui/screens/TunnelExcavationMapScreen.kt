@@ -1,6 +1,6 @@
-import androidx.compose.material.icons.filled.Straighten
 package com.adel.assistant.ui.screens
 
+import androidx.compose.material.icons.filled.Straighten
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -120,7 +120,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var measureA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var distanceMsg by remember { mutableStateOf<String?>(null) }
-    var editingMeasureEnd by remember { mutableStateOf<Int?>(null) }
 
     var selectedId by remember { mutableStateOf<String?>(null) }
     var editMode by remember { mutableStateOf(false) }
@@ -398,13 +397,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 measureMode = !measureMode
                                 if (!measureMode) { measureA = null; measureB = null; distanceMsg = null }
-                                else status = "اندازه‌گذاری: دو نقطه لمس کن (حساس به عارضه)"
+                                else status = "اندازه‌گذاری: دو نقطه لمس کن"
                             }) {
-                                Icon(
-                                    Icons.Filled.Straighten,
-                                    null,
-                                    tint = if (measureMode) Color(0xFF81C995) else Color.White
-                                )
+                                Icon(Icons.Filled.Straighten, null, tint = if (measureMode) Color(0xFF81C995) else Color.White)
                             }
                             IconButton(onClick = { showBaseDialog = true }) { Icon(Icons.Outlined.Map, null, tint = Color.White) }
                             IconButton(onClick = {
@@ -476,7 +471,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         detectTapGestures { tap ->
                             if (!measureMode) return@detectTapGestures
                             val raw = screenToWorld(tap.x, tap.y)
-                            // snap to tunnel/report/overlay/bg endpoints
                             fun consider(x: Double, y: Double, best: Array<Any?>) {
                                 val d = kotlin.math.hypot(x - raw.first, y - raw.second)
                                 val maxW = (28f / scale.coerceAtLeast(1e-6f)).toDouble()
@@ -492,13 +486,13 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             tunnelPts.forEach { consider(it.x, it.y, best) }
                             reportPts.forEach { consider(it.x, it.y, best) }
                             overlays.forEach { consider(it.x, it.y, best) }
-                            val p = if (best[1] != null) (best[1] as Double) to (best[2] as Double) else raw
+                            val pt = if (best[1] != null) (best[1] as Double) to (best[2] as Double) else raw
                             if (measureA == null || measureB != null) {
-                                measureA = p; measureB = null
+                                measureA = pt; measureB = null
                                 distanceMsg = "نقطه اول — نقطه دوم را لمس کن"
                             } else {
-                                measureB = p
-                                val d = kotlin.math.hypot(measureA!!.first - p.first, measureA!!.second - p.second)
+                                measureB = pt
+                                val d = kotlin.math.hypot(measureA!!.first - pt.first, measureA!!.second - pt.second)
                                 distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر"
                             }
                         }
@@ -623,17 +617,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             drawText(p.dateLabel, tx, ty - lineH, textPaint)
                             drawText(formatEn("%.3f", p.z), tx, ty, textPaint)
                             drawText(formatEn("%.3f", p.km), tx, ty + lineH, textPaint)
-                        }
-                    }
-
-                    // اندازه‌گذاری
-                    if (measureA != null) {
-                        val a = worldToScreen(measureA!!.first, measureA!!.second)
-                        drawCircle(Color(0xFF81C995), radius = 8f, center = a)
-                        if (measureB != null) {
-                            val b = worldToScreen(measureB!!.first, measureB!!.second)
-                            drawLine(Color(0xFF81C995), a, b, strokeWidth = 3f)
-                            drawCircle(Color(0xFF81C995), radius = 8f, center = b)
                         }
                     }
                 }

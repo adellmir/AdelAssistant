@@ -87,15 +87,13 @@ object AssistantAgent {
 
         menuIntent(msg)?.let { return it }
         return AgentReply(
-            "منظورت را کامل متوجه نشدم.
-" +
-            "مثال‌ها:
-• ۵۰ متر شفت ۱
-• مختصات کیلومتر ۱۲۳.۵
-• نقطه AH1
-• آمار تونل
-• برو نقشه تونل
-" +
+            "منظورت را کامل متوجه نشدم.\n" +
+            "مثال‌ها:\n" +
+            "• ۵۰ متر شفت ۱\n" +
+            "• مختصات کیلومتر ۱۲۳.۵\n" +
+            "• نقطه AH1\n" +
+            "• آمار تونل\n" +
+            "• برو نقشه تونل\n" +
             "یا حالت آنلاین را روشن کن تا با دانش کامل برنامه مشورت کنی.",
             action = "fallback"
         )
@@ -155,8 +153,7 @@ object AssistantAgent {
                 }
             if (fixed == null) {
                 return AgentReply(
-                    "شفت $shaft در پایگاه نقاط (type=sh$shaft) پیدا نشد.
-" +
+                    "شفت $shaft در پایگاه نقاط (type=sh$shaft) پیدا نشد.\n" +
                     DomainCatalog.liveSnapshot(context)
                 )
             }
@@ -165,8 +162,7 @@ object AssistantAgent {
             val p = TunnelReportStore.findByKm(context, targetKm)
             if (p == null) {
                 return AgentReply(
-                    "شفت $shaft: km پایه=${"%.3f".format(fixed)} | هدف=${"%.3f".format(targetKm)} (سمت $side، ${meters}m)
-" +
+                    "شفت $shaft: km پایه=${"%.3f".format(fixed)} | هدف=${"%.3f".format(targetKm)} (سمت $side، ${meters}m)\n" +
                     "ولی محور نقاط برای درون‌یابی کافی نیست."
                 )
             }
