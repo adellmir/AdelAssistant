@@ -126,14 +126,16 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
             val parsed = when {
                 name.endsWith(".xlsx") || name.endsWith(".xls") -> XlsxPointReader.parse(bytes)
                 else -> {
-                    val text = bytes.toString(Charsets.UTF_8)
+                    val text = bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
                     when {
                         name.endsWith(".dat") -> GsiParser.parseDat(text)
                         name.endsWith(".gsi") ||
                             text.trimStart().startsWith("*11") ||
                             text.contains("81..") ||
-                            text.contains("81.") -> GsiParser.parse(text)
-                        else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parse(text) }
+                            text.contains("*81") -> GsiParser.parse(text)
+                        name.endsWith(".txt") || name.endsWith(".csv") ->
+                            GsiParser.parseTxt(text).ifEmpty { GsiParser.parseDat(text) }.ifEmpty { GsiParser.parse(text) }
+                        else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parseDat(text) }.ifEmpty { GsiParser.parse(text) }
                     }
                 }
             }

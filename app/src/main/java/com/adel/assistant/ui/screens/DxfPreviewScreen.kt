@@ -97,6 +97,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
 
     // —— CAD حرفه‌ای (منوی کرکره‌ای، نه آیکن زیاد) ——
     var showCadPanel by remember { mutableStateOf(false) }
+    var showSaveDxfDialog by remember { mutableStateOf(false) }
+    var saveDxfName by remember { mutableStateOf("map_edit") }
     var cadTool by remember { mutableStateOf(CadTool.None) }
     var orthoOn by remember { mutableStateOf(false) }
     var gridOn by remember { mutableStateOf(false) }
@@ -421,6 +423,30 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             } else it
         }
     }
+    fun deleteSelected() {
+        val sel = selected ?: return
+        pushUndo()
+        drawings = drawings.map { dr ->
+            val matchId = when (sel) {
+                is CadEntity.Line -> sel.drawingId
+                is CadEntity.Circle -> sel.drawingId
+                is CadEntity.Text -> sel.drawingId
+            }
+            if (dr.id != matchId) return@map dr
+            // لایه قفل؟
+            val locked = dr.model.layers.values.any { it.locked }
+            val m = when (sel) {
+                is CadEntity.Line -> dr.model.copy(lines = dr.model.lines.filterIndexed { i, _ -> i != sel.index })
+                is CadEntity.Circle -> dr.model.copy(circles = dr.model.circles.filterIndexed { i, _ -> i != sel.index })
+                is CadEntity.Text -> dr.model.copy(texts = dr.model.texts.filterIndexed { i, _ -> i != sel.index })
+            }.recalculatedBounds()
+            dr.copy(model = m)
+        }
+        selected = null
+        showProps = false
+        message = "شیء حذف شد — ذخیره را فراموش نکن"
+    }
+
     fun processCadPoint(raw: Pair<Double, Double>) {
         val ref = draftPts.lastOrNull()
         var p = snapWorld(raw.first, raw.second, ref)
@@ -784,8 +810,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
                                     mapAlignPick?.let { (rowIdx, side) ->
-                                        val e = String.format(java.util.Locale.US, "%.3f", p.first)
-                                        val n = String.format(java.util.Locale.US, "%.3f", p.second)
+                                        val e = String.format(java.util.Locale.US, "%.4f", p.first)
+                                        val n = String.format(java.util.Locale.US, "%.4f", p.second)
                                         val rows = mapAlignRows.toMutableList()
                                         if (rowIdx in rows.indices) {
                                             val r = rows[rowIdx].toMutableList()
@@ -1527,6 +1553,38 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
+
+    if (showSaveDxfDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDxfDialog = false },
+            title = { Text("ذخیره DXF") },
+            text = {
+                OutlinedTextField(
+                    saveDxfName,
+                    { saveDxfName = it },
+                    label = { Text("نام فایل (بدون پسوند)") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
+                            if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
+                        }
+                        val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+                        FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+                        message = "ذخیره شد: $name"
+                    } catch (e: Exception) {
+                        message = "خطا ذخیره: ${e.message}"
+                    }
+                    showSaveDxfDialog = false
+                }) { Text("ذخیره") }
+            },
+            dismissButton = { TextButton(onClick = { showSaveDxfDialog = false }) { Text("لغو") } }
+        )
+    }
+
     if (showCadPanel) {
         AlertDialog(
             onDismissRequest = { showCadPanel = false },
@@ -1550,6 +1608,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         listOf(CadTool.Select to "انتخاب", CadTool.Move to "جابجایی", CadTool.Copy to "کپی").forEach { (tool, label) ->
                             FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false }, label = { Text(label, fontSize = 11.sp) })
                         }
+                        FilterChip(selected = false, onClick = {
+                            if (selected != null) deleteSelected() else { cadTool = CadTool.Select; message = "اول شیء را انتخاب کن" }
+                            showCadPanel = false
+                        }, label = { Text("حذف شیء", fontSize = 11.sp) })
                     }
                     Text("نمایش", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1593,14 +1655,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     }
                     Button(
                         onClick = {
-                            try {
-                                val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
-                                FileExport.exportTextToDocuments(context, "map_edit.dxf", body, "application/dxf")
-                                message = "DXF ذخیره شد"
-                            } catch (e: Exception) {
-                                message = "خطا ذخیره: ${e.message}"
-                            }
                             showCadPanel = false
+                            showSaveDxfDialog = true
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         modifier = Modifier.fillMaxWidth()
@@ -1661,7 +1717,12 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showProps = false }) { Text("بستن") } }
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { deleteSelected() }) { Text("حذف شیء", color = Color(0xFFE57373)) }
+                    TextButton(onClick = { showProps = false }) { Text("بستن") }
+                }
+            }
         )
     }
 
@@ -1762,7 +1823,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             OutlinedTextField(row[0], { v ->
                                 val m = row.toMutableList(); m[0] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
-                            }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
+                            }, label = { Text("نام") }, modifier = Modifier.weight(1f), singleLine = true)
                             OutlinedTextField(row[1], { v ->
                                 val m = row.toMutableList(); m[1] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("E") }, modifier = Modifier.weight(1f), singleLine = true)
@@ -1786,7 +1847,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             OutlinedTextField(row[4], { v ->
                                 val m = row.toMutableList(); m[4] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
-                            }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
+                            }, label = { Text("نام") }, modifier = Modifier.weight(1f), singleLine = true)
                             OutlinedTextField(row[5], { v ->
                                 val m = row.toMutableList(); m[5] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("E") }, modifier = Modifier.weight(1f), singleLine = true)

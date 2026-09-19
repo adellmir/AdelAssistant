@@ -42,20 +42,9 @@ object GsiParser {
         }
 
         val points = mutableListOf<GsiPoint>()
-        // کد نقطه در برخی فایل‌ها روی WI41 (خط جدا) است، نه فقط WI71
-        var lastCode = ""
         for (i in lines.indices) {
             if (drop[i]) continue
             val words = parseWords(lines[i])
-            // خط کد/ریمارک: 41 بدون 11 و 81
-            if (words.containsKey("41") && !words.containsKey("11") && !words.containsKey("81")) {
-                val c = cleanName(words["41"]!!)
-                val cu = c.uppercase()
-                if (c.isNotBlank() && c != "0" && cu != "OCUPAR" && cu != "RE") {
-                    lastCode = c
-                }
-                continue
-            }
             val w11 = words["11"] ?: continue
             val w81 = words["81"] ?: continue
             val w82 = words["82"] ?: continue
@@ -66,9 +55,8 @@ object GsiParser {
             val nameUp = name.uppercase()
             if (nameUp == "OCUPAR" || nameUp == "RE") continue
 
-            val code71 = words["71"]?.let { cleanName(it) }
+            val code = words["71"]?.let { cleanName(it) }
                 ?.takeIf { it.isNotBlank() && it != "0" } ?: ""
-            val code = if (code71.isNotBlank()) code71 else lastCode
 
             points.add(
                 GsiPoint(
@@ -94,47 +82,58 @@ object GsiParser {
 
     private fun parseDelimited(text: String, swapXY: Boolean): List<GsiPoint> {
         val out = mutableListOf<GsiPoint>()
-        text.lineSequence().forEach { raw ->
-            val line = raw.trim()
-            if (line.isEmpty() || line.startsWith("#")) return@forEach
+        val cleaned = text.replace("\uFEFF", "").replace('\r', '\n')
+        cleaned.lineSequence().forEach { raw ->
+            var line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) return@forEach
+            // ارقام فارسی/عربی → انگلیسی
+            line = line.map { ch ->
+                when (ch) {
+                    in '۰'..'۹' -> '0' + (ch - '۰')
+                    in '٠'..'٩' -> '0' + (ch - '٠')
+                    else -> ch
+                }
+            }.joinToString("")
             val low = line.lowercase()
             if (low.startsWith("x,y") || low.startsWith("n,x") || low.startsWith("n,y") ||
-                low.startsWith("id,") || low.contains("easting") || low.contains("northing")
+                low.startsWith("id,") || low.startsWith("name,") ||
+                low.contains("easting") || low.contains("northing")
             ) return@forEach
-            val p = line.split(Regex("[,;\\t]+")).map { it.trim() }.filter { it.isNotEmpty() }
+            // جداکننده: کاما، ;، تب، یا چند فاصله
+            var p = line.split(Regex("[,;\t]+")).map { it.trim() }.filter { it.isNotEmpty() }
+            if (p.size < 3) {
+                p = line.split(Regex("\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+            }
             if (p.size < 3) return@forEach
             try {
                 fun d(i: Int) = p.getOrNull(i)?.replace(',', '.')?.toDoubleOrNull()
-                when {
-                    // همیشه N,X,Y,Z[,D] وقتی حداقل ۴ فیلد مختصاتی باشد (حتی اگر نام عددی باشد)
-                    p.size >= 4 && d(1) != null && d(2) != null && d(3) != null -> {
-                        val e = if (swapXY) d(2)!! else d(1)!!
-                        val n = if (swapXY) d(1)!! else d(2)!!
-                        out.add(
-                            GsiPoint(
-                                name = p[0],
-                                e = e,
-                                n = n,
-                                z = d(3)!!,
-                                code = p.drop(4).joinToString(" ")
-                            )
+                // اولویت: N,X,Y,Z[,D] وقتی حداقل ۴ ستون و سه مختصات عددی در 1..3
+                if (p.size >= 4 && d(1) != null && d(2) != null && d(3) != null) {
+                    val e = if (swapXY) d(2)!! else d(1)!!
+                    val n = if (swapXY) d(1)!! else d(2)!!
+                    out.add(
+                        GsiPoint(
+                            name = p[0],
+                            e = e,
+                            n = n,
+                            z = d(3)!!,
+                            code = p.drop(4).joinToString(" ")
                         )
-                    }
-                    // X,Y,Z[,D] (یا Y,X,Z در DAT) — فقط وقتی نام جدا نیست
-                    d(0) != null && d(1) != null && d(2) != null -> {
-                        val e = if (swapXY) d(1)!! else d(0)!!
-                        val n = if (swapXY) d(0)!! else d(1)!!
-                        val codeOrName = p.drop(3).joinToString(" ")
-                        out.add(
-                            GsiPoint(
-                                name = if (codeOrName.isNotBlank()) codeOrName else (out.size + 1).toString(),
-                                e = e,
-                                n = n,
-                                z = d(2)!!,
-                                code = codeOrName
-                            )
+                    )
+                } else if (d(0) != null && d(1) != null && d(2) != null) {
+                    // X,Y,Z[,D]
+                    val e = if (swapXY) d(1)!! else d(0)!!
+                    val n = if (swapXY) d(0)!! else d(1)!!
+                    val rest = p.drop(3).joinToString(" ")
+                    out.add(
+                        GsiPoint(
+                            name = if (rest.isNotBlank() && d(3) == null) rest else (out.size + 1).toString(),
+                            e = e,
+                            n = n,
+                            z = d(2)!!,
+                            code = rest
                         )
-                    }
+                    )
                 }
             } catch (_: Exception) {
             }
