@@ -95,6 +95,28 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
+
+    // —— CAD حرفه‌ای (منوی کرکره‌ای، نه آیکن زیاد) ——
+    var showCadPanel by remember { mutableStateOf(false) }
+    var cadTool by remember { mutableStateOf(CadTool.None) }
+    var orthoOn by remember { mutableStateOf(false) }
+    var gridOn by remember { mutableStateOf(false) }
+    var gridStep by remember { mutableStateOf(1.0) }
+    var osnap by remember { mutableStateOf(OsnapFlags()) }
+    var undoStack by remember { mutableStateOf<List<List<ViewerDrawing>>>(emptyList()) }
+    var redoStack by remember { mutableStateOf<List<List<ViewerDrawing>>>(emptyList()) }
+    var selected by remember { mutableStateOf<CadEntity?>(null) }
+    var showProps by remember { mutableStateOf(false) }
+    var draftPts by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
+    var statusXY by remember { mutableStateOf("X: —  Y: —") }
+    var zoomPrev by remember { mutableStateOf<List<Pair<Float, Offset>>>(emptyList()) }
+    var zoomWindowFirst by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var zoomWindowMode by remember { mutableStateOf(false) }
+    var layerFilter by remember { mutableStateOf("") }
+    var drawLayer by remember { mutableStateOf("CAD") }
+    var textDraft by remember { mutableStateOf("متن") }
+    var showTextInput by remember { mutableStateOf(false) }
+
     var showMapAlignDialog by remember { mutableStateOf(false) }
     var mapAlignUseScale by remember { mutableStateOf(true) }
     var mapAlignUseAverage by remember { mutableStateOf(false) }
@@ -330,20 +352,212 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    fun snapWorld(rawX: Double, rawY: Double): Pair<Double, Double> {
+    fun snapWorld(rawX: Double, rawY: Double, ref: Pair<Double, Double>? = null): Pair<Double, Double> {
+        var x = rawX; var y = rawY
+        if (gridOn) {
+            val g = CadEngine.snapToGrid(x, y, gridStep)
+            x = g.first; y = g.second
+        }
         val maxW = (28f / scale.coerceAtLeast(1e-6f)).toDouble()
-        var bestD = maxW
-        var best: Pair<Double, Double>? = null
-        fun consider(x: Double, y: Double) {
-            val d = kotlin.math.hypot(x - rawX, y - rawY)
-            if (d < bestD) { bestD = d; best = x to y }
+        val models = activeDrawings.map { it.id to it.model }
+        return CadEngine.snap(x, y, models, osnap, maxW, ref)
+    }
+
+    
+    fun pushUndo() {
+        undoStack = (undoStack + listOf(drawings.map { it.copy(model = it.model.copy(
+            lines = it.model.lines.toList(),
+            circles = it.model.circles.toList(),
+            texts = it.model.texts.toList(),
+            layers = it.model.layers.toMutableMap()
+        )) })).takeLast(25)
+        redoStack = emptyList()
+    }
+    fun doUndo() {
+        if (undoStack.isEmpty()) return
+        redoStack = redoStack + listOf(drawings)
+        drawings = undoStack.last()
+        undoStack = undoStack.dropLast(1)
+        message = "Undo"
+    }
+    fun doRedo() {
+        if (redoStack.isEmpty()) return
+        undoStack = undoStack + listOf(drawings)
+        drawings = redoStack.last()
+        redoStack = redoStack.dropLast(1)
+        message = "Redo"
+    }
+    fun ensureCadDrawing(): Int {
+        val existing = drawings.find { it.name == "_CAD" }
+        if (existing != null) return existing.id
+        val empty = DxfModel(emptyList(), emptyList(), emptyList(), linkedMapOf(
+            "CAD" to com.adel.assistant.data.DxfLayerInfo("CAD", 1, true)
+        ), 0.0, 0.0, 1.0, 1.0)
+        val id = nextDrawingId
+        drawings = drawings + ViewerDrawing(id, "_CAD", empty)
+        nextDrawingId++
+        return id
+    }
+    fun mutateCad(block: (DxfModel) -> DxfModel) {
+        pushUndo()
+        val id = ensureCadDrawing()
+        drawings = drawings.map {
+            if (it.id == id) {
+                val nm = block(it.model).recalculatedBounds()
+                it.copy(model = nm)
+            } else it
         }
-        allModels.forEach { m ->
-            m.lines.forEach { consider(it.x1, it.y1); consider(it.x2, it.y2) }
-            m.circles.forEach { consider(it.x, it.y) }
-            m.texts.forEach { consider(it.x, it.y) }
+    }
+    fun processCadPoint(raw: Pair<Double, Double>) {
+        val ref = draftPts.lastOrNull()
+        var p = snapWorld(raw.first, raw.second, ref)
+        if (orthoOn && ref != null && cadTool in listOf(CadTool.DrawLine, CadTool.DrawPoly, CadTool.Move, CadTool.Copy)) {
+            p = CadEngine.applyOrtho(ref, p)
         }
-        return best ?: (rawX to rawY)
+        when (cadTool) {
+            CadTool.Select -> {
+                val maxW = (24f / scale.coerceAtLeast(1e-6f)).toDouble()
+                selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                showProps = selected != null
+                message = if (selected != null) "شیء انتخاب شد" else "چیزی انتخاب نشد"
+            }
+            CadTool.MeasureDist -> {
+                if (draftPts.isEmpty()) {
+                    draftPts = listOf(p)
+                    distanceMsg = "نقطه دوم فاصله"
+                } else {
+                    val a = draftPts[0]
+                    val d = CadEngine.hypot(p.first - a.first, p.second - a.second)
+                    distanceMsg = "فاصله: ${"%.3f".format(java.util.Locale.US, d)} m"
+                    draftPts = emptyList()
+                }
+            }
+            CadTool.MeasureAngle -> {
+                draftPts = draftPts + p
+                if (draftPts.size >= 3) {
+                    val ang = CadEngine.angleDeg(draftPts[0], draftPts[1], draftPts[2])
+                    distanceMsg = "زاویه: ${"%.2f".format(java.util.Locale.US, ang)}°"
+                    draftPts = emptyList()
+                } else distanceMsg = "نقطه ${draftPts.size + 1} از ۳ (رأس وسط)"
+            }
+            CadTool.MeasureArea -> {
+                draftPts = draftPts + p
+                if (draftPts.size >= 3) {
+                    val ar = CadEngine.polygonArea(draftPts)
+                    distanceMsg = "مساحت موقت: ${"%.3f".format(java.util.Locale.US, ar)} m² — دوباره بزن برای بستن"
+                } else distanceMsg = "رأس ${draftPts.size} — حداقل ۳"
+            }
+            CadTool.DrawLine -> {
+                if (draftPts.isEmpty()) {
+                    draftPts = listOf(p)
+                    message = "نقطه دوم خط"
+                } else {
+                    val a = draftPts[0]
+                    mutateCad { m ->
+                        m.copy(lines = m.lines + DxfLine(a.first, a.second, p.first, p.second, drawLayer, 1))
+                    }
+                    draftPts = emptyList()
+                    message = "خط ترسیم شد"
+                }
+            }
+            CadTool.DrawPoly -> {
+                if (draftPts.isNotEmpty()) {
+                    val a = draftPts.last()
+                    mutateCad { m ->
+                        m.copy(lines = m.lines + DxfLine(a.first, a.second, p.first, p.second, drawLayer, 3))
+                    }
+                }
+                draftPts = draftPts + p
+                message = "پلی‌لاین: ${draftPts.size} رأس — ابزار را ببند برای پایان"
+            }
+            CadTool.DrawCircle -> {
+                if (draftPts.isEmpty()) {
+                    draftPts = listOf(p)
+                    message = "نقطه روی محیط دایره"
+                } else {
+                    val c = draftPts[0]
+                    val r = CadEngine.hypot(p.first - c.first, p.second - c.second)
+                    mutateCad { m ->
+                        m.copy(circles = m.circles + DxfCircle(c.first, c.second, r, drawLayer, 1))
+                    }
+                    draftPts = emptyList()
+                    message = "دایره ترسیم شد"
+                }
+            }
+            CadTool.DrawArc -> {
+                // تقریبی: سه نقطه → وتر + کمان ساده با دایره
+                draftPts = draftPts + p
+                if (draftPts.size >= 3) {
+                    val (a, b, c) = Triple(draftPts[0], draftPts[1], draftPts[2])
+                    // دایره از ۳ نقطه ساده نیست؛ دو پاره خط
+                    mutateCad { m ->
+                        m.copy(lines = m.lines + listOf(
+                            DxfLine(a.first, a.second, b.first, b.second, drawLayer, 2),
+                            DxfLine(b.first, b.second, c.first, c.second, drawLayer, 2)
+                        ))
+                    }
+                    draftPts = emptyList()
+                    message = "قوس تقریبی (دو پاره)"
+                } else message = "نقطه ${draftPts.size} از ۳ قوس"
+            }
+            CadTool.DrawText -> {
+                draftPts = listOf(p)
+                showTextInput = true
+            }
+            CadTool.Move, CadTool.Copy -> {
+                if (selected == null) {
+                    val maxW = (24f / scale.coerceAtLeast(1e-6f)).toDouble()
+                    selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                    draftPts = if (selected != null) listOf(p) else emptyList()
+                    message = if (selected != null) "مقصد را لمس کن" else "اول شیء را انتخاب کن"
+                } else if (draftPts.size == 1) {
+                    val a = draftPts[0]
+                    val dx = p.first - a.first
+                    val dy = p.second - a.second
+                    pushUndo()
+                    val sel = selected!!
+                    drawings = drawings.map { dr ->
+                        if (dr.id != when (sel) {
+                            is CadEntity.Line -> sel.drawingId
+                            is CadEntity.Circle -> sel.drawingId
+                            is CadEntity.Text -> sel.drawingId
+                        }) return@map dr
+                        val m = dr.model
+                        val nm = when (sel) {
+                            is CadEntity.Line -> {
+                                val moved = CadEngine.translateLine(sel.line, dx, dy)
+                                if (cadTool == CadTool.Copy)
+                                    m.copy(lines = m.lines + moved)
+                                else
+                                    m.copy(lines = m.lines.mapIndexed { i, l -> if (i == sel.index) moved else l })
+                            }
+                            is CadEntity.Circle -> {
+                                val moved = CadEngine.translateCircle(sel.circle, dx, dy)
+                                if (cadTool == CadTool.Copy)
+                                    m.copy(circles = m.circles + moved)
+                                else
+                                    m.copy(circles = m.circles.mapIndexed { i, c -> if (i == sel.index) moved else c })
+                            }
+                            is CadEntity.Text -> {
+                                val moved = CadEngine.translateText(sel.text, dx, dy)
+                                if (cadTool == CadTool.Copy)
+                                    m.copy(texts = m.texts + moved)
+                                else
+                                    m.copy(texts = m.texts.mapIndexed { i, tx -> if (i == sel.index) moved else tx })
+                            }
+                        }.recalculatedBounds()
+                        dr.copy(model = nm)
+                    }
+                    draftPts = emptyList()
+                    if (cadTool == CadTool.Move) selected = null
+                    message = if (cadTool == CadTool.Copy) "کپی شد" else "جابجا شد"
+                }
+            }
+            CadTool.Rotate, CadTool.Scale -> {
+                message = "چرخش/مقیاس: شیء را Select کن سپس ابزار را از پنل CAD بزن (نسخه ساده: Move/Copy فعال)"
+            }
+            else -> {}
+        }
     }
 
     fun updateMeasureDistance() {
@@ -395,6 +609,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     .padding(bottom = 76.dp)
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
+                            val sw = screenToWorld(centroid.x, centroid.y)
+                            statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
                             // Keep the original smooth map gesture. While editing a point,
                             // the map must stay still so the point can move independently.
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
@@ -455,7 +671,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         message = "نقطه ثبت شد؛ برای ثبت نقطه بعدی + را بزن"
                                         return@detectTapGestures
                                     }
-                                    if (!measureMode && mapAlignPick == null) return@detectTapGestures
+                                    if (!measureMode && mapAlignPick == null && cadTool == CadTool.None && !zoomWindowMode) return@detectTapGestures
                                     val raw = screenToWorld(tap.x, tap.y)
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
@@ -478,6 +694,38 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         mapAlignPick = null
                                         showMapAlignDialog = true
                                         message = "مختصات از نقشه ثبت شد"
+                                        return@detectTapGestures
+                                    }
+                                    if (zoomWindowMode) {
+                                        if (zoomWindowFirst == null) {
+                                            zoomWindowFirst = p
+                                            message = "گوشه دوم پنجره زوم"
+                                        } else {
+                                            val a = zoomWindowFirst!!
+                                            zoomPrev = (zoomPrev + listOf(scale to offset)).takeLast(10)
+                                            // fit to window a..p
+                                            val minX = minOf(a.first, p.first)
+                                            val maxX = maxOf(a.first, p.first)
+                                            val minY = minOf(a.second, p.second)
+                                            val maxY = maxOf(a.second, p.second)
+                                            val w = canvasSize.x; val h = canvasSize.y
+                                            if (w > 0 && maxX > minX && maxY > minY) {
+                                                val sx = w * 0.9f / (maxX - minX).toFloat()
+                                                val sy = h * 0.9f / (maxY - minY).toFloat()
+                                                scale = minOf(sx, sy).coerceIn(0.000001f, 5000f)
+                                                offset = Offset(
+                                                    w / 2f - ((minX + maxX) / 2.0 * scale).toFloat(),
+                                                    h / 2f + ((minY + maxY) / 2.0 * scale).toFloat()
+                                                )
+                                            }
+                                            zoomWindowFirst = null
+                                            zoomWindowMode = false
+                                            message = "Zoom Window"
+                                        }
+                                        return@detectTapGestures
+                                    }
+                                    if (cadTool != CadTool.None) {
+                                        processCadPoint(p)
                                         return@detectTapGestures
                                     }
                                     if (!measureMode) return@detectTapGestures
@@ -586,6 +834,58 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             isAntiAlias = true
                         }
                         drawContext.canvas.nativeCanvas.drawText(t.text, p.x, p.y, paint)
+                    }
+                }
+
+
+                // شبکه
+                if (gridOn && scale > 0.01f) {
+                    val step = gridStep
+                    val (w0x, w0y) = screenToWorld(0f, 0f)
+                    val (w1x, w1y) = screenToWorld(canvasSize.x, canvasSize.y)
+                    val gx0 = kotlin.math.floor(minOf(w0x, w1x) / step) * step
+                    val gx1 = kotlin.math.ceil(maxOf(w0x, w1x) / step) * step
+                    val gy0 = kotlin.math.floor(minOf(w0y, w1y) / step) * step
+                    val gy1 = kotlin.math.ceil(maxOf(w0y, w1y) / step) * step
+                    var x = gx0
+                    var n = 0
+                    while (x <= gx1 && n < 80) {
+                        val a = worldToScreen(x, gy0); val b = worldToScreen(x, gy1)
+                        drawLine(Color(0x33FFFFFF), a, b, 1f)
+                        x += step; n++
+                    }
+                    var y = gy0; n = 0
+                    while (y <= gy1 && n < 80) {
+                        val a = worldToScreen(gx0, y); val b = worldToScreen(gx1, y)
+                        drawLine(Color(0x33FFFFFF), a, b, 1f)
+                        y += step; n++
+                    }
+                }
+                // پیش‌نمایش ترسیم
+                draftPts.forEachIndexed { i, pt ->
+                    val s = worldToScreen(pt.first, pt.second)
+                    drawCircle(Color(0xFF00E5FF), 6f, s)
+                    if (i > 0) {
+                        val prev = worldToScreen(draftPts[i-1].first, draftPts[i-1].second)
+                        drawLine(Color(0xFF00E5FF), prev, s, 2f)
+                    }
+                }
+                // انتخاب
+                selected?.let { sel ->
+                    when (sel) {
+                        is CadEntity.Line -> {
+                            val a = worldToScreen(sel.line.x1, sel.line.y1)
+                            val b = worldToScreen(sel.line.x2, sel.line.y2)
+                            drawLine(Color(0xFFFF9800), a, b, 5f)
+                        }
+                        is CadEntity.Circle -> {
+                            val c = worldToScreen(sel.circle.x, sel.circle.y)
+                            drawCircle(Color(0xFFFF9800), (sel.circle.r * scale).toFloat().coerceIn(4f, 500f), c, style = Stroke(3f))
+                        }
+                        is CadEntity.Text -> {
+                            val s = worldToScreen(sel.text.x, sel.text.y)
+                            drawCircle(Color(0xFFFF9800), 12f, s, style = Stroke(3f))
+                        }
                     }
                 }
 
@@ -730,6 +1030,9 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         IconButton(onClick = { fitAll(canvasSize.x, canvasSize.y) }) {
                             Icon(Icons.Filled.ZoomOutMap, null, tint = Color.White)
                         }
+                        IconButton(onClick = { showCadPanel = true; menuOpen = false }) {
+                            Icon(Icons.Filled.Architecture, null, tint = if (cadTool != CadTool.None) Color(0xFF81C995) else Color.White)
+                        }
                         IconButton(onClick = {
                             if (drawings.isEmpty()) message = "اول یک نقشه DXF/KML باز کن"
                             else {
@@ -829,6 +1132,33 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
+
+        // نوار مختصات و ابزار فعال
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
+            color = Color(0xCC1A1F18),
+            shape = RoundedCornerShape(10.dp)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    statusXY + (if (cadTool != CadTool.None) "  |  ${cadTool.name}" else "") +
+                        (if (orthoOn) "  ORTHO" else "") + (if (gridOn) "  GRID" else ""),
+                    color = Color(0xFFE0E0E0),
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (undoStack.isNotEmpty()) {
+                    TextButton(onClick = { doUndo() }) { Text("Undo", fontSize = 11.sp) }
+                }
+            }
+        }
+
     if (showPointsDialog) {
         AlertDialog(
             onDismissRequest = { showPointsDialog = false },
@@ -914,28 +1244,177 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             text = {
                 if (drawings.isEmpty()) Text("نقشه‌ای باز نشده است.")
                 else LazyColumn {
-                    drawings.filter { it.visible }.forEach { drawing ->
+                    item {
+                            OutlinedTextField(layerFilter, { layerFilter = it }, label = { Text("فیلتر نام لایه") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        }
+                        drawings.filter { it.visible }.forEach { drawing ->
                         item {
                             Text("📁 ${drawing.name}", style = MaterialTheme.typography.titleSmall, color = color, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                         }
                         val layers = drawing.model.layers.values.sortedBy { it.name }
                         itemsIndexed(layers, key = { _, layer -> "${drawing.id}:${layer.name}" }) { _, layer ->
+                            if (layerFilter.isBlank() || layer.name.contains(layerFilter, true)) {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                                 Checkbox(checked = layer.visible, onCheckedChange = { v ->
                                     layer.visible = v
                                     drawings = drawings.toList()
                                 })
-                                Text(layer.name.ifBlank { "(بدون نام)" }, Modifier.weight(1f))
+                                Text(layer.name.ifBlank { "(بدون نام)" }, Modifier.weight(1f), fontSize = 12.sp)
+                                Checkbox(checked = layer.locked, onCheckedChange = { v ->
+                                    layer.locked = v
+                                    drawings = drawings.toList()
+                                })
+                                Text("قفل", fontSize = 10.sp)
                                 LayerColorButton(layer.displayColor ?: DxfParser.aciToColor(layer.colorAci)) { newColor ->
                                     layer.displayColor = newColor
                                     drawings = drawings.toList()
                                 }
+                            }
                             }
                         }
                     }
                 }
             },
             confirmButton = { TextButton(onClick = { showLayers = false }) { Text("بستن") } }
+        )
+    }
+
+
+    if (showCadPanel) {
+        AlertDialog(
+            onDismissRequest = { showCadPanel = false },
+            title = { Text("ابزار CAD") },
+            text = {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ترسیم", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن").forEach { (tool, label) ->
+                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = label }, label = { Text(label, fontSize = 11.sp) })
+                        }
+                    }
+                    Text("اندازه", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(CadTool.MeasureDist to "فاصله", CadTool.MeasureAngle to "زاویه", CadTool.MeasureArea to "مساحت").forEach { (tool, label) ->
+                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); measureMode = false; showCadPanel = false }, label = { Text(label, fontSize = 11.sp) })
+                        }
+                    }
+                    Text("ویرایش", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(CadTool.Select to "انتخاب", CadTool.Move to "جابجایی", CadTool.Copy to "کپی").forEach { (tool, label) ->
+                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false }, label = { Text(label, fontSize = 11.sp) })
+                        }
+                    }
+                    Text("نمایش", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(selected = false, onClick = { fitTrigger++; showCadPanel = false }, label = { Text("Fit", fontSize = 11.sp) })
+                        FilterChip(selected = zoomWindowMode, onClick = { zoomWindowMode = true; zoomWindowFirst = null; showCadPanel = false; message = "Zoom Window: دو گوشه" }, label = { Text("پنجره", fontSize = 11.sp) })
+                        FilterChip(selected = false, onClick = {
+                            if (zoomPrev.isNotEmpty()) {
+                                val (s, o) = zoomPrev.last()
+                                zoomPrev = zoomPrev.dropLast(1)
+                                scale = s; offset = o
+                            }
+                            showCadPanel = false
+                        }, label = { Text("قبلی", fontSize = 11.sp) })
+                    }
+                    Text("قیدها", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(orthoOn, { orthoOn = it }); Text("Ortho", fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Checkbox(gridOn, { gridOn = it }); Text("Grid", fontSize = 12.sp)
+                    }
+                    if (gridOn) {
+                        OutlinedTextField(gridStep.toString(), { v -> v.replace(',','.').toDoubleOrNull()?.let { if (it > 0) gridStep = it } }, label = { Text("گام شبکه") }, singleLine = true)
+                    }
+                    Text("Osnap", fontWeight = FontWeight.Bold)
+                    Row {
+                        Checkbox(osnap.end, { osnap = osnap.copy(end = it) }); Text("End", fontSize = 11.sp)
+                        Checkbox(osnap.mid, { osnap = osnap.copy(mid = it) }); Text("Mid", fontSize = 11.sp)
+                        Checkbox(osnap.center, { osnap = osnap.copy(center = it) }); Text("Cen", fontSize = 11.sp)
+                    }
+                    Row {
+                        Checkbox(osnap.intersection, { osnap = osnap.copy(intersection = it) }); Text("Int", fontSize = 11.sp)
+                        Checkbox(osnap.perpendicular, { osnap = osnap.copy(perpendicular = it) }); Text("Perp", fontSize = 11.sp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { doUndo() }) { Text("Undo") }
+                        TextButton(onClick = { doRedo() }) { Text("Redo") }
+                        TextButton(onClick = {
+                            cadTool = CadTool.None; draftPts = emptyList(); zoomWindowMode = false; message = "ابزار خاموش"
+                            showCadPanel = false
+                        }) { Text("خاموش") }
+                    }
+                    Button(
+                        onClick = {
+                            try {
+                                val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+                                FileExport.exportTextToDocuments(context, "map_edit.dxf", body, "application/dxf")
+                                message = "DXF ذخیره شد"
+                            } catch (e: Exception) {
+                                message = "خطا ذخیره: ${e.message}"
+                            }
+                            showCadPanel = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("ذخیره DXF ویرایش‌شده") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showCadPanel = false }) { Text("بستن") } }
+        )
+    }
+
+    if (showTextInput && draftPts.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showTextInput = false; draftPts = emptyList() },
+            title = { Text("متن") },
+            text = { OutlinedTextField(textDraft, { textDraft = it }, label = { Text("محتوا") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val pt = draftPts[0]
+                    mutateCad { m ->
+                        m.copy(texts = m.texts + DxfText(pt.first, pt.second, 0.5, textDraft, drawLayer, 7))
+                    }
+                    showTextInput = false
+                    draftPts = emptyList()
+                    message = "متن اضافه شد"
+                }) { Text("ثبت") }
+            },
+            dismissButton = { TextButton(onClick = { showTextInput = false; draftPts = emptyList() }) { Text("لغو") } }
+        )
+    }
+
+    if (showProps && selected != null) {
+        AlertDialog(
+            onDismissRequest = { showProps = false },
+            title = { Text("خصوصیات") },
+            text = {
+                val s = selected!!
+                Column {
+                    when (s) {
+                        is CadEntity.Line -> {
+                            Text("نوع: خط")
+                            Text("لایه: ${s.line.layer}")
+                            Text("از: ${"%.3f".format(s.line.x1)}, ${"%.3f".format(s.line.y1)}")
+                            Text("تا: ${"%.3f".format(s.line.x2)}, ${"%.3f".format(s.line.y2)}")
+                            val len = CadEngine.hypot(s.line.x2 - s.line.x1, s.line.y2 - s.line.y1)
+                            Text("طول: ${"%.3f".format(len)} m")
+                        }
+                        is CadEntity.Circle -> {
+                            Text("نوع: دایره")
+                            Text("لایه: ${s.circle.layer}")
+                            Text("مرکز: ${"%.3f".format(s.circle.x)}, ${"%.3f".format(s.circle.y)}")
+                            Text("شعاع: ${"%.3f".format(s.circle.r)}")
+                        }
+                        is CadEntity.Text -> {
+                            Text("نوع: متن")
+                            Text("لایه: ${s.text.layer}")
+                            Text(s.text.text)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showProps = false }) { Text("بستن") } }
         )
     }
 

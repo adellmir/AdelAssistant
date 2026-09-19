@@ -1,19 +1,12 @@
 package com.adel.assistant.data
 
 import androidx.compose.ui.graphics.Color
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.atan
-import kotlin.math.cos
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 data class DxfLine(val x1: Double, val y1: Double, val x2: Double, val y2: Double, val layer: String, val color: Int)
 data class DxfCircle(val x: Double, val y: Double, val r: Double, val layer: String, val color: Int)
 data class DxfText(val x: Double, val y: Double, val height: Double, val text: String, val layer: String, val color: Int)
-data class DxfLayerInfo(val name: String, var colorAci: Int, var visible: Boolean = true, var displayColor: Color? = null)
+data class DxfLayerInfo(val name: String, var colorAci: Int, var visible: Boolean = true, var locked: Boolean = false, var displayColor: Color? = null)
 
 data class DxfModel(
     val lines: List<DxfLine>,
@@ -28,7 +21,43 @@ data class DxfModel(
     val isEmpty: Boolean get() = lines.isEmpty() && circles.isEmpty() && texts.isEmpty()
     fun width() = (maxX - minX).coerceAtLeast(1.0)
     fun height() = (maxY - minY).coerceAtLeast(1.0)
+
+    fun recalculatedBounds(): DxfModel {
+        var minX = Double.POSITIVE_INFINITY
+        var minY = Double.POSITIVE_INFINITY
+        var maxX = Double.NEGATIVE_INFINITY
+        var maxY = Double.NEGATIVE_INFINITY
+        fun pt(x: Double, y: Double) {
+            if (x < minX) minX = x; if (y < minY) minY = y
+            if (x > maxX) maxX = x; if (y > maxY) maxY = y
+        }
+        lines.forEach { pt(it.x1, it.y1); pt(it.x2, it.y2) }
+        circles.forEach {
+            pt(it.x - it.r, it.y - it.r); pt(it.x + it.r, it.y + it.r)
+        }
+        texts.forEach { pt(it.x, it.y) }
+        if (minX == Double.POSITIVE_INFINITY) {
+            minX = 0.0; minY = 0.0; maxX = 1.0; maxY = 1.0
+        }
+        return copy(minX = minX, minY = minY, maxX = maxX, maxY = maxY)
+    }
+
+    fun toDxfText(): String = buildString {
+        append("0\nSECTION\n2\nHEADER\n0\nENDSEC\n")
+        append("0\nSECTION\n2\nENTITIES\n")
+        lines.forEach { l ->
+            append("0\nLINE\n8\n${l.layer}\n10\n${l.x1}\n20\n${l.y1}\n11\n${l.x2}\n21\n${l.y2}\n")
+        }
+        circles.forEach { c ->
+            append("0\nCIRCLE\n8\n${c.layer}\n10\n${c.x}\n20\n${c.y}\n40\n${c.r}\n")
+        }
+        texts.forEach { tx ->
+            append("0\nTEXT\n8\n${tx.layer}\n10\n${tx.x}\n20\n${tx.y}\n40\n${tx.height}\n1\n${tx.text}\n")
+        }
+        append("0\nENDSEC\n0\nEOF\n")
+    }
 }
+
 
 object DxfParser {
     fun parse(content: String): DxfModel {
@@ -55,84 +84,7 @@ object DxfParser {
         fun next(): Pair<Int, String>? = if (idx < pairs.size) pairs[idx++] else null
         fun peek(): Pair<Int, String>? = if (idx < pairs.size) pairs[idx] else null
 
-        fun addArcSegments(
-            cx: Double, cy: Double, r: Double,
-            startDeg: Double, endDeg: Double,
-            layer: String, color: Int
-        ) {
-            if (r <= 1e-9) return
-            var a0 = startDeg
-            var a1 = endDeg
-            // DXF: counter-clockwise from start to end
-            while (a1 <= a0) a1 += 360.0
-            val sweep = a1 - a0
-            val steps = max(8, (abs(sweep) / 6.0).toInt().coerceAtMost(180))
-            var prevX = cx + r * cos(Math.toRadians(a0))
-            var prevY = cy + r * sin(Math.toRadians(a0))
-            for (s in 1..steps) {
-                val ang = a0 + sweep * s / steps
-                val x = cx + r * cos(Math.toRadians(ang))
-                val y = cy + r * sin(Math.toRadians(ang))
-                outLines += DxfLine(prevX, prevY, x, y, layer, color)
-                prevX = x; prevY = y
-            }
-            layerTable.putIfAbsent(layer, DxfLayerInfo(layer, 7))
-        }
-
-        /** bulge: tan(included/4); positive = CCW */
-        fun addBulgeSegment(
-            x1: Double, y1: Double, x2: Double, y2: Double, bulge: Double,
-            layer: String, color: Int
-        ) {
-            if (abs(bulge) < 1e-12) {
-                outLines += DxfLine(x1, y1, x2, y2, layer, color)
-                return
-            }
-            val dx = x2 - x1
-            val dy = y2 - y1
-            val chord = sqrt(dx * dx + dy * dy)
-            if (chord < 1e-12) return
-            val included = 4.0 * atan(bulge) // radians, signed
-            val sHalf = sin(included / 2.0)
-            if (abs(sHalf) < 1e-12) {
-                outLines += DxfLine(x1, y1, x2, y2, layer, color)
-                return
-            }
-            val r = abs((chord / 2.0) / sHalf)
-            val midX = (x1 + x2) / 2.0
-            val midY = (y1 + y2) / 2.0
-            val ux = dx / chord
-            val uy = dy / chord
-            val px = -uy // left normal
-            val py = ux
-            val sagOffset = (chord / 2.0) * (1 - bulge * bulge) / (2 * bulge)
-            val cx = midX - sagOffset * px
-            val cy = midY - sagOffset * py
-            var aStart = Math.toDegrees(kotlin.math.atan2(y1 - cy, x1 - cx))
-            var aEnd = Math.toDegrees(kotlin.math.atan2(y2 - cy, x2 - cx))
-            if (bulge >= 0) {
-                while (aEnd <= aStart) aEnd += 360.0
-                addArcSegments(cx, cy, r, aStart, aEnd, layer, color)
-            } else {
-                while (aStart <= aEnd) aStart += 360.0
-                // CW: from aStart down toward aEnd
-                val sweep = aEnd - aStart // negative
-                val steps = max(8, (abs(sweep) / 6.0).toInt().coerceAtMost(180))
-                var prevX = x1
-                var prevY = y1
-                for (sStep in 1..steps) {
-                    val ang = aStart + sweep * sStep / steps
-                    val x = cx + r * cos(Math.toRadians(ang))
-                    val y = cy + r * sin(Math.toRadians(ang))
-                    outLines += DxfLine(prevX, prevY, x, y, layer, color)
-                    prevX = x
-                    prevY = y
-                }
-                layerTable.putIfAbsent(layer, DxfLayerInfo(layer, 7))
-            }
-        }
-
-while (idx < pairs.size) {
+        while (idx < pairs.size) {
             val (c, v) = next() ?: break
             if (c == 0 && v.trim() == "SECTION") {
                 val n = next()
@@ -174,7 +126,7 @@ while (idx < pairs.size) {
                 continue
             }
             if (inEntities && c == 0) {
-                when (v.trim().uppercase()) {
+                when (v.trim()) {
                     "LINE" -> {
                         var x1 = 0.0; var y1 = 0.0; var x2 = 0.0; var y2 = 0.0
                         var layer = "0"; var color = 256
@@ -192,10 +144,10 @@ while (idx < pairs.size) {
                             }
                         }
                         outLines += DxfLine(x1, y1, x2, y2, layer, color)
-                        layerTable.putIfAbsent(layer, DxfLayerInfo(layer, 7))
+                        layerTable.putIfAbsent(layer, DxfLayerInfo(layer, if (color in 1..255) color else 7))
                     }
                     "CIRCLE" -> {
-                        var x = 0.0; var y = 0.0; var r = 0.0
+                        var x = 0.0; var y = 0.0; var r = 0.15
                         var layer = "0"; var color = 256
                         while (true) {
                             val p = peek() ?: break
@@ -206,141 +158,31 @@ while (idx < pairs.size) {
                                 62 -> color = gv.trim().toIntOrNull() ?: 256
                                 10 -> x = gv.trim().toDoubleOrNull() ?: 0.0
                                 20 -> y = gv.trim().toDoubleOrNull() ?: 0.0
-                                40 -> r = gv.trim().toDoubleOrNull() ?: 0.0
+                                40 -> r = gv.trim().toDoubleOrNull() ?: 0.15
                             }
                         }
-                        if (r > 0) {
-                            outCircles += DxfCircle(x, y, r, layer, color)
-                            layerTable.putIfAbsent(layer, DxfLayerInfo(layer, 7))
-                        }
-                    }
-                    "ARC" -> {
-                        var x = 0.0; var y = 0.0; var r = 0.0
-                        var a0 = 0.0; var a1 = 0.0
-                        var layer = "0"; var color = 256
-                        while (true) {
-                            val p = peek() ?: break
-                            if (p.first == 0) break
-                            val (gc, gv) = next()!!
-                            when (gc) {
-                                8 -> layer = gv.trim().ifBlank { "0" }
-                                62 -> color = gv.trim().toIntOrNull() ?: 256
-                                10 -> x = gv.trim().toDoubleOrNull() ?: 0.0
-                                20 -> y = gv.trim().toDoubleOrNull() ?: 0.0
-                                40 -> r = gv.trim().toDoubleOrNull() ?: 0.0
-                                50 -> a0 = gv.trim().toDoubleOrNull() ?: 0.0
-                                51 -> a1 = gv.trim().toDoubleOrNull() ?: 0.0
-                            }
-                        }
-                        if (r > 0) addArcSegments(x, y, r, a0, a1, layer, color)
-                    }
-                    "LWPOLYLINE" -> {
-                        var layer = "0"; var color = 256
-                        var closed = false
-                        data class Vtx(var x: Double = 0.0, var y: Double = 0.0, var bulge: Double = 0.0)
-                        val verts = mutableListOf<Vtx>()
-                        var cur: Vtx? = null
-                        while (true) {
-                            val p = peek() ?: break
-                            if (p.first == 0) break
-                            val (gc, gv) = next()!!
-                            when (gc) {
-                                8 -> layer = gv.trim().ifBlank { "0" }
-                                62 -> color = gv.trim().toIntOrNull() ?: 256
-                                70 -> closed = ((gv.trim().toIntOrNull() ?: 0) and 1) != 0
-                                10 -> {
-                                    cur = Vtx(x = gv.trim().toDoubleOrNull() ?: 0.0)
-                                    verts += cur!!
-                                }
-                                20 -> cur?.y = gv.trim().toDoubleOrNull() ?: 0.0
-                                42 -> cur?.bulge = gv.trim().toDoubleOrNull() ?: 0.0
-                            }
-                        }
-                        if (verts.size >= 2) {
-                            for (vi in 0 until verts.size - 1) {
-                                val a = verts[vi]; val b = verts[vi + 1]
-                                addBulgeSegment(a.x, a.y, b.x, b.y, a.bulge, layer, color)
-                            }
-                            if (closed) {
-                                val a = verts.last(); val b = verts.first()
-                                addBulgeSegment(a.x, a.y, b.x, b.y, a.bulge, layer, color)
-                            }
-                        }
-                    }
-                    "POLYLINE" -> {
-                        // legacy: collect VERTEX until SEQEND — simplified as straight segments
-                        var layer = "0"; var color = 256
-                        var closed = false
-                        while (true) {
-                            val p = peek() ?: break
-                            if (p.first == 0) break
-                            val (gc, gv) = next()!!
-                            when (gc) {
-                                8 -> layer = gv.trim().ifBlank { "0" }
-                                62 -> color = gv.trim().toIntOrNull() ?: 256
-                                70 -> closed = ((gv.trim().toIntOrNull() ?: 0) and 1) != 0
-                            }
-                        }
-                        val verts = mutableListOf<Pair<Double, Double>>()
-                        while (true) {
-                            val p = peek() ?: break
-                            if (p.first == 0 && p.second.trim().uppercase() == "SEQEND") {
-                                next(); break
-                            }
-                            if (p.first == 0 && p.second.trim().uppercase() == "VERTEX") {
-                                next()
-                                var x = 0.0; var y = 0.0
-                                while (true) {
-                                    val q = peek() ?: break
-                                    if (q.first == 0) break
-                                    val (gc, gv) = next()!!
-                                    when (gc) {
-                                        10 -> x = gv.trim().toDoubleOrNull() ?: 0.0
-                                        20 -> y = gv.trim().toDoubleOrNull() ?: 0.0
-                                    }
-                                }
-                                verts += x to y
-                            } else if (p.first == 0) break
-                            else next()
-                        }
-                        for (vi in 0 until verts.size - 1) {
-                            val a = verts[vi]; val b = verts[vi + 1]
-                            outLines += DxfLine(a.first, a.second, b.first, b.second, layer, color)
-                        }
-                        if (closed && verts.size >= 2) {
-                            val a = verts.last(); val b = verts.first()
-                            outLines += DxfLine(a.first, a.second, b.first, b.second, layer, color)
-                        }
-                        if (verts.isNotEmpty()) layerTable.putIfAbsent(layer, DxfLayerInfo(layer, 7))
+                        outCircles += DxfCircle(x, y, r, layer, color)
+                        layerTable.putIfAbsent(layer, DxfLayerInfo(layer, if (color in 1..255) color else 7))
                     }
                     "TEXT", "MTEXT" -> {
                         var x = 0.0; var y = 0.0; var h = 0.25; var text = ""
-                        var layer = "0"; var color = 256
+                        var layer = "0"; var color = 250
                         while (true) {
                             val p = peek() ?: break
                             if (p.first == 0) break
                             val (gc, gv) = next()!!
                             when (gc) {
                                 8 -> layer = gv.trim().ifBlank { "0" }
-                                62 -> color = gv.trim().toIntOrNull() ?: 256
+                                62 -> color = gv.trim().toIntOrNull() ?: 250
                                 10 -> x = gv.trim().toDoubleOrNull() ?: 0.0
                                 20 -> y = gv.trim().toDoubleOrNull() ?: 0.0
                                 40 -> h = gv.trim().toDoubleOrNull() ?: 0.25
                                 1 -> text = gv
-                                3 -> if (text.isBlank()) text = gv else text += gv
                             }
                         }
                         if (text.isNotBlank()) {
                             outTexts += DxfText(x, y, h, text, layer, color)
                             layerTable.putIfAbsent(layer, DxfLayerInfo(layer, 7))
-                        }
-                    }
-                    else -> {
-                        // skip unknown entity body
-                        while (true) {
-                            val p = peek() ?: break
-                            if (p.first == 0) break
-                            next()
                         }
                     }
                 }
@@ -366,6 +208,7 @@ while (idx < pairs.size) {
         if (minX == Double.POSITIVE_INFINITY) {
             minX = 0.0; minY = 0.0; maxX = 1.0; maxY = 1.0
         }
+        // pad
         val pad = ((maxX - minX).coerceAtLeast(maxY - minY)) * 0.05 + 1.0
         return DxfModel(outLines, outCircles, outTexts, layerTable, minX - pad, minY - pad, maxX + pad, maxY + pad)
     }
