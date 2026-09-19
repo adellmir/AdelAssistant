@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -66,21 +67,45 @@ private fun OverallStatus(context: android.content.Context) {
     val byShaft = TunnelReportStore.TUNNEL_LAYOUT.groupBy { it.first }.toSortedMap()
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
         items(byShaft.entries.toList()) { (shaftName, sides) ->
+            // سمت کمتر و بیشتر
+            val lessSide = sides.firstOrNull { (sh, side) -> TunnelReportStore.isTowardLessSide(sh, side) }
+            val moreSide = sides.firstOrNull { (sh, side) -> !TunnelReportStore.isTowardLessSide(sh, side) }
+            fun sideBlock(shaft: String, side: String): Triple<String, Double, Pair<Double, Double>> {
+                val km = TunnelReportStore.currentKm(context, shaft, side)
+                val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: km
+                val progress = abs(km - fixedKm)
+                val remaining = abs(km - oppositeKm(context, shaft, side))
+                return Triple(side, km, progress to remaining)
+            }
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("شفت $shaftName", style = MaterialTheme.typography.titleSmall)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    sides.forEach { (shaft, side) ->
-                        val km = TunnelReportStore.currentKm(context, shaft, side)
-                        val fixedKm = TunnelReportStore.shaftFixedKm(context, shaft) ?: km
-                        val a = abs(km - fixedKm)
-                        val opp = oppositeKm(context, shaft, side)
-                        val b = abs(km - opp)
-                        Text(
-                            formatEn("سمت %s — پیشرفت: %.2f — مانده: %.2f (کیلومتر فعلی %.2f)", side, a, b, km),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF9BA888)
-                        )
+                Row(
+                    Modifier.padding(12.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // چپ: جهت بیشتر
+                    Column(Modifier.weight(1f)) {
+                        if (moreSide != null) {
+                            val (side, km, pr) = sideBlock(moreSide.first, moreSide.second)
+                            Text(side, style = MaterialTheme.typography.bodySmall, color = Color(0xFF81C995))
+                            Text(formatEn("%.3f", km), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9BA888))
+                            Text(formatEn("پ:%.1f / م:%.1f", pr.first, pr.second), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8))
+                        }
+                    }
+                    // وسط: شماره شفت
+                    Text(
+                        shaftName,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    // راست: جهت کمتر
+                    Column(Modifier.weight(1f), horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                        if (lessSide != null) {
+                            val (side, km, pr) = sideBlock(lessSide.first, lessSide.second)
+                            Text(side, style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFB74D))
+                            Text(formatEn("%.3f", km), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9BA888))
+                            Text(formatEn("پ:%.1f / م:%.1f", pr.first, pr.second), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8))
+                        }
                     }
                 }
             }

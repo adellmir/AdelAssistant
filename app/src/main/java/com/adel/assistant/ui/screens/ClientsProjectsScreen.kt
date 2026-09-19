@@ -23,6 +23,11 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
+
+private fun moneyM(v: Double): String {
+    val m = v / 1_000_000.0
+    return String.format(java.util.Locale.US, "%,.1f م", m)
+}
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -169,13 +174,13 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 }
                             }
                             Text(
-                                "پروژه: ${e.projectCount}  |  دریافتی: ${formatMoney(e.totalReceived)}  |  مطالبات: ${formatMoney(e.totalClaims)}",
+                                "پروژه: ${e.projectCount} | درآمد: ${moneyM(e.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(e.totalReceived)} | مانده: ${moneyM(e.totalClaims)}",
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
                             e.sessions.take(8).forEach { s ->
                                 Text(
-                                    "• ${s.name} | جلسه ${s.day}/${s.month}/${s.year} | ${formatMoney(s.amount)}",
+                                    "• ${s.name} | جلسه ${s.day}/${s.month}/${s.year} | ${moneyM(s.amount)}",
                                     color = TextPrimary,
                                     fontSize = 12.sp
                                 )
@@ -204,7 +209,7 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 }
                             }
                             Text(
-                                "جلسات: ${p.sessionCount}  |  دریافتی: ${formatMoney(p.totalReceived)}  |  مطالبات: ${formatMoney(p.totalClaims)}",
+                                "جلسات: ${p.sessionCount} | درآمد: ${moneyM(p.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(p.totalReceived)} | مانده: ${moneyM(p.totalClaims)}",
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
@@ -279,7 +284,7 @@ private fun SessionSettleRow(s: ProjectEntry, color: Color, onToggle: () -> Unit
             colors = CheckboxDefaults.colors(checkedColor = color)
         )
         Text(
-            "${s.day}/${s.month}/${s.year} — ${formatMoney(s.amount)}" +
+            "${s.day}/${s.month}/${s.year} — ${moneyM(s.amount)}" +
                 if (settled) " (تسویه)" else "",
             color = TextPrimary,
             fontSize = 12.sp,

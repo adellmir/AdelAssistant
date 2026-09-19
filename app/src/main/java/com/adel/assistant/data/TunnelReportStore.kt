@@ -347,19 +347,26 @@ object TunnelReportStore {
         fun toText(): String = buildString {
             appendLine("📍 کیلومتر ${"%.3f".format(km)}")
             nearest?.let {
-                appendLine("نزدیک‌ترین نقطه محور: ${it.pointNo} (km=${"%.3f".format(it.km)}, type=${it.type})")
+                appendLine("نزدیک‌ترین نقطه: ${it.pointNo} (km=${"%.3f".format(it.km)} | ${it.type})")
                 appendLine("X=${"%.3f".format(it.x)} Y=${"%.3f".format(it.y)} Z=${"%.3f".format(it.z)}")
             }
-            fun line(title: String, a: KmNeighbor?, b: KmNeighbor?) {
-                appendLine(title)
-                if (a != null) appendLine("  قبل: ${a.pointNo} @${"%.3f".format(a.km)} — فاصله ${"%.1f".format(a.distanceM)} m ${a.extra}".trimEnd())
-                else appendLine("  قبل: —")
-                if (b != null) appendLine("  بعد: ${b.pointNo} @${"%.3f".format(b.km)} — فاصله ${"%.1f".format(b.distanceM)} m ${b.extra}".trimEnd())
-                else appendLine("  بعد: —")
-            }
-            line("شفت قبل / بعد:", prevShaft, nextShaft)
-            line("آخرین گزارش حفاری قبل / بعد:", prevReport, nextReport)
-            line("نقطه کددار (sump/ch/tah/…) قبل / بعد:", prevCoded, nextCoded)
+            appendLine(
+                "فاصله از شفت ${prevShaft?.label ?: "—"} (${prevShaft?.let { "%.1f".format(it.distanceM) } ?: "—"} m) | فاصله تا شفت ${nextShaft?.label ?: "—"} (${nextShaft?.let { "%.1f".format(it.distanceM) } ?: "—"} m)"
+            )
+            appendLine(
+                "فاصله تا آخرین سینه کار حفر شده قبل: " + (prevReport?.let { "%.1f m (${it.pointNo})".format(it.distanceM) } ?: "—")
+            )
+            appendLine(
+                "فاصله تا آخرین سینه کار حفر شده بعد: " + (nextReport?.let { "%.1f m (${it.pointNo})".format(it.distanceM) } ?: "—")
+            )
+            val pc = prevCoded?.extra?.ifBlank { prevCoded?.pointNo } ?: prevCoded?.pointNo
+            val nc = nextCoded?.extra?.ifBlank { nextCoded?.pointNo } ?: nextCoded?.pointNo
+            appendLine(
+                "فاصله از آخرین نقطه کددار قبل${if (pc != null) " ($pc)" else ""}: " + (prevCoded?.let { "%.1f m".format(it.distanceM) } ?: "—")
+            )
+            appendLine(
+                "فاصله از آخرین نقطه کددار بعد${if (nc != null) " ($nc)" else ""}: " + (nextCoded?.let { "%.1f m".format(it.distanceM) } ?: "—")
+            )
         }.trimEnd()
     }
 

@@ -664,6 +664,7 @@ object AssistantAgent {
         return when {
             hasAny(msg,listOf("تسک","وظیفه"))->AgentReply(taskStats(context,categoryStore(msg)))
             hasAny(msg,listOf("تونل","شفت","پیشروی","کارکرد"))->AgentReply(tunnelStats(context))
+            hasAny(msg,listOf("پیشرفت تونل","پیشرفت","وضعیت تونل"))->AgentReply(tunnelProgressText(context))
             hasAny(msg,listOf("پروژه","مطالبه","کارفرما","فاکتور","دریافت"))->AgentReply(projectStats(context))
             else->AgentReply(statsOverview(context))
         }
@@ -671,6 +672,31 @@ object AssistantAgent {
 
     fun statsOverview(context: Context)= "📊 آمار کلی AdelAssistant\n\n${tunnelStats(context)}\n\n${projectStats(context)}\n\n${taskStats(context,null)}"
     private fun tunnelStats(context: Context)=try { val s=TunnelFinanceStore.summary(context); val points=runCatching{TunnelReportStore.allPoints(context).size}.getOrNull(); buildString { appendLine("🚇 تونل"); appendLine("جمع کارکرد: ${formatMoney(s.sumPayable)}"); appendLine("جمع دریافتی: ${formatMoney(s.sumReceived)}"); appendLine("مانده: ${formatMoney(s.remaining)}"); points?.let{append("تعداد نقاط ثبت‌شده: $it")} } } catch(e:Exception){"🚇 خطا در خواندن داده تونل: ${e.message}"}
-    private fun projectStats(context: Context)=try { val all=ProjectStore.all(context); val open=all.filter{it.remaining>0.0001}; buildString { appendLine("📁 پروژه‌ها"); appendLine("تعداد کل: ${all.size} | با مانده: ${open.size}"); appendLine("جمع کارکرد: ${formatMoney(all.sumOf{it.amount})}"); appendLine("جمع دریافتی: ${formatMoney(all.sumOf{it.settled})}"); appendLine("جمع مانده: ${formatMoney(all.sumOf{it.remaining.coerceAtLeast(0.0)})}"); open.sortedByDescending{it.remaining}.take(5).forEachIndexed{i,p->appendLine("${i+1}. ${p.name} — مانده ${formatMoney(p.remaining)}")} } } catch(e:Exception){"📁 خطا در خواندن پروژه‌ها: ${e.message}"}
+    
+    private fun tunnelProgressText(context: Context): String {
+        val byShaft = TunnelReportStore.TUNNEL_LAYOUT.groupBy { it.first }.toSortedMap()
+        return buildString {
+            appendLine("🚇 پیشرفت تونل")
+            byShaft.forEach { (shaftName, sides) ->
+                val less = sides.firstOrNull { (sh, side) -> TunnelReportStore.isTowardLessSide(sh, side) }
+                val more = sides.firstOrNull { (sh, side) -> !TunnelReportStore.isTowardLessSide(sh, side) }
+                fun block(sh: String, side: String): String {
+                    val km = TunnelReportStore.currentKm(context, sh, side)
+                    val fixed = TunnelReportStore.shaftFixedKm(context, sh) ?: km
+                    val p = kotlin.math.abs(km - fixed)
+                    val opp = if (normalizeSide(side) == "start" || normalizeSide(side) == "end") {
+                        TunnelReportStore.shaftFixedKm(context, normalizeSide(side)) ?: 0.0
+                    } else TunnelReportStore.currentKm(context, normalizeSide(side), sh)
+                    val r = kotlin.math.abs(km - opp)
+                    return "$side km=${"%.3f".format(km)} پ=${"%.1f".format(p)} م=${"%.1f".format(r)}"
+                }
+                appendLine("شفت $shaftName")
+                if (more != null) appendLine("  بیشتر: ${block(more.first, more.second)}")
+                if (less != null) appendLine("  کمتر: ${block(less.first, less.second)}")
+            }
+        }.trimEnd()
+    }
+
+    private fun projectStats(context: Context)=try { val all=ProjectStore.all(context); val open=all.filter{it.remaining>0.0001}; buildString { appendLine("📁 پروژه‌ها"); appendLine("تعداد کل: ${all.size} | با مانده: ${open.size}"); appendLine("جمع درآمد: ${"%.1f م".format(all.sumOf{it.amount}/1e6)}"); appendLine("جمع دریافتی: ${"%.1f م".format(all.sumOf{it.settled}/1e6)}"); appendLine("جمع مانده: ${"%.1f م".format(all.sumOf{it.remaining.coerceAtLeast(0.0)}/1e6)}"); open.sortedByDescending{it.remaining}.take(5).forEachIndexed{i,p->appendLine("${i+1}. ${p.name} — مانده ${formatMoney(p.remaining)}")} } } catch(e:Exception){"📁 خطا در خواندن پروژه‌ها: ${e.message}"}
     private fun todayPlan(context: Context):String = "📅 برنامه فعلی\n\n${taskStats(context,"tunnel_tasks")}\n\n${taskStats(context,"project_tasks")}" 
 }

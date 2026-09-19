@@ -119,6 +119,9 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var showTextInput by remember { mutableStateOf(false) }
 
     var showMapAlignDialog by remember { mutableStateOf(false) }
+    var alignTargetIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var alignDragKey by remember { mutableStateOf<Pair<Int, String>?>(null) } // row, src|dst
+
     var mapAlignUseScale by remember { mutableStateOf(true) }
     var mapAlignUseAverage by remember { mutableStateOf(false) }
     // هر ردیف: مبدا (name,e,n,z) + مقصد (name,e,n,z)
@@ -331,7 +334,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }
             mapAlignRows = rows
             message = "بارگذاری ${pts.size} نقطه در " + if (mapAlignLoadTarget == "src") "مبدا" else "مقصد"
-            showMapAlignDialog = true
+            if (alignTargetIds.isEmpty()) alignTargetIds = drawings.filter { it.visible }.map { it.id }.toSet()
+                                showMapAlignDialog = true
         } catch (e: Exception) {
             message = "خطا خواندن فایل: ${e.message}"
         }
@@ -826,7 +830,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                             mapAlignRows = rows
                                         }
                                         mapAlignPick = null
-                                        showMapAlignDialog = true
+                                        if (alignTargetIds.isEmpty()) alignTargetIds = drawings.filter { it.visible }.map { it.id }.toSet()
+                                showMapAlignDialog = true
                                         message = "مختصات از نقشه ثبت شد"
                                         return@detectTapGestures
                                     }
@@ -858,6 +863,26 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         annotPointNo = (lastAnnotPointNo + 1).toString()
                                         showAnnotPointNoDialog = true
                                         return@detectTapGestures
+                                    }
+
+                                    
+                                    // جابجایی مارکر الاین با فاصله انگشت
+                                    run {
+                                        val hitR = 40f
+                                        mapAlignRows.forEachIndexed { idx, row ->
+                                            fun tryHit(ei: Int, ni: Int, side: String): Boolean {
+                                                val e = row.getOrNull(ei)?.replace(',', '.')?.toDoubleOrNull() ?: return false
+                                                val n = row.getOrNull(ni)?.replace(',', '.')?.toDoubleOrNull() ?: return false
+                                                val s = worldToScreen(e, n)
+                                                if (kotlin.math.hypot(tap.x - s.x, tap.y - s.y) < hitR) {
+                                                    alignDragKey = idx to side
+                                                    message = "مارکر را با فاصله انگشت جابجا کن"
+                                                    return true
+                                                }
+                                                return false
+                                            }
+                                            if (tryHit(1, 2, "src") || tryHit(5, 6, "dst")) return@detectTapGestures
+                                        }
                                     }
 
                                     if (zoomWindowMode) {
@@ -935,6 +960,32 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             }
                         )
                     }
+                    .pointerInput(alignDragKey, scale, offset) {
+                        if (alignDragKey == null) return@pointerInput
+                        detectDragGestures(
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val key = alignDragKey ?: return@detectDragGestures
+                                val raw = screenToWorld(change.position.x, change.position.y)
+                                // فاصله: نقطه زیر انگشت نیست — همان مختصات انگشت به عنوان هدف
+                                val p = snapWorld(raw.first, raw.second)
+                                val e = String.format(java.util.Locale.US, "%.4f", p.first)
+                                val n = String.format(java.util.Locale.US, "%.4f", p.second)
+                                val rows = mapAlignRows.toMutableList()
+                                if (key.first in rows.indices) {
+                                    val r = rows[key.first].toMutableList()
+                                    if (key.second == "src") { r[1] = e; r[2] = n } else { r[5] = e; r[6] = n }
+                                    rows[key.first] = r
+                                    mapAlignRows = rows
+                                }
+                            },
+                            onDragEnd = {
+                                alignDragKey = null
+                                message = "مارکر جابجا شد"
+                            }
+                        )
+                    }
+
 
             ) {
                 canvasSize = Offset(size.width, size.height)
@@ -1033,7 +1084,30 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         drawLine(Color(0xFF69F0AE), prev, s, 2f)
                     }
                 }
-                // پیش‌نمایش ترسیم
+                
+                // مارکرهای الاین نقشه
+                mapAlignRows.forEachIndexed { idx, row ->
+                    fun pt(ei: Int, ni: Int): Pair<Double, Double>? {
+                        val e = row.getOrNull(ei)?.replace(',', '.')?.toDoubleOrNull() ?: return null
+                        val n = row.getOrNull(ni)?.replace(',', '.')?.toDoubleOrNull() ?: return null
+                        return e to n
+                    }
+                    pt(1, 2)?.let { (e, n) ->
+                        val s = worldToScreen(e, n)
+                        drawCircle(Color(0xFF4FC3F7), 10f, s, style = Stroke(3f))
+                        drawContext.canvas.nativeCanvas.drawText("S${idx+1}", s.x + 12f, s.y, android.graphics.Paint().apply {
+                            color = android.graphics.Color.CYAN; textSize = 28f; isAntiAlias = true
+                        })
+                    }
+                    pt(5, 6)?.let { (e, n) ->
+                        val s = worldToScreen(e, n)
+                        drawCircle(Color(0xFFFF8A65), 10f, s, style = Stroke(3f))
+                        drawContext.canvas.nativeCanvas.drawText("T${idx+1}", s.x + 12f, s.y, android.graphics.Paint().apply {
+                            color = android.graphics.Color.rgb(255,138,101); textSize = 28f; isAntiAlias = true
+                        })
+                    }
+                }
+// پیش‌نمایش ترسیم
                 draftPts.forEachIndexed { i, pt ->
                     val s = worldToScreen(pt.first, pt.second)
                     drawCircle(Color(0xFF00E5FF), 6f, s)
@@ -1207,6 +1281,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         IconButton(onClick = {
                             if (drawings.isEmpty()) message = "اول یک نقشه DXF/KML باز کن"
                             else {
+                                if (alignTargetIds.isEmpty()) alignTargetIds = drawings.filter { it.visible }.map { it.id }.toSet()
                                 showMapAlignDialog = true
                                 mapAlignManual = true
                             }
@@ -1791,6 +1866,18 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text("حداقل ۲ جفت مبدا → مقصد (پشت‌سرهم). شماره نقطه اختیاری است.", style = MaterialTheme.typography.bodySmall)
+                    Text("نقشه(های) هدف برای جابجایی:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    drawings.forEach { dr ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = dr.id in alignTargetIds,
+                                onCheckedChange = { on ->
+                                    alignTargetIds = if (on) alignTargetIds + dr.id else alignTargetIds - dr.id
+                                }
+                            )
+                            Text(dr.name, fontSize = 12.sp)
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         IconButton(onClick = {
                             mapAlignRows = mapAlignRows + listOf(listOf("", "", "", "", "", "", "", ""))
@@ -1895,7 +1982,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                         }
                         val (params, msg) = AlignTransform.alignMapPairs(pairs, mapAlignUseScale, mapAlignUseAverage)
                         drawings = drawings.map { dr ->
-                            dr.copy(model = AlignTransform.transformModel(dr.model, params))
+                            if (dr.id in alignTargetIds) dr.copy(model = AlignTransform.transformModel(dr.model, params))
+                            else dr
                         }
                         message = msg
                         showMapAlignDialog = false
