@@ -202,27 +202,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon
-            Button(
-                onClick = {
-                    dwgPicker.launch(
-                        arrayOf(
-                            "application/acad",
-                            "application/x-dwg",
-                            "application/octet-stream",
-                            "image/vnd.dwg",
-                            "*/*"
-                        )
-                    )
-                },
-                enabled = !convertingDwg,
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (convertingDwg) "در حال تبدیل DWG…" else "DWG → DXF (آنلاین/محلی)")
-            }
-
-Button(onClick = {
+                IconButton(onClick = {
                     picker.launch(arrayOf("*/*", "text/*", "application/octet-stream",
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 }) { Icon(Icons.Outlined.FolderOpen, "باز کردن", tint = color) }
@@ -244,6 +224,25 @@ Button(onClick = {
                 }, enabled = points.isNotEmpty()) {
                     Icon(Icons.Outlined.Close, "گزینش", tint = color)
                 }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    dwgPicker.launch(
+                        arrayOf(
+                            "application/acad",
+                            "application/x-dwg",
+                            "application/octet-stream",
+                            "image/vnd.dwg",
+                            "*/*"
+                        )
+                    )
+                },
+                enabled = !convertingDwg,
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (convertingDwg) "در حال تبدیل DWG…" else "DWG → DXF (آنلاین/محلی)")
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
