@@ -32,6 +32,12 @@ data class ShaftEntry(val name: String, val fixedKm: Double, val type: String)
 /** سمت «۰» و «start» برای شفت۱ معادل هم هستند؛ این تابع همیشه یک برچسب یکسان برمی‌گرداند */
 fun normalizeSide(side: String): String = if (side == "0") "start" else side
 
+/** نمایش سمت: start/end → اتصال تونل */
+fun sideDisplayName(side: String): String {
+    val s = normalizeSide(side)
+    return if (s.equals("start", true) || s.equals("end", true)) "اتصال تونل" else s
+}
+
 object TunnelReportStore {
     private const val REPORT_CSV = "survey_tunnel_report"
     private const val POINTS_TXT = "tunnel_points"
@@ -345,29 +351,21 @@ object TunnelReportStore {
         val nextCoded: KmNeighbor?
     ) {
         fun toText(): String = buildString {
-            appendLine("📍 کیلومتر ${"%.3f".format(km)}")
+            appendLine("📍 " + centerLabel())
             nearest?.let {
-                appendLine("نزدیک‌ترین نقطه: ${it.pointNo} (km=${"%.3f".format(it.km)} | ${it.type})")
                 appendLine("X=${"%.3f".format(it.x)} Y=${"%.3f".format(it.y)} Z=${"%.3f".format(it.z)}")
             }
-            appendLine(
-                "فاصله از شفت ${prevShaft?.label ?: "—"} (${prevShaft?.let { "%.1f".format(it.distanceM) } ?: "—"} m) | فاصله تا شفت ${nextShaft?.label ?: "—"} (${nextShaft?.let { "%.1f".format(it.distanceM) } ?: "—"} m)"
-            )
-            appendLine(
-                "فاصله تا آخرین سینه کار حفر شده قبل: " + (prevReport?.let { "%.1f m (${it.pointNo})".format(it.distanceM) } ?: "—")
-            )
-            appendLine(
-                "فاصله تا آخرین سینه کار حفر شده بعد: " + (nextReport?.let { "%.1f m (${it.pointNo})".format(it.distanceM) } ?: "—")
-            )
-            val pc = prevCoded?.extra?.ifBlank { prevCoded?.pointNo } ?: prevCoded?.pointNo
-            val nc = nextCoded?.extra?.ifBlank { nextCoded?.pointNo } ?: nextCoded?.pointNo
-            appendLine(
-                "فاصله از آخرین نقطه کددار قبل${if (pc != null) " ($pc)" else ""}: " + (prevCoded?.let { "%.1f m".format(it.distanceM) } ?: "—")
-            )
-            appendLine(
-                "فاصله از آخرین نقطه کددار بعد${if (nc != null) " ($nc)" else ""}: " + (nextCoded?.let { "%.1f m".format(it.distanceM) } ?: "—")
-            )
+            appendLine("— کمتر —")
+            appendLine("شفت ${prevShaft?.pointNo ?: "—"}: ${prevShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("حفاری: ${prevReport?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("کد ${prevCoded?.let { it.extra.ifBlank { it.pointNo } } ?: "—"}: ${prevCoded?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("— بیشتر —")
+            appendLine("شفت ${nextShaft?.pointNo ?: "—"}: ${nextShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("حفاری: ${nextReport?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("کد ${nextCoded?.let { it.extra.ifBlank { it.pointNo } } ?: "—"}: ${nextCoded?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
         }.trimEnd()
+        fun centerLabel(): String =
+            nearest?.let { "نقطه ${it.pointNo} / km ${"%.3f".format(km)}" } ?: "km ${"%.3f".format(km)}"
     }
 
     private fun isShaftType(type: String): Boolean {

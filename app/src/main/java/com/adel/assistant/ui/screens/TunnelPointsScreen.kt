@@ -129,6 +129,8 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                 }
             }
             results = listOf(nearest)
+            contextKm = nearest.km
+            contextCenter = "نزدیک‌ترین: ${nearest.pointNo}"
             autofillFromPoint(nearest)
             myLocationResult = formatEn(
                 "نزدیک‌ترین: نقطه %s — کیلومتر %.3f — فاصله حدود %.0f متر (دقت GPS تقریبی)",
@@ -160,14 +162,36 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
 
     fun search() {
         val byNo = if (pointNo.isNotBlank()) TunnelReportStore.findByPointNo(context, pointNo) else null
-        if (byNo != null) { autofillFromPoint(byNo); results = listOf(byNo); return }
-        val byKm = km.toDoubleOrNullFa()?.let { TunnelReportStore.findByKm(context, it) }
-        if (byKm != null) { autofillFromPoint(byKm); results = listOf(byKm); return }
+        if (byNo != null) {
+            autofillFromPoint(byNo)
+            results = listOf(byNo)
+            contextKm = byNo.km
+            contextCenter = "نقطه ${byNo.pointNo}"
+            return
+        }
+        val kmVal = km.toDoubleOrNullFa()
+        if (kmVal != null) {
+            val byKm = TunnelReportStore.findByKm(context, kmVal)
+            if (byKm != null) {
+                autofillFromPoint(byKm)
+                results = listOf(byKm)
+            } else {
+                results = emptyList()
+            }
+            contextKm = kmVal
+            contextCenter = "km ${"%.3f".format(kmVal)}"
+            return
+        }
         if (description.isNotBlank()) {
             results = TunnelReportStore.searchByKeyword(context, description)
+            val first = results.firstOrNull()
+            contextKm = first?.km
+            contextCenter = first?.let { "نقطه ${it.pointNo}" } ?: ""
             return
         }
         results = emptyList()
+        contextKm = null
+        contextCenter = ""
     }
 
     fun register() {
@@ -275,6 +299,11 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text("نتایج", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
+                val ck = contextKm
+        if (ck != null) {
+            KmContextCard(context, ck, contextCenter, color)
+        }
+
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(results) { p ->
                 val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
@@ -342,6 +371,62 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun KmContextCard(
+    context: android.content.Context,
+    km: Double,
+    centerLabel: String,
+    color: Color
+) {
+    val ctx = remember(km) { TunnelReportStore.kmContext(context, km) }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = SurfaceColor,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+    ) {
+        Row(
+            Modifier.padding(10.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // چپ: بیشتر
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "شفت ${ctx.nextShaft?.pointNo ?: "—"}: ${ctx.nextShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    color = Color(0xFF81C995), style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    "حفاری: ${ctx.nextReport?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    color = Color(0xFF9BA888), style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    "کد ${ctx.nextCoded?.let { it.extra.ifBlank { it.pointNo } } ?: "—"}: ${ctx.nextCoded?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    color = Color(0xFFB0B8A8), style = MaterialTheme.typography.labelSmall
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 4.dp)) {
+                Text(centerLabel.ifBlank { "km ${"%.3f".format(km)}" }, color = Color.White, style = MaterialTheme.typography.titleSmall)
+            }
+            // راست: کمتر
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                Text(
+                    "شفت ${ctx.prevShaft?.pointNo ?: "—"}: ${ctx.prevShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    color = Color(0xFFFFB74D), style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    "حفاری: ${ctx.prevReport?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    color = Color(0xFF9BA888), style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    "کد ${ctx.prevCoded?.let { it.extra.ifBlank { it.pointNo } } ?: "—"}: ${ctx.prevCoded?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    color = Color(0xFFB0B8A8), style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }
