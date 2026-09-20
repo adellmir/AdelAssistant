@@ -91,6 +91,23 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var showEmptyColorPalette by remember { mutableStateOf(false) }
     var showBaseMapDialog by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var menuGroup by remember { mutableStateOf<Int?>(null) } // 0..8
+    var showOsnapPanel by remember { mutableStateOf(false) }
+    var showMyLocPanel by remember { mutableStateOf(false) }
+    var pathPts by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
+    var pathMode by remember { mutableStateOf(false) } // مسافت چندنقطه‌ای
+    var pathEdit by remember { mutableStateOf(false) }
+    var pathFinished by remember { mutableStateOf(false) }
+    var areaPts by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
+    var areaMode by remember { mutableStateOf(false) }
+    var areaEdit by remember { mutableStateOf(false) }
+    var areaFinished by remember { mutableStateOf(false) }
+    var linePickIds by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) } // drawingId, lineIndex
+    var linePickMode by remember { mutableStateOf(false) }
+    var showCoordSub by remember { mutableStateOf(false) }
+    var showAreaSub by remember { mutableStateOf(false) }
+    var showSaveAndView by remember { mutableStateOf(false) }
+
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
@@ -809,7 +826,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         message = "نقطه ثبت شد؛ برای ثبت نقطه بعدی + را بزن"
                                         return@detectTapGestures
                                     }
-                                    if (!measureMode && mapAlignPick == null && cadTool == CadTool.None && !zoomWindowMode && annotMode.isEmpty()) return@detectTapGestures
+                                    if (!measureMode && mapAlignPick == null && cadTool == CadTool.None && !zoomWindowMode && annotMode.isEmpty() && !pathMode && !areaMode && !linePickMode) {
+                                            if (menuOpen) { menuOpen = false; menuGroup = null }
+                                            return@detectTapGestures
+                                        }
                                     val raw = screenToWorld(tap.x, tap.y)
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
@@ -885,7 +905,29 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         }
                                     }
 
-                                    if (zoomWindowMode) {
+                                    
+                                    if (pathMode && !pathFinished) {
+                                        val p = snapWorld(raw.first, raw.second)
+                                        pathPts = pathPts + p
+                                        message = "مسافت: ${pathPts.size} نقطه"
+                                        return@detectTapGestures
+                                    }
+                                    if (areaMode && !areaFinished) {
+                                        val p = snapWorld(raw.first, raw.second)
+                                        areaPts = areaPts + p
+                                        message = "مساحت: ${areaPts.size} رأس"
+                                        return@detectTapGestures
+                                    }
+                                    if (linePickMode) {
+                                        val hit = CadEngine.pickEntity(raw.first, raw.second, activeDrawings.map { it.id to it.model }, maxW)
+                                        if (hit is CadEntity.Line) {
+                                            val key = hit.drawingId to hit.index
+                                            linePickIds = if (key in linePickIds) linePickIds - key else linePickIds + key
+                                            message = "خطوط: ${linePickIds.size}"
+                                        }
+                                        return@detectTapGestures
+                                    }
+if (zoomWindowMode) {
                                         if (zoomWindowFirst == null) {
                                             zoomWindowFirst = p
                                             message = "گوشه دوم پنجره زوم"
@@ -1085,6 +1127,71 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
                 
+                
+                // مسیر مسافت
+                if (pathPts.isNotEmpty()) {
+                    for (i in 1 until pathPts.size) {
+                        val a = worldToScreen(pathPts[i-1].first, pathPts[i-1].second)
+                        val b = worldToScreen(pathPts[i].first, pathPts[i].second)
+                        drawLine(Color(0xFF4FC3F7), a, b, 3f)
+                    }
+                    pathPts.forEach { pt ->
+                        drawCircle(Color(0xFF4FC3F7), 6f, worldToScreen(pt.first, pt.second))
+                    }
+                    if (pathFinished && pathPts.size >= 2) {
+                        var sum = 0.0
+                        for (i in 1 until pathPts.size) {
+                            val dx = pathPts[i].first - pathPts[i-1].first
+                            val dy = pathPts[i].second - pathPts[i-1].second
+                            sum += kotlin.math.hypot(dx, dy)
+                        }
+                        val mid = pathPts[pathPts.size / 2]
+                        val s = worldToScreen(mid.first, mid.second)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            String.format(java.util.Locale.US, "%.2f m", sum),
+                            s.x, s.y - 12f,
+                            android.graphics.Paint().apply {
+                                this.color = android.graphics.Color.CYAN
+                                textSize = 32f
+                                isAntiAlias = true
+                            }
+                        )
+                    }
+                }
+                if (areaPts.size >= 2) {
+                    for (i in 1 until areaPts.size) {
+                        val a = worldToScreen(areaPts[i-1].first, areaPts[i-1].second)
+                        val b = worldToScreen(areaPts[i].first, areaPts[i].second)
+                        drawLine(Color(0xFFCE93D8), a, b, 3f)
+                    }
+                    if (areaPts.size >= 3) {
+                        val a0 = worldToScreen(areaPts[0].first, areaPts[0].second)
+                        val al = worldToScreen(areaPts.last().first, areaPts.last().second)
+                        drawLine(Color(0xFFCE93D8), al, a0, 2f)
+                    }
+                    if (areaFinished && areaPts.size >= 3) {
+                        var a = 0.0
+                        val n = areaPts.size
+                        for (i in 0 until n) {
+                            val j = (i + 1) % n
+                            a += areaPts[i].first * areaPts[j].second - areaPts[j].first * areaPts[i].second
+                        }
+                        a = kotlin.math.abs(a) / 2.0
+                        val cx = areaPts.map { it.first }.average()
+                        val cy = areaPts.map { it.second }.average()
+                        val s = worldToScreen(cx, cy)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            String.format(java.util.Locale.US, "%.2f m²", a),
+                            s.x, s.y,
+                            android.graphics.Paint().apply {
+                                this.color = android.graphics.Color.rgb(206, 147, 216)
+                                textSize = 34f
+                                isAntiAlias = true
+                            }
+                        )
+                    }
+                }
+
                 // مارکرهای الاین نقشه
                 mapAlignRows.forEachIndexed { idx, row ->
                     fun pt(ei: Int, ni: Int): Pair<Double, Double>? {
@@ -1218,97 +1325,296 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
 
         
-        // منوی شیشه‌ای کرکره‌ای — گوشه بالا راست
+
+        // ——— منوی شیشه‌ای ۹ ستونه + زیرمنوی عمود ———
+        val glass = Color(0x66FFFFFF)
+        val glassDark = Color(0xCC1A1F18)
+        fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
+        fun exitAllTools() {
+            cadTool = CadTool.None
+            measureMode = false
+            pathMode = false; pathEdit = false; pathFinished = false
+            areaMode = false; areaEdit = false; areaFinished = false
+            linePickMode = false
+            zoomWindowMode = false
+            annotMode = ""
+            mapAlignPick = null
+            closeMenus()
+            message = ""
+        }
+        val anyTool = cadTool != CadTool.None || measureMode || pathMode || areaMode || linePickMode ||
+            zoomWindowMode || annotMode.isNotEmpty() || mapAlignPick != null
+
         Column(
             Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
-                .zIndex(20f)
+                .zIndex(20f),
+            horizontalAlignment = Alignment.End
         ) {
+            // دکمه اصلی منو
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = Color(0x66FFFFFF),
+                color = glass,
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
                 modifier = Modifier.size(40.dp)
             ) {
-                IconButton(onClick = { menuOpen = !menuOpen }, modifier = Modifier.fillMaxSize()) {
+                IconButton(onClick = {
+                    if (anyTool) exitAllTools()
+                    else { menuOpen = !menuOpen; if (!menuOpen) menuGroup = null }
+                }, modifier = Modifier.fillMaxSize()) {
                     Icon(
-                        if (menuOpen) Icons.Filled.Close else Icons.Filled.Menu,
+                        if (anyTool || menuOpen) Icons.Filled.Close else Icons.Filled.Menu,
                         contentDescription = "منو",
                         tint = Color.White
                     )
                 }
             }
-            AnimatedVisibility(
-                visible = menuOpen,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xAA1B1B1B),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                    modifier = Modifier.padding(top = 6.dp).width(52.dp)
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(vertical = 4.dp)
+
+            if (menuOpen) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    // زیرمنوی افقی (عمود بر ستون اصلی) سمت چپ آیکن‌ها
+                    if (menuGroup != null) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = glassDark,
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Row(
+                                Modifier.padding(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                when (menuGroup) {
+                                    0 -> { // فایل
+                                        IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }) {
+                                            Icon(Icons.Filled.FolderOpen, "ورود DXF", tint = Color.White)
+                                        }
+                                        IconButton(onClick = { showLayers = true; closeMenus() }) {
+                                            Icon(Icons.Filled.Layers, "لایه‌ها", tint = Color.White)
+                                        }
+                                        IconButton(onClick = { showBaseMapDialog = true; closeMenus() }) {
+                                            Icon(Icons.Filled.Public, "پس‌زمینه", tint = Color.White)
+                                        }
+                                        IconButton(onClick = { showSaveDxfDialog = true; closeMenus() }) {
+                                            Icon(Icons.Filled.Save, "ذخیره", tint = Color.White)
+                                        }
+                                    }
+                                    1 -> { // مشاهده
+                                        IconButton(onClick = { fitTrigger++; closeMenus() }) {
+                                            Icon(Icons.Filled.ZoomOutMap, "فیت", tint = Color.White)
+                                        }
+                                        IconButton(onClick = {
+                                            zoomWindowMode = true; zoomWindowFirst = null
+                                            message = "زوم پنجره: دو گوشه"; closeMenus()
+                                        }) {
+                                            Icon(Icons.Filled.Crop, "زوم پنجره", tint = Color.White)
+                                        }
+                                        IconButton(onClick = {
+                                            gridOn = !gridOn; message = if (gridOn) "گرید روشن" else "گرید خاموش"; closeMenus()
+                                        }) {
+                                            Icon(Icons.Filled.GridOn, "گرید", tint = if (gridOn) Color(0xFF81C995) else Color.White)
+                                        }
+                                        IconButton(onClick = {
+                                            if (hasPermission) { readGps(); showMyLocPanel = true }
+                                            else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                            closeMenus()
+                                        }) {
+                                            Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White)
+                                        }
+                                    }
+                                    2 -> { // اندازه
+                                        IconButton(onClick = {
+                                            measureMode = true; measureA = null; measureB = null
+                                            pathMode = false; areaMode = false; linePickMode = false
+                                            message = "اندازه طول: دو نقطه"; closeMenus()
+                                        }) {
+                                            Icon(Icons.Filled.Straighten, "طول", tint = Color.White)
+                                        }
+                                        IconButton(onClick = {
+                                            pathMode = true; pathPts = emptyList(); pathFinished = false; pathEdit = false
+                                            measureMode = false; areaMode = false; linePickMode = false
+                                            message = "مسافت: نقاط را پشت‌سرهم لمس کن"; closeMenus()
+                                        }) {
+                                            Icon(Icons.Filled.MoreHoriz, "مسافت", tint = Color.White)
+                                        }
+                                        IconButton(onClick = {
+                                            linePickMode = true; linePickIds = emptyList()
+                                            measureMode = false; pathMode = false; areaMode = false
+                                            message = "خطوط را لمس کن"; closeMenus()
+                                        }) {
+                                            Icon(Icons.Filled.Remove, "طول خط", tint = Color.White)
+                                        }
+                                        IconButton(onClick = { showAreaSub = true }) {
+                                            Icon(Icons.Filled.CropSquare, "مساحت", tint = Color.White)
+                                        }
+                                        IconButton(onClick = { showCoordSub = true }) {
+                                            Icon(Icons.Filled.Place, "مختصات", tint = Color.White)
+                                        }
+                                    }
+                                    3 -> { // ترسیم
+                                        listOf(
+                                            CadTool.DrawLine to Icons.Filled.TrendingFlat,
+                                            CadTool.DrawCircle to Icons.Filled.RadioButtonUnchecked,
+                                            CadTool.DrawArc to Icons.Filled.Architecture,
+                                            CadTool.DrawText to Icons.Filled.Title
+                                        ).forEach { (tool, ic) ->
+                                            IconButton(onClick = {
+                                                cadTool = tool; draftPts = emptyList(); closeMenus()
+                                                message = tool.name
+                                            }) { Icon(ic, null, tint = Color.White) }
+                                        }
+                                    }
+                                    4 -> { // ویرایش
+                                        listOf(
+                                            CadTool.Select to Icons.Filled.NearMe,
+                                            CadTool.Move to Icons.Filled.OpenWith,
+                                            CadTool.Copy to Icons.Filled.ContentCopy
+                                        ).forEach { (tool, ic) ->
+                                            IconButton(onClick = {
+                                                cadTool = tool; draftPts = emptyList(); closeMenus()
+                                            }) { Icon(ic, null, tint = Color.White) }
+                                        }
+                                        IconButton(onClick = {
+                                            if (selected != null) deleteSelected() else {
+                                                cadTool = CadTool.Select; message = "اول انتخاب کن"
+                                            }
+                                            closeMenus()
+                                        }) { Icon(Icons.Filled.Delete, "حذف", tint = Color(0xFFE57373)) }
+                                    }
+                                    5 -> { // الاین
+                                        IconButton(onClick = {
+                                            if (alignTargetIds.isEmpty())
+                                                alignTargetIds = drawings.filter { it.visible }.map { it.id }.toSet()
+                                            showMapAlignDialog = true; closeMenus()
+                                        }) { Icon(Icons.Filled.Transform, "الاین", tint = Color.White) }
+                                        IconButton(onClick = { showDrawings = true; closeMenus() }) {
+                                            Icon(Icons.Filled.Map, "انتخاب DXF", tint = Color.White)
+                                        }
+                                    }
+                                    6 -> {
+                                        IconButton(onClick = { doUndo(); closeMenus() }) {
+                                            Icon(Icons.Filled.Undo, "عقب", tint = Color.White)
+                                        }
+                                    }
+                                    7 -> {
+                                        IconButton(onClick = { doRedo(); closeMenus() }) {
+                                            Icon(Icons.Filled.Redo, "جلو", tint = Color.White)
+                                        }
+                                    }
+                                    8 -> {
+                                        IconButton(onClick = { showOsnapPanel = true }) {
+                                            Icon(Icons.Filled.MyLocation, "OSNAP", tint = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // زیر-زیرمنو مختصات / مساحت
+                        if (showCoordSub && menuGroup == 2) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = glassDark,
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Column(Modifier.padding(6.dp)) {
+                                    TextButton(onClick = {
+                                        showCoordMenu = true; showCoordSub = false; closeMenus()
+                                    }) { Text("مختصات کنار نقطه / جدول", color = Color.White, fontSize = 11.sp) }
+                                    TextButton(onClick = {
+                                        showExportPickedDialog = true; showCoordSub = false; closeMenus()
+                                    }) { Text("خروجی مختصات", color = Color.White, fontSize = 11.sp) }
+                                }
+                            }
+                        }
+                        if (showAreaSub && menuGroup == 2) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = glassDark,
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Column(Modifier.padding(6.dp)) {
+                                    TextButton(onClick = {
+                                        // انتخاب پلی‌گون بسته از مدل — ساده: حالت دستی
+                                        areaMode = true; areaPts = emptyList(); areaFinished = false; areaEdit = false
+                                        showAreaSub = false; closeMenus()
+                                        message = "مساحت دستی: رئوس را لمس کن"
+                                    }) { Text("انتخاب دستی", color = Color.White, fontSize = 11.sp) }
+                                    TextButton(onClick = {
+                                        areaMode = true; areaPts = emptyList(); areaFinished = false
+                                        showAreaSub = false; closeMenus()
+                                        message = "پلی‌گون: رئوس پشت‌سرهم"
+                                    }) { Text("پلی‌گون بسته", color = Color.White, fontSize = 11.sp) }
+                                }
+                            }
+                        }
+                        if (showOsnapPanel && menuGroup == 8) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = glassDark,
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Column(Modifier.padding(8.dp)) {
+                                    listOf(
+                                        "نقطه" to osnap.end,
+                                        "وسط" to osnap.mid,
+                                        "تقاطع" to osnap.intersection
+                                    ).forEachIndexed { i, (lab, on) ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(on, {
+                                                osnap = when (i) {
+                                                    0 -> osnap.copy(end = it)
+                                                    1 -> osnap.copy(mid = it)
+                                                    else -> osnap.copy(intersection = it)
+                                                }
+                                            })
+                                            Text(lab, color = Color.White, fontSize = 12.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // ستون اصلی ۹ آیکن
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = glassDark,
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                     ) {
-                        IconButton(onClick = { openFile.launch(arrayOf("*/*")) }) {
-                            Icon(Icons.Filled.FolderOpen, null, tint = Color.White)
-                        }
-                        IconButton(onClick = { showDrawings = true }) {
-                            Icon(Icons.Filled.Map, null, tint = Color.White)
-                        }
-                        IconButton(onClick = { showLayers = true }) {
-                            Icon(Icons.Filled.Layers, null, tint = Color.White)
-                        }
-                        IconButton(onClick = { showBaseMapDialog = true }) {
-                            Icon(Icons.Filled.Public, null, tint = Color.White)
-                        }
-                        IconButton(onClick = {
-                            showCoordMenu = true
-                            menuOpen = false
-                        }) {
-                            Icon(Icons.Filled.MyLocation, null, tint = if (annotMode.isNotEmpty()) Color(0xFF81C995) else Color.White)
-                        }
-                        IconButton(onClick = { fitAll(canvasSize.x, canvasSize.y) }) {
-                            Icon(Icons.Filled.ZoomOutMap, null, tint = Color.White)
-                        }
-                        IconButton(onClick = { showCadPanel = true; menuOpen = false }) {
-                            Icon(Icons.Filled.Architecture, null, tint = if (cadTool != CadTool.None) Color(0xFF81C995) else Color.White)
-                        }
-                        IconButton(onClick = {
-                            if (drawings.isEmpty()) message = "اول یک نقشه DXF/KML باز کن"
-                            else {
-                                if (alignTargetIds.isEmpty()) alignTargetIds = drawings.filter { it.visible }.map { it.id }.toSet()
-                                showMapAlignDialog = true
-                                mapAlignManual = true
-                            }
-                        }) {
-                            Icon(
-                                Icons.Filled.OpenWith,
-                                contentDescription = "الاین نقشه",
-                                tint = Color.White
+                        Column(Modifier.padding(4.dp)) {
+                            val mainIcons = listOf(
+                                Icons.Filled.Folder to 0,
+                                Icons.Filled.Map to 1,
+                                Icons.Filled.Straighten to 2,
+                                Icons.Filled.Edit to 3,
+                                Icons.Filled.Edit to 4,
+                                Icons.Filled.Transform to 5,
+                                Icons.Filled.Undo to 6,
+                                Icons.Filled.Redo to 7,
+                                Icons.Filled.MyLocation to 8
                             )
-                        }
-                        IconButton(onClick = {
-                            measureMode = !measureMode
-                            measureDragTarget = null
-                            if (measureMode) {
-                                if (measureA == null) distanceMsg = "اندازه‌گذاری: نقطه اول را لمس کن (حساس به عارضه)"
-                                else updateMeasureDistance()
-                            } else {
-                                distanceMsg = null
+                            mainIcons.forEach { (ic, g) ->
+                                IconButton(
+                                    onClick = {
+                                        menuGroup = if (menuGroup == g) null else g
+                                        showCoordSub = false; showAreaSub = false; showOsnapPanel = false
+                                        if (g == 6) { doUndo() }
+                                        if (g == 7) { doRedo() }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(ic, null, tint = if (menuGroup == g) Color(0xFF81C995) else Color.White)
+                                }
                             }
-                        }) {
-                            Icon(Icons.Filled.Straighten, null, tint = if (measureMode) Color(0xFF81C995) else Color.White)
                         }
                     }
                 }
             }
         }
-
 
         FloatingActionButton(
             onClick = {
@@ -1338,6 +1644,38 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f)
                 )
+                if (pathMode && !pathFinished) {
+                    TextButton(onClick = {
+                        pathFinished = true
+                        message = "مسافت تمام — ویرایش فعال"
+                        pathEdit = true
+                    }) { Text("اتمام", fontSize = 11.sp) }
+                }
+                if (pathFinished) {
+                    TextButton(onClick = {
+                        pathPts = emptyList(); pathMode = false; pathFinished = false; pathEdit = false
+                    }) { Text("پاک مسافت", fontSize = 11.sp) }
+                }
+                if (areaMode && !areaFinished) {
+                    TextButton(onClick = {
+                        areaFinished = true; areaEdit = true
+                        message = "مساحت تمام"
+                    }) { Text("اتمام مساحت", fontSize = 11.sp) }
+                }
+                if (areaFinished) {
+                    TextButton(onClick = {
+                        areaPts = emptyList(); areaMode = false; areaFinished = false; areaEdit = false
+                    }) { Text("پاک مساحت", fontSize = 11.sp) }
+                }
+                if (linePickMode) {
+                    val sum = linePickIds.sumOf { (did, li) ->
+                        val dr = drawings.find { it.id == did } ?: return@sumOf 0.0
+                        val line = dr.model.lines.getOrNull(li) ?: return@sumOf 0.0
+                        kotlin.math.hypot(line.x2 - line.x1, line.y2 - line.y1)
+                    }
+                    Text(String.format(java.util.Locale.US, "جمع: %.2f m", sum), color = Color.White, fontSize = 11.sp)
+                    TextButton(onClick = { linePickIds = emptyList(); linePickMode = false }) { Text("پاک", fontSize = 11.sp) }
+                }
                 if (undoStack.isNotEmpty()) {
                     TextButton(onClick = { doUndo() }) { Text("Undo", fontSize = 11.sp) }
                 }
@@ -1347,6 +1685,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
             Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
         }
+    }
+
+
+    if (showMyLocPanel) {
+        AlertDialog(
+            onDismissRequest = { showMyLocPanel = false },
+            title = { Text("موقعیت من") },
+            text = { Text(message.ifBlank { "موقعیت روی نقشه اعمال شد" }) },
+            confirmButton = { TextButton(onClick = { showMyLocPanel = false }) { Text("بستن") } }
+        )
     }
 
     if (showBaseMapDialog) {
@@ -1642,19 +1990,35 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    try {
-                        val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
-                            if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
+                Row {
+                    TextButton(onClick = {
+                        try {
+                            val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
+                                if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
+                            }
+                            val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+                            FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+                            message = "ذخیره شد: $name"
+                        } catch (e: Exception) {
+                            message = "خطا ذخیره: ${e.message}"
                         }
-                        val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
-                        FileExport.exportTextToDocuments(context, name, body, "application/dxf")
-                        message = "ذخیره شد: $name"
-                    } catch (e: Exception) {
-                        message = "خطا ذخیره: ${e.message}"
-                    }
-                    showSaveDxfDialog = false
-                }) { Text("ذخیره") }
+                        showSaveDxfDialog = false
+                    }) { Text("ذخیره") }
+                    TextButton(onClick = {
+                        try {
+                            val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
+                                if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
+                            }
+                            val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+                            FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+                            PendingMapOpen.setDxf(body, name)
+                            message = "ذخیره و آماده نمایش: $name"
+                        } catch (e: Exception) {
+                            message = "خطا: ${e.message}"
+                        }
+                        showSaveDxfDialog = false
+                    }) { Text("ذخیره + نمایش") }
+                }
             },
             dismissButton = { TextButton(onClick = { showSaveDxfDialog = false }) { Text("لغو") } }
         )

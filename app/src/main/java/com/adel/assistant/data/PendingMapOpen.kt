@@ -4,9 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-/**
- * وقتی از مبدل/خروجی DXF ساخته می‌شود، متن را نگه می‌دارد تا نمایش نقشه باز کند.
- */
 object PendingMapOpen {
     var pendingDxfText by mutableStateOf<String?>(null)
         private set
@@ -17,6 +14,8 @@ object PendingMapOpen {
         pendingDxfText = text
         pendingName = name
     }
+
+    fun set(text: String, name: String) = setDxf(text, name)
 
     fun consume(): Pair<String, String>? {
         val t = pendingDxfText ?: return null
