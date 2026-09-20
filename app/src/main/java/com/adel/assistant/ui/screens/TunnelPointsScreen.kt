@@ -62,6 +62,8 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     var isEditMode by remember { mutableStateOf(false) }
     var editingOriginalNo by remember { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf(listOf<TunnelPoint>()) }
+    var contextKm by remember { mutableStateOf<Double?>(null) }
+    var contextCenter by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
     var myLocationResult by remember { mutableStateOf<String?>(null) }

@@ -100,18 +100,22 @@ object FileExport {
                 n.contains("tunel-report") ||
                 n.contains("tunnel_report") ||
                 n.contains("tunnel-report") ||
-                Regex("""^b\d{4}\.xlsx$""").matches(n) ||
-                (n.startsWith("b") && n.endsWith(".xlsx") && n.length in 8..14) -> "tunel-report"
+                n.contains("daily") && n.endsWith(".xlsx") ||
+                Regex("""^b\d{4,6}\.xlsx$""").matches(n) ||
+                (n.startsWith("b") && n.endsWith(".xlsx") && n.length in 8..16) ||
+                (n.startsWith("a") && n.endsWith(".xlsx") && n.length in 8..16) -> "tunel-report"
             // فاکتور
-            n.startsWith("invoice") || n.contains("invoice") || n.contains("فاکتور") -> "invoice"
+            n.startsWith("invoice") || n.contains("invoice") || n.contains("فاکتور") || n.contains("factor") -> "invoice"
             // نامه
             n.startsWith("letter") || n.contains("letter") || n.contains("leter") || n.contains("نامه") -> "letter"
-            n.contains("backup") || n.endsWith(".zip") && n.contains("backup") -> "backup"
+            n.contains("backup") || (n.endsWith(".zip") && n.contains("backup")) || n.contains("پشتیبان") -> "backup"
             n.endsWith(".dxf") || mime.contains("dxf") -> "dxf"
             n.endsWith(".gsi") || mime.contains("gsi") -> "gsi"
             n.endsWith(".kml") || n.endsWith(".kmz") || mime.contains("google-earth") || mime.contains("kml") -> "kml"
             n.endsWith(".pdf") || mime.contains("pdf") -> "pdf"
-            n.endsWith(".txt") || n.endsWith(".csv") || n.endsWith(".dat") -> "txt"
+            n.endsWith(".txt") || n.endsWith(".csv") || n.endsWith(".dat") || n.endsWith(".xyz") -> "txt"
+            // xlsx عمومی بدون تشخیص → ریشه نه؛ اگر mime spreadsheet و نام مبهم
+            n.endsWith(".xlsx") && mime.contains("sheet") -> "txt"
             else -> ""
         }
     }
