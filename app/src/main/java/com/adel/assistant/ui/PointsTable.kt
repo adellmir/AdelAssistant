@@ -43,6 +43,7 @@ fun PointsSpreadsheet(
     onToggleSelect: ((Long, Boolean) -> Unit)? = null,
     onChange: (GsiPoint) -> Unit,
     onDelete: ((GsiPoint) -> Unit)? = null,
+    onMove: ((GsiPoint) -> Unit)? = null,
     rowBackground: Color = Color(0xFF1E241A),
     headerBackground: Color = Color(0xFF2A3324)
 ) {
@@ -54,6 +55,7 @@ fun PointsSpreadsheet(
     val wZ = 78.dp
     val wD = 70.dp
     val wDel = 36.dp
+    val wMove = 36.dp
 
     Column(modifier) {
         Row(
@@ -104,6 +106,17 @@ fun PointsSpreadsheet(
                         s.replace(',', '.').toDoubleOrNull()?.let { onChange(p.copy(z = it)) }
                     }
                     CellField(p.code, wD) { onChange(p.copy(code = it)) }
+                    if (onMove != null) {
+                        Text(
+                            "↔",
+                            color = Color(0xFF81C995),
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .width(wMove)
+                                .clickable { onMove(p) }
+                                .padding(6.dp)
+                        )
+                    }
                     if (onDelete != null) {
                         Text(
                             "✕",

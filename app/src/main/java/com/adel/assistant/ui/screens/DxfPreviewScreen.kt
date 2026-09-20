@@ -134,6 +134,9 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     var drawLayer by remember { mutableStateOf("CAD") }
     var textDraft by remember { mutableStateOf("متن") }
     var showTextInput by remember { mutableStateOf(false) }
+    var showCircleRadiusDialog by remember { mutableStateOf(false) }
+    var circleCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var circleRadiusText by remember { mutableStateOf("1") }
 
     var showMapAlignDialog by remember { mutableStateOf(false) }
     var alignTargetIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
@@ -476,7 +479,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
         when (cadTool) {
             CadTool.Select -> {
-                val maxW = (24f / scale.coerceAtLeast(1e-6f)).toDouble()
+                val maxW = (40f / scale.coerceAtLeast(1e-6f)).toDouble()
                 selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                 showProps = selected != null
                 message = if (selected != null) "شیء انتخاب شد" else "چیزی انتخاب نشد"
@@ -531,18 +534,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                 message = "پلی‌لاین: ${draftPts.size} رأس — ابزار را ببند برای پایان"
             }
             CadTool.DrawCircle -> {
-                if (draftPts.isEmpty()) {
-                    draftPts = listOf(p)
-                    message = "نقطه روی محیط دایره"
-                } else {
-                    val c = draftPts[0]
-                    val r = CadEngine.hypot(p.first - c.first, p.second - c.second)
-                    mutateCad { m ->
-                        m.copy(circles = m.circles + DxfCircle(c.first, c.second, r, drawLayer, 1))
-                    }
-                    draftPts = emptyList()
-                    message = "دایره ترسیم شد"
-                }
+                circleCenter = p
+                circleRadiusText = "1"
+                showCircleRadiusDialog = true
+                message = "شعاع دایره را وارد کن"
             }
             CadTool.DrawArc -> {
                 // تقریبی: سه نقطه → وتر + کمان ساده با دایره
@@ -566,7 +561,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }
             CadTool.Move, CadTool.Copy -> {
                 if (selected == null) {
-                    val maxW = (24f / scale.coerceAtLeast(1e-6f)).toDouble()
+                    val maxW = (40f / scale.coerceAtLeast(1e-6f)).toDouble()
                     selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                     draftPts = if (selected != null) listOf(p) else emptyList()
                     message = if (selected != null) "مقصد را لمس کن" else "اول شیء را انتخاب کن"
@@ -804,7 +799,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                             }
                         )
                     }
-                    .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId) {
+                    .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId, cadTool, pathMode, areaMode, linePickMode, zoomWindowMode, annotMode, mapAlignPick, pathFinished, areaFinished) {
                         if (editingPointId == null) {
                             detectTapGestures(
                                 onDoubleTap = { tap ->
@@ -1081,17 +1076,21 @@ if (zoomWindowMode) {
                         drawLine(col, Offset(p.x-r,p.y), Offset(p.x+r,p.y), 1.8f)
                         drawLine(col, Offset(p.x,p.y-r), Offset(p.x,p.y+r), 1.8f)
                     }
-                    m.texts.forEach { t ->
-                        val layer = m.layers[t.layer]
+                    m.texts.forEach { tx ->
+                        val layer = m.layers[tx.layer]
                         if (layer?.visible == false) return@forEach
-                        val col = layer?.displayColor ?: DxfParser.aciToColor(if (t.color in 1..255) t.color else layer?.colorAci ?: 7)
-                        val p = worldToScreen(t.x, t.y)
+                        val col = layer?.displayColor ?: DxfParser.aciToColor(if (tx.color in 1..255) tx.color else layer?.colorAci ?: 7)
+                        val p = worldToScreen(tx.x, tx.y)
+                        val realPx = (tx.height * scale).toFloat()
+                        val minScreen = minOf(size.width, size.height) * 0.028f // حدود ۲٫۸٪ صفحه تا خوانا بماند
+                        val maxScreen = minOf(size.width, size.height) * 0.12f
+                        val ts = maxOf(realPx, minScreen).coerceAtMost(maxScreen).coerceAtLeast(10f)
                         val paint = android.graphics.Paint().apply {
                             this.color = col.toArgb()
-                            textSize = (t.height * scale).toFloat().coerceIn(12f, 48f)
+                            textSize = ts
                             isAntiAlias = true
                         }
-                        drawContext.canvas.nativeCanvas.drawText(t.text, p.x, p.y, paint)
+                        drawContext.canvas.nativeCanvas.drawText(tx.text, p.x, p.y, paint)
                     }
                 }
 
@@ -1139,24 +1138,42 @@ if (zoomWindowMode) {
                     pathPts.forEach { pt ->
                         drawCircle(Color(0xFF4FC3F7), 6f, worldToScreen(pt.first, pt.second))
                     }
-                    if (pathFinished && pathPts.size >= 2) {
+                    if (pathPts.size >= 2) {
                         var sum = 0.0
                         for (i in 1 until pathPts.size) {
                             val dx = pathPts[i].first - pathPts[i-1].first
                             val dy = pathPts[i].second - pathPts[i-1].second
-                            sum += kotlin.math.hypot(dx, dy)
-                        }
-                        val mid = pathPts[pathPts.size / 2]
-                        val s = worldToScreen(mid.first, mid.second)
-                        drawContext.canvas.nativeCanvas.drawText(
-                            String.format(java.util.Locale.US, "%.2f m", sum),
-                            s.x, s.y - 12f,
-                            android.graphics.Paint().apply {
-                                this.color = android.graphics.Color.CYAN
-                                textSize = 32f
-                                isAntiAlias = true
+                            val seg = kotlin.math.hypot(dx, dy)
+                            sum += seg
+                            if (pathFinished) {
+                                val mx = (pathPts[i-1].first + pathPts[i].first) / 2.0
+                                val my = (pathPts[i-1].second + pathPts[i].second) / 2.0
+                                val s = worldToScreen(mx, my)
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    String.format(java.util.Locale.US, "%.2f", seg),
+                                    s.x, s.y - 4f,
+                                    android.graphics.Paint().apply {
+                                        this.color = android.graphics.Color.CYAN
+                                        textSize = 26f
+                                        isAntiAlias = true
+                                    }
+                                )
                             }
-                        )
+                        }
+                        if (pathFinished) {
+                            val end = pathPts.last()
+                            val s = worldToScreen(end.first, end.second)
+                            drawContext.canvas.nativeCanvas.drawText(
+                                String.format(java.util.Locale.US, "Σ %.2f m", sum),
+                                s.x + 10f, s.y - 16f,
+                                android.graphics.Paint().apply {
+                                    this.color = android.graphics.Color.YELLOW
+                                    textSize = 34f
+                                    isAntiAlias = true
+                                    isFakeBoldText = true
+                                }
+                            )
+                        }
                     }
                 }
                 if (areaPts.size >= 2) {
@@ -1656,10 +1673,27 @@ if (zoomWindowMode) {
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f)
                 )
+                if (pathMode && pathPts.size >= 2) {
+                    val pathSum = run {
+                        var s = 0.0
+                        for (i in 1 until pathPts.size) {
+                            s += kotlin.math.hypot(
+                                pathPts[i].first - pathPts[i-1].first,
+                                pathPts[i].second - pathPts[i-1].second
+                            )
+                        }
+                        s
+                    }
+                    Text(
+                        String.format(java.util.Locale.US, "مسیر: %.2f m", pathSum),
+                        color = Color(0xFF4FC3F7),
+                        fontSize = 11.sp
+                    )
+                }
                 if (pathMode && !pathFinished) {
                     TextButton(onClick = {
                         pathFinished = true
-                        message = "مسافت تمام — ویرایش فعال"
+                        message = "مسافت تمام — طول هر قطعه و جمع کل روی نقشه"
                         pathEdit = true
                     }) { Text("اتمام", fontSize = 11.sp) }
                 }
@@ -1706,6 +1740,43 @@ if (zoomWindowMode) {
             title = { Text("موقعیت من") },
             text = { Text(message.ifBlank { "موقعیت روی نقشه اعمال شد" }) },
             confirmButton = { TextButton(onClick = { showMyLocPanel = false }) { Text("بستن") } }
+        )
+    }
+
+
+    if (showCircleRadiusDialog && circleCenter != null) {
+        AlertDialog(
+            onDismissRequest = { showCircleRadiusDialog = false; circleCenter = null },
+            title = { Text("شعاع دایره (متر)") },
+            text = {
+                OutlinedTextField(
+                    circleRadiusText,
+                    { circleRadiusText = it },
+                    label = { Text("شعاع") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val r = circleRadiusText.replace(',', '.').toDoubleOrNull()
+                    val c = circleCenter
+                    if (r != null && r > 0 && c != null) {
+                        mutateCad { m ->
+                            m.copy(circles = m.circles + DxfCircle(c.first, c.second, r, drawLayer, 1))
+                        }
+                        message = "دایره با شعاع ${"%.3f".format(r)} ترسیم شد"
+                    }
+                    showCircleRadiusDialog = false
+                    circleCenter = null
+                    draftPts = emptyList()
+                }) { Text("ثبت") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCircleRadiusDialog = false
+                    circleCenter = null
+                }) { Text("لغو") }
+            }
         )
     }
 
@@ -1802,11 +1873,16 @@ if (zoomWindowMode) {
                         onDelete = { g ->
                             pickedPoints = pickedPoints.filterNot { it.id.toLong() == g.id }
                         },
+                        onMove = { g ->
+                            editingPointId = g.id.toInt()
+                            showPointsDialog = false
+                            message = "نقطه ${g.name}: انگشت را دور از نقطه بکش تا جابجا شود؛ سپس تأیید"
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 360.dp)
                     )
-                    Text("سلول را بزن و ویرایش کن؛ ✕ = حذف. برای جابجایی روی نقشه از آیکن ویرایش قبلی استفاده کن.", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text("سلول = ویرایش عدد  |  ↔ = جابجایی روی نقشه  |  ✕ = حذف", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 }
 
             },
