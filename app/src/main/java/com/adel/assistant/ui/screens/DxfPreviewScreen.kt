@@ -919,6 +919,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         return@detectTapGestures
                                     }
                                     if (linePickMode) {
+                                        val maxW = (24f / scale.coerceAtLeast(1e-6f)).toDouble()
                                         val hit = CadEngine.pickEntity(raw.first, raw.second, activeDrawings.map { it.id to it.model }, maxW)
                                         if (hit is CadEntity.Line) {
                                             val key = hit.drawingId to hit.index
