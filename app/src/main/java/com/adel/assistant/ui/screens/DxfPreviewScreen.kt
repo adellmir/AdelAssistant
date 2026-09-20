@@ -1588,27 +1588,38 @@ if (zoomWindowMode) {
                     ) {
                         Column(Modifier.padding(4.dp)) {
                             val mainIcons = listOf(
-                                Icons.Filled.Folder to 0,
-                                Icons.Filled.Map to 1,
-                                Icons.Filled.Straighten to 2,
-                                Icons.Filled.Edit to 3,
-                                Icons.Filled.Edit to 4,
-                                Icons.Filled.Transform to 5,
-                                Icons.Filled.Undo to 6,
-                                Icons.Filled.Redo to 7,
-                                Icons.Filled.MyLocation to 8
+                                Triple(Icons.Filled.Folder, 0, "فایل"),
+                                Triple(Icons.Filled.Map, 1, "نمایش"),
+                                Triple(Icons.Filled.Straighten, 2, "اندازه"),
+                                Triple(Icons.Filled.Create, 3, "ترسیم"),
+                                Triple(Icons.Filled.Build, 4, "ویرایش"),
+                                Triple(Icons.Filled.Transform, 5, "الاین"),
+                                Triple(Icons.Filled.Undo, 6, "عقب"),
+                                Triple(Icons.Filled.Redo, 7, "جلو"),
+                                Triple(Icons.Filled.MyLocation, 8, "گیر")
                             )
-                            mainIcons.forEach { (ic, g) ->
-                                IconButton(
-                                    onClick = {
-                                        menuGroup = if (menuGroup == g) null else g
-                                        showCoordSub = false; showAreaSub = false; showOsnapPanel = false
-                                        if (g == 6) { doUndo() }
-                                        if (g == 7) { doRedo() }
-                                    },
-                                    modifier = Modifier.size(40.dp)
+                            mainIcons.forEach { (ic, g, label) ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.width(48.dp).padding(vertical = 2.dp)
                                 ) {
-                                    Icon(ic, null, tint = if (menuGroup == g) Color(0xFF81C995) else Color.White)
+                                    IconButton(
+                                        onClick = {
+                                            menuGroup = if (menuGroup == g) null else g
+                                            showCoordSub = false; showAreaSub = false; showOsnapPanel = false
+                                            if (g == 6) { doUndo() }
+                                            if (g == 7) { doRedo() }
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(ic, null, tint = if (menuGroup == g) Color(0xFF81C995) else Color.White, modifier = Modifier.size(22.dp))
+                                    }
+                                    Text(
+                                        label,
+                                        color = if (menuGroup == g) Color(0xFF81C995) else Color.White.copy(alpha = 0.85f),
+                                        fontSize = 9.sp,
+                                        maxLines = 1
+                                    )
                                 }
                             }
                         }
