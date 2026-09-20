@@ -397,10 +397,15 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             val g = CadEngine.snapToGrid(x, y, gridStep)
             x = g.first; y = g.second
         }
-        val maxW = (28f / scale.coerceAtLeast(1e-6f)).toDouble()
+        // گیر OSNAP: حداقل ۰٫۵ متر یا حدود ۴۸ پیکسل صفحه
+        val maxW = (48f / scale.coerceAtLeast(1e-6f)).toDouble().coerceAtLeast(0.5)
         val models = activeDrawings.map { it.id to it.model }
         return CadEngine.snap(x, y, models, osnap, maxW, ref)
     }
+
+    fun pickToleranceWorld(): Double =
+        (56f / scale.coerceAtLeast(1e-6f)).toDouble().coerceAtLeast(0.8)
+
 
     
     fun pushUndo() {
@@ -479,7 +484,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
         }
         when (cadTool) {
             CadTool.Select -> {
-                val maxW = (40f / scale.coerceAtLeast(1e-6f)).toDouble()
+                val maxW = pickToleranceWorld()
                 selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                 showProps = selected != null
                 message = if (selected != null) "شیء انتخاب شد" else "چیزی انتخاب نشد"
@@ -561,7 +566,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
             }
             CadTool.Move, CadTool.Copy -> {
                 if (selected == null) {
-                    val maxW = (40f / scale.coerceAtLeast(1e-6f)).toDouble()
+                    val maxW = pickToleranceWorld()
                     selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                     draftPts = if (selected != null) listOf(p) else emptyList()
                     message = if (selected != null) "مقصد را لمس کن" else "اول شیء را انتخاب کن"
@@ -914,7 +919,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                         return@detectTapGestures
                                     }
                                     if (linePickMode) {
-                                        val maxW = (24f / scale.coerceAtLeast(1e-6f)).toDouble()
+                                        val maxW = pickToleranceWorld()
                                         val hit = CadEngine.pickEntity(raw.first, raw.second, activeDrawings.map { it.id to it.model }, maxW)
                                         if (hit is CadEntity.Line) {
                                             val key = hit.drawingId to hit.index
@@ -1023,6 +1028,16 @@ if (zoomWindowMode) {
                             }
                         )
                     }
+                    .pointerInput(cadTool, scale, offset, osnap) {
+                        if (cadTool == CadTool.None) return@pointerInput
+                        detectTapGestures(
+                            onTap = { tap ->
+                                val raw = screenToWorld(tap.x, tap.y)
+                                processCadPoint(raw)
+                            }
+                        )
+                    }
+
 
 
             ) {
@@ -1094,6 +1109,30 @@ if (zoomWindowMode) {
                     }
                 }
 
+
+                
+                // هایلایت شیء انتخاب‌شده
+                selected?.let { sel ->
+                    val col = Color(0xFFFFEB3B)
+                    when (sel) {
+                        is CadEntity.Line -> {
+                            val a = worldToScreen(sel.line.x1, sel.line.y1)
+                            val b = worldToScreen(sel.line.x2, sel.line.y2)
+                            drawLine(col, a, b, 5f)
+                            drawCircle(col, 8f, a)
+                            drawCircle(col, 8f, b)
+                        }
+                        is CadEntity.Circle -> {
+                            val c = worldToScreen(sel.circle.x, sel.circle.y)
+                            val r = (sel.circle.r * scale).toFloat().coerceAtLeast(6f)
+                            drawCircle(col, r, c, style = Stroke(4f))
+                        }
+                        is CadEntity.Text -> {
+                            val p = worldToScreen(sel.text.x, sel.text.y)
+                            drawCircle(col, 10f, p, style = Stroke(3f))
+                        }
+                    }
+                }
 
                 // شبکه
                 if (gridOn && scale > 0.01f) {
@@ -1274,10 +1313,21 @@ if (zoomWindowMode) {
                 pickedPoints.forEach { p ->
                     val s = worldToScreen(p.easting, p.northing)
                     val active = p.id == editingPointId
-                    val r = if (active) 22f else 17f
-                    drawCircle(Color(0xFFFFC107), r, s, style = Stroke(width = if (active) 4f else 3f))
-                    drawLine(Color(0xFFFFC107), Offset(s.x - r, s.y), Offset(s.x + r, s.y), if (active) 3f else 2f)
-                    drawLine(Color(0xFFFFC107), Offset(s.x, s.y - r), Offset(s.x, s.y + r), if (active) 3f else 2f)
+                    val col = if (active) Color(0xFFFFEB3B) else Color(0xFF4FC3F7)
+                    drawCircle(col, if (active) 10f else 7f, s, style = Stroke(2.5f))
+                    drawLine(col, Offset(s.x - 8f, s.y), Offset(s.x + 8f, s.y), 2f)
+                    drawLine(col, Offset(s.x, s.y - 8f), Offset(s.x, s.y + 8f), 2f)
+                    // شماره نقطه همیشه کنار موقعیت فعلی (موقعیت قبلی پاک می‌شود چون هر فریم دوباره کشیده می‌شود)
+                    drawContext.canvas.nativeCanvas.drawText(
+                        p.id.toString(),
+                        s.x + 12f, s.y - 8f,
+                        android.graphics.Paint().apply {
+                            this.color = if (active) android.graphics.Color.YELLOW else android.graphics.Color.CYAN
+                            textSize = 28f
+                            isAntiAlias = true
+                            isFakeBoldText = true
+                        }
+                    )
                 }
                 editTarget?.let { target ->
                     val s = worldToScreen(target.first, target.second)
@@ -1347,6 +1397,15 @@ if (zoomWindowMode) {
         // ——— منوی شیشه‌ای ۹ ستونه + زیرمنوی عمود ———
         val glass = Color(0x66FFFFFF)
         val glassDark = Color(0xCC1A1F18)
+        @Composable
+        fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = Color.White, onClick: () -> Unit) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).padding(horizontal = 2.dp)) {
+                IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(22.dp))
+                }
+                Text(label, color = tint.copy(alpha = 0.9f), fontSize = 9.sp, maxLines = 1)
+            }
+        }
         fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
         fun exitAllTools() {
             cadTool = CadTool.None
@@ -1406,110 +1465,90 @@ if (zoomWindowMode) {
                             ) {
                                 when (menuGroup) {
                                     0 -> { // فایل
-                                        IconButton(onClick = { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }) {
-                                            Icon(Icons.Filled.FolderOpen, "ورود DXF", tint = Color.White)
-                                        }
-                                        IconButton(onClick = { showLayers = true; closeMenus() }) {
-                                            Icon(Icons.Filled.Layers, "لایه‌ها", tint = Color.White)
-                                        }
-                                        IconButton(onClick = { showBaseMapDialog = true; closeMenus() }) {
-                                            Icon(Icons.Filled.Public, "پس‌زمینه", tint = Color.White)
-                                        }
-                                        IconButton(onClick = { showSaveDxfDialog = true; closeMenus() }) {
-                                            Icon(Icons.Filled.Save, "ذخیره", tint = Color.White)
-                                        }
+                                        GlassIcon(Icons.Filled.FolderOpen, "ورود") { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }
+                                        GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
+                                        GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
+                                        GlassIcon(Icons.Filled.Save, "ذخیره") { showSaveDxfDialog = true; closeMenus() }
                                     }
                                     1 -> { // مشاهده
-                                        IconButton(onClick = { fitTrigger++; closeMenus() }) {
-                                            Icon(Icons.Filled.ZoomOutMap, "فیت", tint = Color.White)
-                                        }
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.ZoomOutMap, "فیت") { fitTrigger++; closeMenus() }
+                                        GlassIcon(Icons.Filled.Crop, "پنجره") {
                                             zoomWindowMode = true; zoomWindowFirst = null
                                             message = "زوم پنجره: دو گوشه"; closeMenus()
-                                        }) {
-                                            Icon(Icons.Filled.Crop, "زوم پنجره", tint = Color.White)
                                         }
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.GridOn, "گرید", if (gridOn) Color(0xFF81C995) else Color.White) {
                                             gridOn = !gridOn; message = if (gridOn) "گرید روشن" else "گرید خاموش"; closeMenus()
-                                        }) {
-                                            Icon(Icons.Filled.GridOn, "گرید", tint = if (gridOn) Color(0xFF81C995) else Color.White)
                                         }
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.MyLocation, "موقعیت") {
                                             if (hasPermission) { readGps(); showMyLocPanel = true }
                                             else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                             closeMenus()
-                                        }) {
-                                            Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White)
                                         }
                                     }
                                     2 -> { // اندازه
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.Straighten, "طول") {
                                             measureMode = true; measureA = null; measureB = null
                                             pathMode = false; areaMode = false; linePickMode = false
+                                            cadTool = CadTool.None
                                             message = "اندازه طول: دو نقطه"; closeMenus()
-                                        }) {
-                                            Icon(Icons.Filled.Straighten, "طول", tint = Color.White)
                                         }
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.MoreHoriz, "مسافت") {
                                             pathMode = true; pathPts = emptyList(); pathFinished = false; pathEdit = false
                                             measureMode = false; areaMode = false; linePickMode = false
+                                            cadTool = CadTool.None
                                             message = "مسافت: نقاط را پشت‌سرهم لمس کن"; closeMenus()
-                                        }) {
-                                            Icon(Icons.Filled.MoreHoriz, "مسافت", tint = Color.White)
                                         }
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.Remove, "خط") {
                                             linePickMode = true; linePickIds = emptyList()
                                             measureMode = false; pathMode = false; areaMode = false
+                                            cadTool = CadTool.None
                                             message = "خطوط را لمس کن"; closeMenus()
-                                        }) {
-                                            Icon(Icons.Filled.Remove, "طول خط", tint = Color.White)
                                         }
-                                        IconButton(onClick = { showAreaSub = true }) {
-                                            Icon(Icons.Filled.CropSquare, "مساحت", tint = Color.White)
-                                        }
-                                        IconButton(onClick = { showCoordSub = true }) {
-                                            Icon(Icons.Filled.Place, "مختصات", tint = Color.White)
-                                        }
+                                        GlassIcon(Icons.Filled.CropSquare, "مساحت") { showAreaSub = true }
+                                        GlassIcon(Icons.Filled.Place, "مختصات") { showCoordSub = true }
                                     }
                                     3 -> { // ترسیم
-                                        listOf(
-                                            CadTool.DrawLine to Icons.Filled.TrendingFlat,
-                                            CadTool.DrawCircle to Icons.Filled.RadioButtonUnchecked,
-                                            CadTool.DrawArc to Icons.Filled.Architecture,
-                                            CadTool.DrawText to Icons.Filled.Title
-                                        ).forEach { (tool, ic) ->
-                                            IconButton(onClick = {
-                                                cadTool = tool; draftPts = emptyList(); closeMenus()
-                                                message = tool.name
-                                            }) { Icon(ic, null, tint = Color.White) }
+                                        GlassIcon(Icons.Filled.TrendingFlat, "خط") {
+                                            cadTool = CadTool.DrawLine; draftPts = emptyList(); measureMode = false; closeMenus(); message = "خط"
+                                        }
+                                        GlassIcon(Icons.Filled.RadioButtonUnchecked, "دایره") {
+                                            cadTool = CadTool.DrawCircle; draftPts = emptyList(); measureMode = false; closeMenus(); message = "مرکز دایره"
+                                        }
+                                        GlassIcon(Icons.Filled.Architecture, "قوس") {
+                                            cadTool = CadTool.DrawArc; draftPts = emptyList(); measureMode = false; closeMenus(); message = "قوس"
+                                        }
+                                        GlassIcon(Icons.Filled.Title, "متن") {
+                                            cadTool = CadTool.DrawText; draftPts = emptyList(); measureMode = false; closeMenus(); message = "متن"
                                         }
                                     }
                                     4 -> { // ویرایش
-                                        listOf(
-                                            CadTool.Select to Icons.Filled.NearMe,
-                                            CadTool.Move to Icons.Filled.OpenWith,
-                                            CadTool.Copy to Icons.Filled.ContentCopy
-                                        ).forEach { (tool, ic) ->
-                                            IconButton(onClick = {
-                                                cadTool = tool; draftPts = emptyList(); closeMenus()
-                                            }) { Icon(ic, null, tint = Color.White) }
+                                        GlassIcon(Icons.Filled.NearMe, "انتخاب") {
+                                            cadTool = CadTool.Select; draftPts = emptyList()
+                                            measureMode = false; pathMode = false; areaMode = false; linePickMode = false
+                                            closeMenus(); message = "شیء را لمس کن"
                                         }
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.OpenWith, "جابجایی") {
+                                            cadTool = CadTool.Move; draftPts = emptyList()
+                                            measureMode = false; closeMenus(); message = "شیء را لمس کن سپس مقصد"
+                                        }
+                                        GlassIcon(Icons.Filled.ContentCopy, "کپی") {
+                                            cadTool = CadTool.Copy; draftPts = emptyList()
+                                            measureMode = false; closeMenus(); message = "شیء را لمس کن سپس مقصد"
+                                        }
+                                        GlassIcon(Icons.Filled.Delete, "حذف", Color(0xFFE57373)) {
                                             if (selected != null) deleteSelected() else {
                                                 cadTool = CadTool.Select; message = "اول انتخاب کن"
                                             }
                                             closeMenus()
-                                        }) { Icon(Icons.Filled.Delete, "حذف", tint = Color(0xFFE57373)) }
+                                        }
                                     }
                                     5 -> { // الاین
-                                        IconButton(onClick = {
+                                        GlassIcon(Icons.Filled.Transform, "الاین") {
                                             if (alignTargetIds.isEmpty())
                                                 alignTargetIds = drawings.filter { it.visible }.map { it.id }.toSet()
                                             showMapAlignDialog = true; closeMenus()
-                                        }) { Icon(Icons.Filled.Transform, "الاین", tint = Color.White) }
-                                        IconButton(onClick = { showDrawings = true; closeMenus() }) {
-                                            Icon(Icons.Filled.Map, "انتخاب DXF", tint = Color.White)
                                         }
+                                        GlassIcon(Icons.Filled.Map, "DXF") { showDrawings = true; closeMenus() }
                                     }
                                     6 -> {
                                         IconButton(onClick = { doUndo(); closeMenus() }) {
@@ -1522,9 +1561,7 @@ if (zoomWindowMode) {
                                         }
                                     }
                                     8 -> {
-                                        IconButton(onClick = { showOsnapPanel = true }) {
-                                            Icon(Icons.Filled.MyLocation, "OSNAP", tint = Color.White)
-                                        }
+                                        GlassIcon(Icons.Filled.MyLocation, "گیر") { showOsnapPanel = true }
                                     }
                                 }
                             }

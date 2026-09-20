@@ -71,7 +71,8 @@ fun PointsSpreadsheet(
             HeaderCell("Y", wY)
             HeaderCell("Z", wZ)
             HeaderCell("D", wD)
-            if (onDelete != null) HeaderCell("", wDel)
+            if (onMove != null) HeaderCell("↔", wMove)
+            if (onDelete != null) HeaderCell("✕", wDel)
         }
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(1.dp)
