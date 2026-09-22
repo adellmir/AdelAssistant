@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.filled.LinearScale
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,6 +47,8 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
     var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var selectAll by remember { mutableStateOf(true) }
+    var rangeMode by remember { mutableStateOf(false) }
+    var rangeAnchorId by remember { mutableStateOf<Long?>(null) }
     var status by remember { mutableStateOf("") }
     var convertingDwg by remember { mutableStateOf(false) }
     var newestFirst by remember { mutableStateOf(true) }
@@ -235,9 +238,35 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
                 IconButton(onClick = {
                     selectAll = false
                     selectedIds = emptySet()
+                    rangeMode = false
+                    rangeAnchorId = null
                 }, enabled = points.isNotEmpty()) {
                     Icon(Icons.Outlined.Close, "گزینش", tint = color)
                 }
+                IconButton(
+                    onClick = {
+                        rangeMode = !rangeMode
+                        rangeAnchorId = null
+                        status = if (rangeMode)
+                            "حالت بازه: ابتدا یک نقطه، بعد نقطهٔ انتهای بازه را تیک بزن"
+                        else "حالت بازه خاموش"
+                    },
+                    enabled = points.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Filled.LinearScale,
+                        "بازه",
+                        tint = if (rangeMode) Color(0xFF81C995) else color
+                    )
+                }
+            }
+            if (rangeMode) {
+                Text(
+                    "بازه فعال — تیک ابتدا، سپس تیک انتها (خروجی فقط همین بازه)",
+                    color = Color(0xFF81C995),
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.height(4.dp))
             }
             Spacer(Modifier.height(8.dp))
             Button(
@@ -287,8 +316,30 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit, onNavigate: (String) ->
                 selectAll = selectAll,
                 showCheckbox = true,
                 onToggleSelect = { id, on ->
-                    selectAll = false
-                    selectedIds = if (on) selectedIds + id else selectedIds - id
+                    if (rangeMode && on) {
+                        val order = points.map { it.id }
+                        if (rangeAnchorId == null) {
+                            rangeAnchorId = id
+                            selectAll = false
+                            selectedIds = setOf(id)
+                            status = "ابتدای بازه ✓ — انتهای بازه را تیک بزن"
+                        } else {
+                            val i1 = order.indexOf(rangeAnchorId)
+                            val i2 = order.indexOf(id)
+                            if (i1 >= 0 && i2 >= 0) {
+                                val a = minOf(i1, i2)
+                                val b = maxOf(i1, i2)
+                                selectedIds = points.subList(a, b + 1).map { it.id }.toSet()
+                                selectAll = selectedIds.size == points.size
+                                status = "بازه انتخاب شد: ${b - a + 1} نقطه (از ${a + 1} تا ${b + 1})"
+                            }
+                            rangeAnchorId = null
+                        }
+                    } else {
+                        selectAll = false
+                        selectedIds = if (on) selectedIds + id else selectedIds - id
+                        rangeAnchorId = null
+                    }
                 },
                 onChange = { updated ->
                     points = points.map { if (it.id == updated.id) updated else it }
