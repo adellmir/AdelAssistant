@@ -377,7 +377,7 @@ private fun PlumbWorkspace(
                 val reading = if (mode == "control") col.control else col.report
                 val refMm = reading.computedRefMm()
                 val lineMm = reading.computedLineMm()
-                val textH = (if (showBeforeAfter) 0.15 else 0.20) * scale
+                val textH = (if (showBeforeAfter) 0.15f else 0.20f) * scale
 
                 fun drawRef(mm: Double, gray: Boolean, aboveExtra: Float) {
                     val out = PlumbStore.isOutOfTol(mm, tol)
@@ -393,7 +393,7 @@ private fun PlumbWorkspace(
                         label, pos.x, y,
                         android.graphics.Paint().apply {
                             this.color = colr
-                            textSize = textH.toFloat().coerceIn(12f, 36f)
+                            textSize = textH.coerceIn(12f, 36f)
                             textAlign = android.graphics.Paint.Align.CENTER
                             isAntiAlias = true
                         }
@@ -420,7 +420,7 @@ private fun PlumbWorkspace(
                         label, x, pos.y,
                         android.graphics.Paint().apply {
                             this.color = colr
-                            textSize = textH.toFloat().coerceIn(12f, 36f)
+                            textSize = textH.coerceIn(12f, 36f)
                             textAlign = android.graphics.Paint.Align.CENTER
                             isAntiAlias = true
                         }
@@ -491,7 +491,7 @@ private fun PlumbWorkspace(
             title = { Text("تنظیمات") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    listOf(
+                    val settingsItems = listOf<Pair<String, () -> Unit>>(
                         "تعیین ستون‌ها" to {
                             pickColumns = true
                             showSettings = false
@@ -501,7 +501,7 @@ private fun PlumbWorkspace(
                             showAxisEdit = true
                             showSettings = false
                         },
-                        if (p.axesVisible) "عدم نمایش محورها" else "نمایش محورها" to {
+                        (if (p.axesVisible) "عدم نمایش محورها" else "نمایش محورها") to {
                             p = p.copy(axesVisible = !p.axesVisible)
                             persist()
                             showSettings = false
@@ -525,12 +525,11 @@ private fun PlumbWorkspace(
                             } catch (_: Exception) {}
                             showSettings = false
                         },
-                        if (mode == "report") "برو به کنترل" else "برو به گزارش" to {
+                        (if (mode == "report") "برو به کنترل" else "برو به گزارش") to {
                             if (mode == "report" && p.columns.isEmpty()) {
                                 message = "ابتدا ستون‌ها را در گزارش تعیین کنید"
                             } else {
                                 if (mode == "report") {
-                                    // تاریخ کنترل اگر خالی
                                     if (p.controlYear.isBlank()) {
                                         p = p.copy(
                                             controlDay = p.reportDay,
@@ -560,7 +559,6 @@ private fun PlumbWorkspace(
                             showSettings = false
                         },
                         "ریست" to {
-                            // confirm via second dialog simplified
                             p = p.copy(
                                 letterCount = 0, numberCount = 0, factor = 1.0,
                                 columns = mutableListOf(), heightM = 22.0
@@ -569,9 +567,10 @@ private fun PlumbWorkspace(
                             persist()
                             showSettings = false
                         }
-                    ).forEach { (label, act) ->
-                        TextButton(onClick = act, modifier = Modifier.fillMaxWidth()) {
-                            Text(label, modifier = Modifier.fillMaxWidth())
+                    )
+                    settingsItems.forEach { item ->
+                        TextButton(onClick = item.second, modifier = Modifier.fillMaxWidth()) {
+                            Text(item.first, modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -621,8 +620,13 @@ private fun PlumbWorkspace(
             onDismissRequest = { showHeight = false },
             title = { Text("ارتفاع (m)") },
             text = {
-                OutlinedTextField(h, { h = it }, keyboardOptions = numKb, singleLine = true)
-                Text("حد مجاز ≈ ${String.format(Locale.US, "%.0f", (h.replace(',', '.').toDoubleOrNull() ?: 22.0) / 600.0 * 1000)} mm", fontSize = 12.sp)
+                Column {
+                    OutlinedTextField(h, { h = it }, keyboardOptions = numKb, singleLine = true)
+                    Text(
+                        "حد مجاز ≈ ${String.format(Locale.US, "%.0f", (h.replace(',', '.').toDoubleOrNull() ?: 22.0) / 600.0 * 1000)} mm",
+                        fontSize = 12.sp
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -649,18 +653,30 @@ private fun PlumbWorkspace(
             title = { Text("خیابان / همسایه") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    fun row(title: String, n: Boolean, onN: (Boolean) -> Unit, s: String, onS: (String) -> Unit) {
-                        Text(title, fontWeight = FontWeight.Bold)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(n, onN)
-                            Text("همسایه")
-                            OutlinedTextField(s, onS, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
-                        }
+                    Text("بالا", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(topN, { topN = it })
+                        Text("همسایه")
+                        OutlinedTextField(topS, { topS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
-                    row("بالا", topN, { topN = it }, topS, { topS = it })
-                    row("پایین", botN, { botN = it }, botS, { botS = it })
-                    row("راست", rightN, { rightN = it }, rightS, { rightS = it })
-                    row("چپ", leftN, { leftN = it }, leftS, { leftS = it })
+                    Text("پایین", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(botN, { botN = it })
+                        Text("همسایه")
+                        OutlinedTextField(botS, { botS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                    }
+                    Text("راست", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(rightN, { rightN = it })
+                        Text("همسایه")
+                        OutlinedTextField(rightS, { rightS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                    }
+                    Text("چپ", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(leftN, { leftN = it })
+                        Text("همسایه")
+                        OutlinedTextField(leftS, { leftS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                    }
                 }
             },
             confirmButton = {
