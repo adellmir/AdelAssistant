@@ -36,4 +36,5 @@ object Routes {
     const val TOOL_DXF_PREVIEW = "tool/dxf_preview"
     const val TOOL_TOTAL_STATION = "tool/total_station"
     const val TOOL_LETTER = "tool/letter"
+    const val TOOL_PLUMB = "tool/plumb"
 }
