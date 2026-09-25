@@ -210,7 +210,7 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
             TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_GSI) {
-            GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() }, onNavigate = { route -> navController.navigate(route) })
+            GsiConverterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_LOCATION) {
             LocationScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
@@ -227,7 +227,7 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
-                composable(Routes.TOOL_MONITORING) {
+        composable(Routes.TOOL_MONITORING) {
             MonitoringScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_LETTER) {
