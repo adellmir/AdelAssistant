@@ -37,7 +37,8 @@ data class PlumbColumn(
     val letterIdx: Int,
     val numberIdx: Int,
     var report: PlumbReading = PlumbReading(),
-    var control: PlumbReading = PlumbReading()
+    var control: PlumbReading = PlumbReading(),
+    var isWallPlumb: Boolean = false
 )
 
 data class PlumbNeighbor(
@@ -176,6 +177,7 @@ object PlumbStore {
                 put("numberIdx", c.numberIdx)
                 put("report", readingJson(c.report))
                 put("control", readingJson(c.control))
+                put("isWallPlumb", c.isWallPlumb)
             })
         }
         put("columns", cols)
@@ -202,7 +204,8 @@ object PlumbStore {
                     letterIdx = c.optInt("letterIdx"),
                     numberIdx = c.optInt("numberIdx"),
                     report = parseReading(c.optJSONObject("report")),
-                    control = parseReading(c.optJSONObject("control"))
+                    control = parseReading(c.optJSONObject("control")),
+                    isWallPlumb = c.optBoolean("isWallPlumb", false)
                 )
             )
         }

@@ -91,7 +91,7 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         base.sortedByDescending { it.updatedAt }
     }
 
-    val numKb = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     Column(
         Modifier.fillMaxSize().background(Background).padding(12.dp)
@@ -204,7 +204,7 @@ private fun PlumbWorkspace(
     var scale by remember { mutableStateOf(80f) }
     var offset by remember { mutableStateOf(Offset(80f, 120f)) }
 
-    val numKb = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+    val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val tol = p.toleranceMm()
 
     fun persist() {
@@ -358,19 +358,38 @@ private fun PlumbWorkspace(
                 val half = 0.10
                 val tl = w2s(cx - half, cy + half)
                 val br = w2s(cx + half, cy - half)
-                drawRect(
-                    Color(0xFF4FC3F7),
-                    topLeft = Offset(min(tl.x, br.x), min(tl.y, br.y)),
-                    size = androidx.compose.ui.geometry.Size(abs(br.x - tl.x), abs(br.y - tl.y)),
-                    style = Stroke(2.5f)
-                )
+                val left = min(tl.x, br.x)
+                val top = min(tl.y, br.y)
+                val w = abs(br.x - tl.x)
+                val h = abs(br.y - tl.y)
+                if (col.isWallPlumb) {
+                    drawRect(
+                        Color.Black,
+                        topLeft = Offset(left, top),
+                        size = androidx.compose.ui.geometry.Size(w, h)
+                    )
+                    drawRect(
+                        Color.White,
+                        topLeft = Offset(left, top),
+                        size = androidx.compose.ui.geometry.Size(w, h),
+                        style = Stroke(2f)
+                    )
+                } else {
+                    drawRect(
+                        Color(0xFF4FC3F7),
+                        topLeft = Offset(left, top),
+                        size = androidx.compose.ui.geometry.Size(w, h),
+                        style = Stroke(2.5f)
+                    )
+                }
                 drawContext.canvas.nativeCanvas.drawText(
                     col.name, w2s(cx, cy).x, w2s(cx, cy).y + 6f,
                     android.graphics.Paint().apply {
-                        this.color = android.graphics.Color.WHITE
+                        this.color = if (col.isWallPlumb) android.graphics.Color.WHITE else android.graphics.Color.WHITE
                         textSize = (0.10 * scale).toFloat().coerceIn(10f, 28f)
                         textAlign = android.graphics.Paint.Align.CENTER
                         isAntiAlias = true
+                        isFakeBoldText = col.isWallPlumb
                     }
                 )
 
@@ -703,6 +722,21 @@ private fun PlumbWorkspace(
         var lineB by remember(col.name, mode) { mutableStateOf(reading.lineBottom?.toString() ?: "") }
         var lineT by remember(col.name, mode) { mutableStateOf(reading.lineTop?.toString() ?: "") }
         var lineV by remember(col.name, mode) { mutableStateOf(reading.lineValueMm?.toString() ?: "") }
+        var wallPlumb by remember(col.name) { mutableStateOf(col.isWallPlumb) }
+        fun signedFilter(s: String): String {
+            // اجازه منفی، یک نقطه، ارقام
+            val t = s.replace('٫', '.').replace(',', '.')
+            val sb = StringBuilder()
+            var dot = false
+            t.forEachIndexed { i, ch ->
+                when {
+                    ch == '-' && i == 0 && !sb.contains('-') -> sb.append(ch)
+                    ch.isDigit() -> sb.append(ch)
+                    ch == '.' && !dot -> { sb.append(ch); dot = true }
+                }
+            }
+            return sb.toString()
+        }
 
         fun d(s: String) = s.replace(',', '.').toDoubleOrNull()
         // auto delta
@@ -720,14 +754,14 @@ private fun PlumbWorkspace(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("رفرنس (m) — مقدار mm", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedTextField(refT, { refT = it }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                        OutlinedTextField(refB, { refB = it }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(refT, { refT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(refB, { refB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                         OutlinedTextField(
                             refV.ifBlank {
                                 val b = d(refB); val t = d(refT)
                                 if (b != null && t != null) String.format(Locale.US, "%.1f", (t - b) * 1000) else ""
                             },
-                            { refV = it },
+                            { refV = signedFilter(it) },
                             label = { Text("مقدار") },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
@@ -736,19 +770,23 @@ private fun PlumbWorkspace(
                     }
                     Text("لاین (m) — مقدار mm", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedTextField(lineT, { lineT = it }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                        OutlinedTextField(lineB, { lineB = it }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(lineT, { lineT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(lineB, { lineB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                         OutlinedTextField(
                             lineV.ifBlank {
                                 val b = d(lineB); val t = d(lineT)
                                 if (b != null && t != null) String.format(Locale.US, "%.1f", (t - b) * 1000) else ""
                             },
-                            { lineV = it },
+                            { lineV = signedFilter(it) },
                             label = { Text("مقدار") },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = numKb
                         )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = wallPlumb, onCheckedChange = { wallPlumb = it })
+                        Text("دیوار شاقولی", fontSize = 13.sp)
                     }
                     Text("حد مجاز ±${String.format(Locale.US, "%.0f", tol)} mm", fontSize = 11.sp, color = Color.Gray)
                 }
@@ -765,7 +803,8 @@ private fun PlumbWorkspace(
                     p = p.copy(
                         columns = p.columns.map {
                             if (it.name != col.name) it
-                            else if (mode == "control") it.copy(control = newR) else it.copy(report = newR)
+                            else if (mode == "control") it.copy(control = newR, isWallPlumb = wallPlumb)
+                            else it.copy(report = newR, isWallPlumb = wallPlumb)
                         }.toMutableList()
                     )
                     if (mode == "control" && p.controlYear.isBlank()) {
