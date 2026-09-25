@@ -40,9 +40,6 @@ data class TunnelMonthRow(
     val receiveYear: String = "",
     val receiveAmount: Double? = null,
     val note: String = "",
-    /** تاریخ دریافت ترکیبی برای نمایش */
-    val receiveDate: String
-        get() = listOf(receiveYear, receiveMonth, receiveDay).filter { it.isNotBlank() }.joinToString("/"),
     /** اگر از CSV/اکسل آمده باشد، همان عدد ذخیره می‌شود؛ وگرنه محاسبه می‌شود */
     val totalAmount: Double = 0.0,
     val retention: Double = 0.0,
@@ -50,6 +47,10 @@ data class TunnelMonthRow(
     val payable: Double = 0.0,
     val income: Double = 0.0
 ) {
+    /** تاریخ دریافت ترکیبی برای نمایش */
+    val receiveDate: String
+        get() = listOf(receiveYear, receiveMonth, receiveDay).filter { it.isNotBlank() }.joinToString("/")
+
     val year: Int
     val month: Int
 

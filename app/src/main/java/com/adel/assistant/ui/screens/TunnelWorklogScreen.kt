@@ -9,10 +9,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
@@ -29,7 +28,6 @@ import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelMonthRow
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
-import com.adel.assistant.data.formatGroupedNumericInput
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
@@ -72,9 +70,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     }
     BackHandler(enabled = editingCode != null) { clearForm() }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val uri = result.data?.data
-        // SAF starts at Documents/AdelAssistant
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -104,7 +100,9 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
             cameraDeduction = cameraDed.toDoubleOrNullFa() ?: 0.0,
             cameraTimeDeduction = cameraTimeDed.toDoubleOrNullFa() ?: 0.0,
             surveyorPay = surveyor.toDoubleOrNullFa() ?: 0.0,
-            receiveDate = existing?.receiveDate ?: "",
+            receiveDay = existing?.receiveDay ?: "",
+            receiveMonth = existing?.receiveMonth ?: "",
+            receiveYear = existing?.receiveYear ?: "",
             receiveAmount = existing?.receiveAmount,
             note = note.ifBlank { existing?.note ?: "" }
         )
@@ -131,11 +129,11 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         Box {
             ScreenTopBar(title = "کارکرد ماهانه تونل", color = color, onBack = { if (editingCode != null) clearForm() else onBack() })
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Outlined.Settings, null, tint = Color(0xFFAAB697))
+                Icon(Icons.Filled.Settings, null, tint = Color(0xFFAAB697))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن CSV") }, onClick = {
-                    showMenu = false; importLauncher.launch(com.adel.assistant.data.AdelDocuments.openDocumentIntent("text/*", "*/*"))
+                    showMenu = false; importLauncher.launch(arrayOf("text/*", "*/*"))
                 })
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false
@@ -155,7 +153,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("روز کارکرد") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = formatGroupedNumericInput(it) }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
+            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = it }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -216,9 +214,9 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
                                 cameraTimeDed = item.cameraTimeDeduction.toLong().toString()
                                 surveyor = item.surveyorPay.toLong().toString()
                                 note = item.note; editingCode = item.dateCode
-                            }, modifier = Modifier.size(28.dp)) { Icon(Icons.Outlined.Edit, null, tint = TextMuted) }
+                            }, modifier = Modifier.size(28.dp)) { Icon(Icons.Filled.Edit, null, tint = TextMuted) }
                             IconButton(onClick = { confirmDelete = item }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Delete, null, tint = Color(0xFFC2685E))
+                                Icon(Icons.Filled.Delete, null, tint = Color(0xFFC2685E))
                             }
                         }
                     }

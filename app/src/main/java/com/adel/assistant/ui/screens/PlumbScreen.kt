@@ -108,8 +108,10 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             }) { Text("CSV", color = color) }
         }
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
             OutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)

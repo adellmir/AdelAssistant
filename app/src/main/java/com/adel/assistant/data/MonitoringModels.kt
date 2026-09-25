@@ -89,6 +89,42 @@ object MonitoringStore {
         saveAll(ctx, loadAll(ctx).filter { it.id != id })
     }
 
+    fun exportCsv(ctx: Context, list: List<MonProject> = loadAll(ctx)): String {
+        val sb = StringBuilder()
+        sb.appendLine("project_id,project_name,client,report_no,day,month,year,epoch_id,epoch_day,epoch_month,epoch_year,point_name,is_bm,base_x,base_y,base_z,epoch_x,epoch_y,epoch_z,in_out_mm,settle_mm,d3d_mm")
+        list.forEach { p ->
+            if (p.epochs.isEmpty()) {
+                p.basePoints.forEach { b ->
+                    sb.appendLine(listOf(
+                        p.id, esc(p.name), esc(p.client), esc(p.reportNo), p.day, p.month, p.year,
+                        "", "", "", "",
+                        esc(b.name), if (b.isBm) "1" else "0",
+                        b.x, b.y, b.z, "", "", "", "", "", ""
+                    ).joinToString(","))
+                }
+            } else {
+                p.epochs.forEach { e ->
+                    val rows = MonitoringAnalyzer.analyze(p.basePoints, e.points)
+                    rows.forEach { r ->
+                        sb.appendLine(listOf(
+                            p.id, esc(p.name), esc(p.client), esc(p.reportNo), p.day, p.month, p.year,
+                            e.id, e.day, e.month, e.year,
+                            esc(r.name), if (r.isBm) "1" else "0",
+                            r.baseX ?: "", r.baseY ?: "", r.baseZ ?: "",
+                            r.epX ?: "", r.epY ?: "", r.epZ ?: "",
+                            r.inOutMm ?: "", r.settleMm ?: "", r.d3dMm ?: ""
+                        ).joinToString(","))
+                    }
+                }
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun esc(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
+
+
+
     fun saveTemplate(ctx: Context, projectId: String, bytes: ByteArray): String {
         val dir = File(ctx.filesDir, "monitoring_templates")
         if (!dir.exists()) dir.mkdirs()

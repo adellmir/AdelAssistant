@@ -29,6 +29,7 @@ import com.adel.assistant.data.MonPoint
 import com.adel.assistant.data.MonProject
 import com.adel.assistant.data.MonitoringAnalyzer
 import com.adel.assistant.data.MonitoringExport
+import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.MonitoringStore
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
@@ -119,6 +120,13 @@ fun MonitoringScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             ) { Text("ثبت") }
             OutlinedButton(onClick = { query = name.ifBlank { client } }, modifier = Modifier.weight(1f)) {
                 Text("جستجو")
+            }
+            OutlinedButton(onClick = {
+                val text = MonitoringStore.exportCsv(context)
+                val uri = FileExport.exportTextToDocuments(context, "monitoring_backup.csv", text, "text/csv")
+                // silent
+            }, modifier = Modifier.weight(1f)) {
+                Text("پشتیبان")
             }
         }
         Spacer(Modifier.height(8.dp))
