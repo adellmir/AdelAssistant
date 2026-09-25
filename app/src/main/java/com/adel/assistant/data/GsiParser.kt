@@ -130,6 +130,63 @@ object GsiParser {
         return if (neg) -meters else meters
     }
 
+    
+    /**
+     * فرمت DAT نقشه‌برداری: N Y X Z [D]
+     * هنگام خواندن Y و X جابه‌جا می‌شوند تا به E,N,Z استاندارد برسند.
+     */
+    fun parseDat(text: String): List<GsiPoint> {
+        val out = mutableListOf<GsiPoint>()
+        text.lineSequence().forEach { raw ->
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("*")) return@forEach
+            val parts = line.split(',', '\t', ';', ' ').map { it.trim() }.filter { it.isNotEmpty() }
+            if (parts.size < 3) return@forEach
+            fun d(s: String) = s.replace(',', '.').toDoubleOrNull()
+            // N Y X Z [D]
+            if (parts.size >= 4 && d(parts[1]) != null && d(parts[2]) != null && d(parts[3]) != null) {
+                val name = parts[0]
+                val y = d(parts[1])!!  // northing in file
+                val x = d(parts[2])!!  // easting in file
+                val z = d(parts[3])!!
+                val code = parts.getOrNull(4)?.takeIf { d(it) == null } ?: ""
+                // GsiPoint: e=X, n=Y
+                out.add(GsiPoint(name = name, e = x, n = y, z = z, code = code))
+                return@forEach
+            }
+            // Y X Z without name
+            if (d(parts[0]) != null && d(parts[1]) != null && d(parts[2]) != null) {
+                val y = d(parts[0])!!
+                val x = d(parts[1])!!
+                val z = d(parts[2])!!
+                val name = parts.getOrNull(3)?.takeIf { d(it) == null } ?: "P${out.size + 1}"
+                out.add(GsiPoint(name = name, e = x, n = y, z = z))
+            }
+        }
+        return out
+    }
+
+    /** خروجی DAT: N Y X Z [D] */
+    fun toDat(points: List<GsiPoint>): String = buildString {
+        points.forEach { p ->
+            val line = buildString {
+                append(p.name)
+                append("\t")
+                append(fmt(p.n)) // Y
+                append("\t")
+                append(fmt(p.e)) // X
+                append("\t")
+                append(fmt(p.z))
+                if (p.code.isNotBlank()) {
+                    append("\t")
+                    append(p.code)
+                }
+            }
+            appendLine(line)
+        }
+    }
+
+
     fun toTxt(points: List<GsiPoint>): String = buildString {
         points.forEach { p ->
             appendLine("${p.name}\t${fmt(p.e)}\t${fmt(p.n)}\t${fmt(p.z)}")
