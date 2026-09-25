@@ -13,6 +13,7 @@ import com.adel.assistant.data.InvoiceLaunch
 import com.adel.assistant.ui.HomeScreen
 import com.adel.assistant.ui.dxf.DxfConverterScreen
 import com.adel.assistant.ui.screens.AreaScreen
+import com.adel.assistant.ui.screens.MonitoringScreen
 import com.adel.assistant.ui.screens.AssistantScreen
 import com.adel.assistant.ui.screens.ChainageScreen
 import com.adel.assistant.ui.screens.AlignScreen
@@ -27,7 +28,6 @@ import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
 import com.adel.assistant.ui.screens.InvoiceScreen
 import com.adel.assistant.ui.screens.LetterScreen
-import com.adel.assistant.ui.screens.PlumbScreen
 import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
 import com.adel.assistant.ui.screens.ProjectRegisterScreen
@@ -227,8 +227,8 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
-        composable(Routes.TOOL_PLUMB) {
-            PlumbScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+                composable(Routes.TOOL_MONITORING) {
+            MonitoringScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_LETTER) {
             LetterScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

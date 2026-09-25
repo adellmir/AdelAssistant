@@ -85,7 +85,7 @@ object AppMenu {
                 MenuItem("مبدل", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
                 MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
                 MenuItem("نامه‌نگاری", Icons.Filled.Mail, Routes.TOOL_LETTER),
-                MenuItem("شاقولی", Icons.Filled.Straighten, Routes.TOOL_PLUMB),
+                MenuItem("پایش", Icons.Filled.ShowChart, Routes.TOOL_MONITORING),
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
                 MenuItem("محیط و مساحت", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
