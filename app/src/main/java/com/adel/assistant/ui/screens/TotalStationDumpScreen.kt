@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.GsiParser
+import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.ScreenTopBar
@@ -147,20 +149,29 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun saveReceived(text: String) {
-        val ext = if (text.contains("*11")) "gsi" else "txt"
-        val name = "dump_${System.currentTimeMillis()}.$ext"
         try {
+            // بایگانی خام (زاویه/فاصله) در txt
+            val rawName = "dump_raw_${System.currentTimeMillis()}.txt"
             FileExport.exportBytesToDocuments(
-                context,
-                name,
-                text.toByteArray(Charsets.UTF_8),
-                "text/plain"
+                context, rawName, text.toByteArray(Charsets.UTF_8), "text/plain"
             )
-            status = "ذخیره شد: Documents/AdelAssistant/$name — ${points.size} نقطه"
+            if (points.isNotEmpty()) {
+                // GSI مختصات مطلق به سبک BAHAR برای ورود به دوربین
+                val gsiPts = points.map { pt ->
+                    GsiPoint(name = pt.id.ifBlank { "P" }, e = pt.x, n = pt.y, z = pt.z, code = pt.code)
+                }
+                val gsiText = GsiParser.toGsi(gsiPts)
+                val gsiName = "points_${System.currentTimeMillis()}.gsi"
+                FileExport.exportBytesToDocuments(
+                    context, gsiName, gsiText.toByteArray(Charsets.UTF_8), "text/plain"
+                )
+                status = "ذخیره: gsi/$gsiName + txt/$rawName — ${points.size} نقطه (فرمت دوربین)"
+            } else {
+                status = "ذخیره خام txt/$rawName — نقطه مختصاتی برای GSI تشخیص داده نشد"
+            }
         } catch (e: Exception) {
-            // fallback cache
             try {
-                val f = File(context.getExternalFilesDir(null), name)
+                val f = File(context.getExternalFilesDir(null), "dump_${System.currentTimeMillis()}.txt")
                 f.writeText(text)
                 status = "ذخیره در حافظه اپ: ${f.absolutePath}"
             } catch (e2: Exception) {
@@ -245,7 +256,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     }
 
     val openFile = rememberLauncherForActivityResult(
-        com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
+        ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
