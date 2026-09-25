@@ -35,9 +35,14 @@ data class TunnelMonthRow(
     val dayOp: Double = 0.0,
     val dayLeave: Double = 0.0,
     val surveyorPay: Double = 0.0,
-    val receiveDate: String = "",
+    val receiveDay: String = "",
+    val receiveMonth: String = "",
+    val receiveYear: String = "",
     val receiveAmount: Double? = null,
     val note: String = "",
+    /** تاریخ دریافت ترکیبی برای نمایش */
+    val receiveDate: String
+        get() = listOf(receiveYear, receiveMonth, receiveDay).filter { it.isNotBlank() }.joinToString("/"),
     /** اگر از CSV/اکسل آمده باشد، همان عدد ذخیره می‌شود؛ وگرنه محاسبه می‌شود */
     val totalAmount: Double = 0.0,
     val retention: Double = 0.0,
@@ -92,7 +97,9 @@ data class TunnelMonthRow(
             dayOp: Double = 0.0,
             dayLeave: Double = 0.0,
             surveyorPay: Double = 0.0,
-            receiveDate: String = "",
+            receiveDay: String = "",
+            receiveMonth: String = "",
+            receiveYear: String = "",
             receiveAmount: Double? = null,
             note: String = "",
             retentionOverride: Double? = null
@@ -115,7 +122,7 @@ data class TunnelMonthRow(
                 dayOp = dayOp,
                 dayLeave = dayLeave,
                 surveyorPay = surveyorPay,
-                receiveDate = receiveDate,
+                receiveDay = receiveDay, receiveMonth = receiveMonth, receiveYear = receiveYear,
                 receiveAmount = receiveAmount,
                 note = note,
                 totalAmount = total,
@@ -142,7 +149,9 @@ data class TunnelMonthRow(
             dayOp = dayOp,
             dayLeave = dayLeave,
             surveyorPay = surveyorPay,
-            receiveDate = receiveDate,
+            receiveDay = receiveDay,
+            receiveMonth = receiveMonth,
+            receiveYear = receiveYear,
             receiveAmount = receiveAmount,
             note = note,
             retentionOverride = if (keepRetention) retention else null
@@ -166,7 +175,7 @@ object TunnelFinanceStore {
         "نهاری", "کسر نهاری", "اضافه تایم شیت", "کسر تایم شیت",
         "کسر دوربین", "کسر تایم دوربین", "کل کسورات", "مبلغ صورت پرداختی",
         "روز ع", "روز م", "نقشه بردار", "درامد",
-        "تاریخ دریافت", "مبلغ دریافت", "توضیحات"
+        "روز دریافت", "ماه دریافت", "سال دریافت", "مبلغ دریافت", "توضیحات"
     )
 
     fun all(context: Context): List<TunnelMonthRow> {
@@ -182,12 +191,34 @@ object TunnelFinanceStore {
         val code = r.getOrNull(0)?.toEnglishDigits()?.trim()?.toDoubleOrNull()?.toInt() ?: return null
         fun d(i: Int): Double = r.getOrNull(i)?.toEnglishDigits()?.trim()?.toDoubleOrNull() ?: 0.0
         fun s(i: Int): String = r.getOrNull(i)?.trim().orEmpty()
-        val recvRaw = s(18).toEnglishDigits().trim()
-        val recvAmt = if (recvRaw.isBlank()) null else recvRaw.toDoubleOrNull()
+        // پشتیبانی از فرمت قدیم (یک ستون تاریخ) و جدید (روز/ماه/سال)
+        val colCount = r.size
+        val recvDay: String
+        val recvMonth: String
+        val recvYear: String
+        val recvAmt: Double?
+        val note: String
+        if (colCount >= 21) {
+            // فرض: 17=روز 18=ماه 19=سال 20=مبلغ 21=توضیح — اگر هدر جدا باشد از ایندکس استفاده می‌شود
+            recvDay = s(17).toEnglishDigits().trim()
+            recvMonth = s(18).toEnglishDigits().trim()
+            recvYear = s(19).toEnglishDigits().trim()
+            val recvRaw = s(20).toEnglishDigits().trim()
+            recvAmt = if (recvRaw.isBlank()) null else recvRaw.toDoubleOrNull()
+            note = s(21)
+        } else {
+            // فرمت قدیم: 17=تاریخ دریافت یکجا، 18=مبلغ، 19=توضیح
+            val parsed = splitLegacyReceiveDate(s(17).toEnglishDigits().trim())
+            recvDay = parsed.first
+            recvMonth = parsed.second
+            recvYear = parsed.third
+            val recvRaw = s(18).toEnglishDigits().trim()
+            recvAmt = if (recvRaw.isBlank()) null else recvRaw.toDoubleOrNull()
+            note = s(19)
+        }
 
         val days = d(1)
         val unit = d(2)
-        // مقادیر محاسبه‌شده از CSV (اگر خالی بود از نو حساب می‌شود)
         val totalCsv = d(3)
         val hasanCsv = d(4)
         val kasrCsv = d(11)
@@ -207,9 +238,11 @@ object TunnelFinanceStore {
             dayOp = d(13),
             dayLeave = d(14),
             surveyorPay = d(15),
-            receiveDate = s(17).toEnglishDigits(),
+            receiveDay = recvDay,
+            receiveMonth = recvMonth,
+            receiveYear = recvYear,
             receiveAmount = recvAmt,
-            note = s(19),
+            note = note,
             retentionOverride = if (hasanCsv != 0.0 || totalCsv != 0.0) hasanCsv else null
         )
         // اگر CSV عدد صریح داشت، همان را نگه دار (سوابق اکسل)
@@ -244,7 +277,9 @@ object TunnelFinanceStore {
             n(row.dayLeave),
             n(row.surveyorPay),
             n(row.income),
-            row.receiveDate,
+            row.receiveDay,
+            row.receiveMonth,
+            row.receiveYear,
             row.receiveAmount?.let { n(it) } ?: "",
             row.note
         )
@@ -276,9 +311,10 @@ object TunnelFinanceStore {
         val list = all(context).toMutableList()
         val idx = list.indexOfFirst { it.receiveAmount == null }
         if (idx < 0) return false
+        val (d, m, y) = parseReceiveDateInput(receiveDate)
         list[idx] = list[idx].copy(
             receiveAmount = amount,
-            receiveDate = receiveDate,
+            receiveDay = d, receiveMonth = m, receiveYear = y,
             note = if (note.isNotBlank()) note else list[idx].note
         )
         writeAll(context, list)
@@ -286,9 +322,10 @@ object TunnelFinanceStore {
     }
 
     fun updateReceipt(context: Context, dateCode: Int, amount: Double, receiveDate: String, note: String) {
+        val (d, m, y) = parseReceiveDateInput(receiveDate)
         val list = all(context).map {
             if (it.dateCode == dateCode)
-                it.copy(receiveAmount = amount, receiveDate = receiveDate, note = note)
+                it.copy(receiveAmount = amount, receiveDay = d, receiveMonth = m, receiveYear = y, note = note)
             else it
         }
         writeAll(context, list)
@@ -296,9 +333,27 @@ object TunnelFinanceStore {
 
     fun clearReceipt(context: Context, dateCode: Int) {
         val list = all(context).map {
-            if (it.dateCode == dateCode) it.copy(receiveAmount = null, receiveDate = "") else it
+            if (it.dateCode == dateCode)
+                it.copy(receiveAmount = null, receiveDay = "", receiveMonth = "", receiveYear = "")
+            else it
         }
         writeAll(context, list)
+    }
+
+    /** ورودی UI: 1403/05/01 یا 14030501 یا جدا با / */
+    private fun parseReceiveDateInput(raw: String): Triple<String, String, String> {
+        val s = raw.toEnglishDigits().trim()
+        if (s.isBlank()) return Triple("", "", "")
+        val parts = s.split('/', '-', '.')
+        if (parts.size == 3) {
+            val a = parts[0].filter { it.isDigit() }
+            val b = parts[1].filter { it.isDigit() }
+            val c = parts[2].filter { it.isDigit() }
+            // سال/ماه/روز یا روز/ماه/سال
+            return if (a.length == 4) Triple(c.trimStart('0').ifEmpty { "0" }, b.trimStart('0').ifEmpty { "0" }, a)
+            else Triple(a.trimStart('0').ifEmpty { "0" }, b.trimStart('0').ifEmpty { "0" }, c)
+        }
+        return splitLegacyReceiveDate(s)
     }
 
     /**
@@ -347,4 +402,38 @@ object TunnelFinanceStore {
         writeAll(context, parsed)
         return parsed.size
     }
+    private fun splitLegacyReceiveDate(raw: String): Triple<String, String, String> {
+        val digits = raw.filter { it.isDigit() }
+        if (digits.isEmpty()) return Triple("", "", "")
+        return when (digits.length) {
+            8 -> Triple(
+                digits.substring(6, 8).trimStart('0').ifEmpty { "0" },
+                digits.substring(4, 6).trimStart('0').ifEmpty { "0" },
+                digits.substring(0, 4)
+            )
+            7 -> {
+                val y = digits.substring(0, 4)
+                val rest = digits.substring(4).toIntOrNull() ?: 0
+                Triple((rest % 100).toString(), (rest / 100).toString(), y)
+            }
+            6 -> {
+                val yy = digits.substring(0, 2).toIntOrNull() ?: 0
+                val m = digits.substring(2, 4).trimStart('0').ifEmpty { "0" }
+                val d = digits.substring(4, 6).trimStart('0').ifEmpty { "0" }
+                Triple(d, m, (1300 + yy).toString())
+            }
+            else -> Triple("", "", digits)
+        }
+    }
+
+    private fun String.toEnglishDigits(): String {
+        val map = mapOf(
+            '۰' to '0', '۱' to '1', '۲' to '2', '۳' to '3', '۴' to '4',
+            '۵' to '5', '۶' to '6', '۷' to '7', '۸' to '8', '۹' to '9',
+            '٠' to '0', '١' to '1', '٢' to '2', '٣' to '3', '٤' to '4',
+            '٥' to '5', '٦' to '6', '٧' to '7', '٨' to '8', '٩' to '9'
+        )
+        return buildString { for (ch in this@toEnglishDigits) append(map[ch] ?: ch) }
+    }
+
 }
