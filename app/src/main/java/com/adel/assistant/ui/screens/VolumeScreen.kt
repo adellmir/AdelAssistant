@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ContourSet
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PointConverter
-import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.VolPoint
 import com.adel.assistant.data.VolumeEngine
 import com.adel.assistant.data.VolumeResult
@@ -67,14 +66,13 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     fun loadUri(uri: Uri, name: String): List<VolPoint> {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: return emptyList()
-        val pts: List<SurveyPoint> = try {
+        val pts = try {
             PointConverter.readBytes(bytes, name)
         } catch (_: Exception) {
             emptyList()
         }
         val fromSurvey = VolumeEngine.fromSurvey(pts)
-        return if (fromSurvey.isNotEmpty()) fromSurvey
-        else parseSimplePoints(bytes.toString(Charsets.UTF_8))
+        return fromSurvey.ifEmpty { parseSimplePoints(bytes.toString(Charsets.UTF_8)) }
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
