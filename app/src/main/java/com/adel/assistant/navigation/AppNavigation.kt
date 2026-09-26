@@ -42,6 +42,7 @@ import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.VolumeScreen
+import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
@@ -224,6 +225,9 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         }
         composable(Routes.TOOL_VOLUME) {
             VolumeScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_PROFILE) {
+            ProfileScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

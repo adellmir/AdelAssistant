@@ -489,6 +489,7 @@ object AssistantAgent {
             MenuCandidate("چینیج تونل", Routes.SURVEY_TUNNEL_CHAINAGE, "نقشه‌برداری", "تونل"),
             MenuCandidate("الاین مختصات", Routes.TOOL_ALIGN, "ابزار", ""),
             MenuCandidate("محاسبه احجام", Routes.TOOL_VOLUME, "ابزار", ""),
+            MenuCandidate("پروفیل طولی", Routes.TOOL_PROFILE, "ابزار", ""),
             MenuCandidate("نمایش نقشه", Routes.TOOL_DXF_PREVIEW, "ابزار", "")
         )
         return result.distinctBy { it.route }
