@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ContourSet
+import com.adel.assistant.data.CutFillCell
+import com.adel.assistant.data.VolumeAnalysis
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
@@ -79,6 +81,10 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
+    var boundaryPoints by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
+    var cutFillCells by remember { mutableStateOf<List<CutFillCell>>(emptyList()) }
+    var boundaryUsed by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
+    var showCutFill by remember { mutableStateOf(true) }
 
     // تنظیمات نقشه
     var contourInterval by remember { mutableStateOf("1.0") }
@@ -110,6 +116,28 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         val fromSurvey = VolumeEngine.fromSurvey(pts)
         return if (fromSurvey.isNotEmpty()) fromSurvey
         else parseSimplePoints(bytes.toString(Charsets.UTF_8))
+    }
+
+    val boundaryPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: ""
+            val pts = if (name.endsWith(".dxf", true) || text.contains("SECTION")) {
+                VolumeEngine.extractBoundaryFromDxf(text)
+            } else {
+                parseSimplePoints(text).map { it.copy(z = 0.0) }
+            }
+            if (pts.size < 3) {
+                message = "Boundary معتبر یافت نشد (حداقل ۳ رأس)"
+            } else {
+                boundaryPoints = pts
+                message = "Boundary بارگذاری شد: ${pts.size} رأس"
+                result = null
+            }
+        } catch (e: Exception) {
+            message = "خطا Boundary: ${e.message}"
+        }
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -195,20 +223,24 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         val iv = contourInterval.replace(',', '.').toDoubleOrNull() ?: 1.0
         val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
         val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
+        val bnd = boundaryPoints.takeIf { it.size >= 3 }
         busy = true
         try {
             val n1 = s1.name.ifBlank { "سطح${i1 + 1}" }
             val n2 = s2.name.ifBlank { "سطح${i2 + 1}" }
-            result = if (methodTin) {
-                VolumeEngine.computeTin(s1.points, s2.points, null, cf, ff, n1, n2)
+            val analysis: VolumeAnalysis = if (methodTin) {
+                VolumeEngine.computeTinAnalysis(s1.points, s2.points, bnd, cf, ff, n1, n2, gs)
             } else {
-                VolumeEngine.computeGrid(s1.points, s2.points, gs, null, cf, ff, n1, n2)
+                VolumeEngine.computeGridAnalysis(s1.points, s2.points, gs, bnd, cf, ff, n1, n2)
             }
+            result = analysis.result
+            cutFillCells = analysis.cells
+            boundaryUsed = analysis.boundaryUsed
             contours = listOf(
                 VolumeEngine.buildContours(n1, s1.points, iv),
                 VolumeEngine.buildContours(n2, s2.points, iv)
             )
-            message = "تحلیل انجام شد"
+            message = "تحلیل انجام شد — ${analysis.cells.size} سلول Cut/Fill"
         } catch (e: Exception) {
             message = "خطا: ${e.message}"
         }
@@ -221,6 +253,9 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             surfaces = surfaces.filter { it.points.isNotEmpty() },
             contours = contours,
             result = result!!,
+            cutFillCells = cutFillCells,
+            boundaryUsed = boundaryUsed,
+            showCutFill = showCutFill,
             contourInterval = contourInterval,
             fixedColorMode = fixedColorMode,
             fixedColorHue = fixedColorHue,
@@ -236,6 +271,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             onShowGrid = { showGrid = it },
             onShowBoundary = { showBoundary = it },
             onShowPoints = { showPoints = it },
+            onShowCutFill = { showCutFill = it },
             onMode3d = { mode3d = it },
             onRebuildContours = {
                 val iv = contourInterval.replace(',', '.').toDoubleOrNull() ?: 1.0
@@ -360,6 +396,31 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             }
         }
 
+        Spacer(Modifier.height(8.dp))
+        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Boundary محدوده محاسبه", color = color, fontWeight = FontWeight.Bold)
+                Text(
+                    if (boundaryPoints.size >= 3) "${boundaryPoints.size} رأس — دستی/فایل"
+                    else "پیش‌فرض: Convex Hull مشترک دو سطح",
+                    color = Color(0xFFB0B8A8), fontSize = 12.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = { boundaryPicker.launch(arrayOf("*/*")) },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) { Text("ورود DXF/TXT", fontSize = 12.sp) }
+                    if (boundaryPoints.isNotEmpty()) {
+                        TextButton(onClick = {
+                            boundaryPoints = emptyList()
+                            message = "Boundary پاک شد — Convex Hull"
+                            result = null
+                        }) { Text("پاک", color = Color(0xFFFF8A65)) }
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilterChip(selected = !methodTin, onClick = { methodTin = false }, label = { Text("Grid") })
@@ -607,6 +668,9 @@ private fun VolumeMapView(
     surfaces: List<SurfaceSlot>,
     contours: List<ContourSet>,
     result: VolumeResult,
+    cutFillCells: List<CutFillCell>,
+    boundaryUsed: List<VolPoint>,
+    showCutFill: Boolean,
     contourInterval: String,
     fixedColorMode: Boolean,
     fixedColorHue: Float,
@@ -622,6 +686,7 @@ private fun VolumeMapView(
     onShowGrid: (Boolean) -> Unit,
     onShowBoundary: (Boolean) -> Unit,
     onShowPoints: (Boolean) -> Unit,
+    onShowCutFill: (Boolean) -> Unit,
     onMode3d: (Boolean) -> Unit,
     onRebuildContours: () -> Unit,
     onExportDxf: () -> Unit,
@@ -751,8 +816,10 @@ private fun VolumeMapView(
                     }
                 }
 
-                if (showBoundary && allPts.size >= 3) {
-                    val hull = VolumeEngine.convexHull(allPts)
+                if (showBoundary) {
+                    val hull = if (boundaryUsed.size >= 3) boundaryUsed
+                    else if (allPts.size >= 3) VolumeEngine.convexHull(allPts)
+                    else emptyList()
                     if (hull.size >= 2) {
                         val path = Path()
                         val first = project(hull[0].x, hull[0].y, hull[0].z)
@@ -763,6 +830,31 @@ private fun VolumeMapView(
                         }
                         path.close()
                         drawPath(path, Color(0x88FFEB3B), style = Stroke(width = 2f))
+                    }
+                }
+
+
+                // Cut / Fill رنگی
+                if (showCutFill && cutFillCells.isNotEmpty()) {
+                    val maxAbs = cutFillCells.maxOf { kotlin.math.abs(it.dz) }.coerceAtLeast(1e-6)
+                    for (cell in cutFillCells) {
+                        val intensity = (kotlin.math.abs(cell.dz) / maxAbs).toFloat().coerceIn(0.15f, 0.75f)
+                        val col = if (cell.dz > 0)
+                            Color(1f, 0.2f, 0.2f, intensity) // قرمز Cut
+                        else
+                            Color(0.2f, 0.45f, 1f, intensity) // آبی Fill
+                        val hs = cell.size / 2.0
+                        val p1 = project(cell.x - hs, cell.y - hs, 0.0)
+                        val p2 = project(cell.x + hs, cell.y - hs, 0.0)
+                        val p3 = project(cell.x + hs, cell.y + hs, 0.0)
+                        val p4 = project(cell.x - hs, cell.y + hs, 0.0)
+                        val path = Path()
+                        path.moveTo(p1.x, p1.y)
+                        path.lineTo(p2.x, p2.y)
+                        path.lineTo(p3.x, p3.y)
+                        path.lineTo(p4.x, p4.y)
+                        path.close()
+                        drawPath(path, col)
                     }
                 }
 
@@ -840,6 +932,10 @@ private fun VolumeMapView(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(showPoints, onShowPoints); Text("نقاط به تفکیک سطح")
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(showCutFill, onShowCutFill); Text("رنگ Cut/Fill")
+                    }
+                    Text("قرمز=خاکبرداری  آبی=خاکریزی", fontSize = 11.sp, color = Color.Gray)
                 }
             },
             confirmButton = {

@@ -35,6 +35,20 @@ data class ContourSet(
     val labels: List<Triple<Double, Double, Double>> // x,y,elevation
 )
 
+/** سلول شبکه برای نمایش رنگی Cut/Fill روی نقشه */
+data class CutFillCell(
+    val x: Double,
+    val y: Double,
+    val size: Double,
+    val dz: Double // مثبت=Cut ، منفی=Fill
+)
+
+data class VolumeAnalysis(
+    val result: VolumeResult,
+    val cells: List<CutFillCell> = emptyList(),
+    val boundaryUsed: List<VolPoint> = emptyList()
+)
+
 data class VolumeResult(
     val method: String,
     val existingCount: Int,
@@ -206,6 +220,211 @@ object VolumeEngine {
             if (n > 0) sumDz / n else 0.0, n, gs, warnings
         )
     }
+
+
+    /** نسخهٔ کامل Grid با سلول‌های Cut/Fill برای نمایش نقشه */
+    fun computeGridAnalysis(
+        existing: List<VolPoint>,
+        design: List<VolPoint>,
+        gridSize: Double,
+        boundary: List<VolPoint>? = null,
+        cutFactor: Double = 1.0,
+        fillFactor: Double = 1.0,
+        existingName: String = "موجود",
+        designName: String = "طراحی"
+    ): VolumeAnalysis {
+        val warnings = mutableListOf<String>()
+        val (ex, remEx) = dedupe(existing)
+        val (de, remDe) = dedupe(design)
+        if (remEx > 0) warnings.add("$remEx نقطه تکراری «$existingName» ادغام شد")
+        if (remDe > 0) warnings.add("$remDe نقطه تکراری «$designName» ادغام شد")
+        if (ex.size < 3 || de.size < 3) {
+            warnings.add("هر سطح حداقل ۳ نقطه نیاز دارد")
+            val r = VolumeResult("Grid", ex.size, de.size, existingName, designName, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, gridSize, warnings)
+            return VolumeAnalysis(r, emptyList(), boundary ?: emptyList())
+        }
+        val all = ex + de
+        val b = bounds(all)
+        val hull = when {
+            boundary != null && boundary.size >= 3 -> boundary
+            else -> convexHull(all)
+        }
+        val gs = gridSize.coerceAtLeast(0.1)
+        var cut = 0.0; var fill = 0.0; var area = 0.0; var sumDz = 0.0
+        var minDz = Double.POSITIVE_INFINITY; var maxDz = Double.NEGATIVE_INFINITY; var n = 0
+        val cellArea = gs * gs
+        val cells = mutableListOf<CutFillCell>()
+        // فقط داخل bbox boundary نمونه‌برداری کن
+        val bb = bounds(hull)
+        var x = bb[0]
+        while (x < bb[2] - 1e-9) {
+            var y = bb[1]
+            while (y < bb[3] - 1e-9) {
+                val cx = x + gs / 2.0; val cy = y + gs / 2.0
+                if (pointInPolygon(cx, cy, hull)) {
+                    val ze = interpolateIdw(cx, cy, ex) ?: continue
+                    val zd = interpolateIdw(cx, cy, de) ?: continue
+                    val dz = ze - zd
+                    if (dz > 0) cut += cellArea * dz else if (dz < 0) fill += cellArea * abs(dz)
+                    area += cellArea; sumDz += dz
+                    if (dz < minDz) minDz = dz; if (dz > maxDz) maxDz = dz
+                    n++
+                    if (kotlin.math.abs(dz) > 1e-6) {
+                        cells.add(CutFillCell(cx, cy, gs, dz))
+                    }
+                }
+                y += gs
+            }
+            x += gs
+        }
+        if (n == 0) warnings.add("محدوده مشترک / Boundary خالی است")
+        if (n in 1..20) warnings.add("تعداد سلول کم — Grid Size را کوچک‌تر کنید")
+        if (boundary != null && boundary.size >= 3) warnings.add("Boundary دستی/فایل اعمال شد (${boundary.size} رأس)")
+        val cutAdj = cut * cutFactor; val fillAdj = fill * fillFactor
+        val r = VolumeResult(
+            "Grid", ex.size, de.size, existingName, designName,
+            cutAdj, fillAdj, cutAdj - fillAdj, area,
+            if (n > 0) minDz else 0.0, if (n > 0) maxDz else 0.0,
+            if (n > 0) sumDz / n else 0.0, n, gs, warnings
+        )
+        return VolumeAnalysis(r, cells, hull)
+    }
+
+    fun computeTinAnalysis(
+        existing: List<VolPoint>,
+        design: List<VolPoint>,
+        boundary: List<VolPoint>? = null,
+        cutFactor: Double = 1.0,
+        fillFactor: Double = 1.0,
+        existingName: String = "موجود",
+        designName: String = "طراحی",
+        sampleGrid: Double = 1.0
+    ): VolumeAnalysis {
+        val r = computeTin(existing, design, boundary, cutFactor, fillFactor, existingName, designName)
+        // برای نمایش رنگی، از شبکه روی همان boundary نمونه‌برداری
+        val hull = when {
+            boundary != null && boundary.size >= 3 -> boundary
+            else -> convexHull(existing + design)
+        }
+        val cells = mutableListOf<CutFillCell>()
+        if (existing.size >= 3 && design.size >= 3) {
+            val trisDe = buildTin(dedupe(design).first)
+            val ex = dedupe(existing).first
+            val de = dedupe(design).first
+            val gs = sampleGrid.coerceAtLeast(0.2)
+            val bb = bounds(hull)
+            var x = bb[0]
+            while (x < bb[2] - 1e-9) {
+                var y = bb[1]
+                while (y < bb[3] - 1e-9) {
+                    val cx = x + gs / 2.0; val cy = y + gs / 2.0
+                    if (pointInPolygon(cx, cy, hull)) {
+                        val ze = interpolateIdw(cx, cy, ex) ?: continue
+                        val zd = tinZAt(cx, cy, de, trisDe) ?: interpolateIdw(cx, cy, de) ?: continue
+                        val dz = ze - zd
+                        if (kotlin.math.abs(dz) > 1e-6) cells.add(CutFillCell(cx, cy, gs, dz))
+                    }
+                    y += gs
+                }
+                x += gs
+            }
+        }
+        return VolumeAnalysis(r, cells, hull)
+    }
+
+    /**
+     * استخراج Boundary از DXF:
+     * اولویت با LWPOLYLINE / POLYLINE بسته؛ وگرنه Convex Hull نقاط انتهای LINEها
+     */
+    fun extractBoundaryFromDxf(content: String): List<VolPoint> {
+        val pairs = mutableListOf<Pair<Int, String>>()
+        val linesIn = content.replace("\r\n", "\n").replace("\r", "\n").lines()
+        var i = 0
+        while (i + 1 < linesIn.size) {
+            val code = linesIn[i].trim().toIntOrNull()
+            val value = linesIn[i + 1]
+            if (code != null) pairs.add(code to value)
+            i += 2
+        }
+        val polylines = mutableListOf<List<VolPoint>>()
+        val lineEnds = mutableListOf<VolPoint>()
+        var idx = 0
+        fun next(): Pair<Int, String>? = if (idx < pairs.size) pairs[idx++] else null
+        fun peek(): Pair<Int, String>? = if (idx < pairs.size) pairs[idx] else null
+
+        while (idx < pairs.size) {
+            val (c0, v0) = next() ?: break
+            if (c0 != 0) continue
+            when (v0.trim().uppercase()) {
+                "LWPOLYLINE" -> {
+                    var closed = false
+                    val verts = mutableListOf<Pair<Double, Double>>()
+                    var x: Double? = null
+                    while (true) {
+                        val p = peek() ?: break
+                        if (p.first == 0) break
+                        val (c, v) = next()!!
+                        when (c) {
+                            70 -> closed = ((v.trim().toIntOrNull() ?: 0) and 1) != 0
+                            10 -> x = v.trim().replace(',', '.').toDoubleOrNull()
+                            20 -> {
+                                val y = v.trim().replace(',', '.').toDoubleOrNull()
+                                if (x != null && y != null) verts.add(x!! to y)
+                                x = null
+                            }
+                        }
+                    }
+                    if (verts.size >= 3) {
+                        val pts = verts.mapIndexed { i, (xx, yy) -> VolPoint("B$i", xx, yy, 0.0) }
+                        if (closed || dist(verts.first(), verts.last()) < 0.05) {
+                            polylines.add(pts)
+                        } else {
+                            // اگر تقریباً بسته نبود باز هم به‌عنوان مرز قبول کن
+                            polylines.add(pts)
+                        }
+                    }
+                }
+                "LINE" -> {
+                    var x1 = 0.0; var y1 = 0.0; var x2 = 0.0; var y2 = 0.0
+                    while (true) {
+                        val p = peek() ?: break
+                        if (p.first == 0) break
+                        val (c, v) = next()!!
+                        val d = v.trim().replace(',', '.').toDoubleOrNull() ?: continue
+                        when (c) {
+                            10 -> x1 = d
+                            20 -> y1 = d
+                            11 -> x2 = d
+                            21 -> y2 = d
+                        }
+                    }
+                    lineEnds.add(VolPoint("L", x1, y1, 0.0))
+                    lineEnds.add(VolPoint("L", x2, y2, 0.0))
+                }
+            }
+        }
+        // بزرگ‌ترین پلی‌لاین
+        val best = polylines.maxByOrNull { polyArea(it) }
+        if (best != null && best.size >= 3) return best
+        if (lineEnds.size >= 3) return convexHull(lineEnds)
+        return emptyList()
+    }
+
+    private fun dist(a: Pair<Double, Double>, b: Pair<Double, Double>): Double {
+        val dx = a.first - b.first; val dy = a.second - b.second
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    private fun polyArea(pts: List<VolPoint>): Double {
+        if (pts.size < 3) return 0.0
+        var s = 0.0
+        for (i in pts.indices) {
+            val j = (i + 1) % pts.size
+            s += pts[i].x * pts[j].y - pts[j].x * pts[i].y
+        }
+        return abs(s) / 2.0
+    }
+
 
     // ---------- TIN ----------
     private data class Tri(var a: Int, var b: Int, var c: Int)
