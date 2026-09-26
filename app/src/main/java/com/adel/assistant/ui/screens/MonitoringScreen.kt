@@ -163,6 +163,8 @@ private fun ProjectDetail(
     var showBase by remember { mutableStateOf(false) }
     var analyzeEpoch by remember { mutableStateOf<MonEpoch?>(null) }
     var message by remember { mutableStateOf("") }
+    var exportPickEpoch by remember { mutableStateOf<MonEpoch?>(null) }
+    var exportPickIdx by remember { mutableStateOf(1) }
 
     val templatePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -219,6 +221,40 @@ private fun ProjectDetail(
         )
     }
 
+    if (exportPickEpoch != null) {
+        AlertDialog(
+            onDismissRequest = { exportPickEpoch = null },
+            title = { Text("نوع گزارش") },
+            text = { Text("کدام مدل پایش صادر شود؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val ep = exportPickEpoch!!
+                    val rows = MonitoringAnalyzer.analyze(p.basePoints, ep.points)
+                    val uri = MonitoringExport.export(context, p, ep, rows, exportPickIdx, "axial")
+                    if (uri != null) {
+                        message = "گزارش محوری ذخیره شد"
+                        MonitoringExport.shareUri(context, uri)
+                    } else message = "خطا در صدور"
+                    exportPickEpoch = null
+                }) { Text("محوری") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val ep = exportPickEpoch!!
+                    val rows = MonitoringAnalyzer.analyzeCoordinate(p.basePoints, ep.points)
+                    val uri = MonitoringExport.export(context, p, ep, rows, exportPickIdx, "coord")
+                    if (uri != null) {
+                        message = "گزارش مختصاتی ذخیره شد"
+                        MonitoringExport.shareUri(context, uri)
+                    } else message = "خطا در صدور"
+                    exportPickEpoch = null
+                }) { Text("مختصاتی") }
+            }
+        )
+    }
+
+
+
     Column(Modifier.fillMaxSize().background(Background).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
@@ -271,12 +307,8 @@ private fun ProjectDetail(
                                     message = "ابتدا قالب گزارش را وارد کنید"
                                     return@TextButton
                                 }
-                                val rows = MonitoringAnalyzer.analyze(p.basePoints, ep.points)
-                                val uri = MonitoringExport.export(context, p, ep, rows, idx)
-                                if (uri != null) {
-                                    message = "گزارش ذخیره شد"
-                                    MonitoringExport.shareUri(context, uri)
-                                } else message = "خطا در صدور گزارش"
+                                exportPickEpoch = ep
+                                exportPickIdx = idx
                             }) { Text("صدور گزارش", color = Color(0xFFFFB74D)) }
                         }
                     }
@@ -423,11 +455,19 @@ private fun AnalyzePage(
 ) {
     val context = LocalContext.current
     var ep by remember { mutableStateOf(epoch) }
-    val rows = remember(ep.points, project.basePoints) {
+    var tab by remember { mutableStateOf(0) } // 0=مختصاتی 1=محوری
+    val rowsAxial = remember(ep.points, project.basePoints) {
         MonitoringAnalyzer.analyze(project.basePoints, ep.points)
     }
+    val rowsCoord = remember(ep.points, project.basePoints) {
+        MonitoringAnalyzer.analyzeCoordinate(project.basePoints, ep.points)
+    }
     var msg by remember { mutableStateOf("") }
-    val idx = project.epochs.sortedBy { it.createdAt }.indexOfFirst { it.id == ep.id }.let { if (it < 0) project.epochs.size else it + 1 }
+    val idx = project.epochs.sortedBy { it.createdAt }.indexOfFirst { it.id == ep.id }.let {
+        if (it < 0) project.epochs.size else it + 1
+    }
+    val rows = if (tab == 0) rowsCoord else rowsAxial
+    val mode = if (tab == 0) "coord" else "axial"
 
     Column(Modifier.fillMaxSize().background(Background).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -442,9 +482,9 @@ private fun AnalyzePage(
                         msg = "قالب گزارش را در پروژه وارد کنید"
                         return@Button
                     }
-                    val uri = MonitoringExport.export(context, project, ep, rows, idx)
+                    val uri = MonitoringExport.export(context, project, ep, rows, idx, mode)
                     if (uri != null) {
-                        msg = "گزارش ذخیره شد"
+                        msg = if (mode == "coord") "گزارش مختصاتی ذخیره شد" else "گزارش محوری ذخیره شد"
                         MonitoringExport.shareUri(context, uri)
                     } else msg = "خطا در صدور"
                 },
@@ -452,29 +492,67 @@ private fun AnalyzePage(
             ) { Text("صدور گزارش") }
         }
         if (msg.isNotBlank()) Text(msg, color = Color(0xFFB0B8A8), fontSize = 12.sp)
-        Text("سبز ≤3 · نارنجی 4–5 · قرمز ≥6 mm  |  + داخل گود", color = Color(0xFF7A8570), fontSize = 11.sp)
+
+        TabRow(selectedTabIndex = tab, containerColor = Color(0xFF1A1F16)) {
+            Tab(
+                selected = tab == 0,
+                onClick = { tab = 0 },
+                text = { Text("پایش مختصاتی", color = if (tab == 0) color else Color.White) }
+            )
+            Tab(
+                selected = tab == 1,
+                onClick = { tab = 1 },
+                text = { Text("پایش محوری", color = if (tab == 1) color else Color.White) }
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        if (tab == 0) {
+            Text("اختلاف خام مختصات نسبت به BASE (بدون Translation)", color = Color(0xFF7A8570), fontSize = 11.sp)
+            Text("سبز ≤3 · نارنجی 4–5 · قرمز ≥6 mm", color = Color(0xFF7A8570), fontSize = 11.sp)
+        } else {
+            Text("پس از حذف جابه‌جایی مشترک BM  |  + داخل گود", color = Color(0xFF7A8570), fontSize = 11.sp)
+            Text("سبز ≤3 · نارنجی 4–5 · قرمز ≥6 mm", color = Color(0xFF7A8570), fontSize = 11.sp)
+        }
         Spacer(Modifier.height(6.dp))
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             HeaderCell("نقطه", 64)
             HeaderCell("نوع", 40)
-            HeaderCell("X دوره", 88)
-            HeaderCell("Y دوره", 88)
-            HeaderCell("Z دوره", 72)
-            HeaderCell("داخل/خارج", 72)
-            HeaderCell("نشست", 56)
-            HeaderCell("سه‌بعدی", 56)
+            HeaderCell("X پایه", 80)
+            HeaderCell("Y پایه", 80)
+            HeaderCell("Z پایه", 64)
+            HeaderCell("X دوره", 80)
+            HeaderCell("Y دوره", 80)
+            HeaderCell("Z دوره", 64)
+            if (tab == 0) {
+                HeaderCell("ΔX", 56)
+                HeaderCell("ΔY", 56)
+                HeaderCell("ΔH", 56)
+            } else {
+                HeaderCell("داخل/خارج", 72)
+                HeaderCell("نشست", 56)
+                HeaderCell("سه‌بعدی", 56)
+            }
         }
         LazyColumn {
             items(rows) { r ->
                 Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                     DataCell(r.name, 64)
                     DataCell(if (r.isBm) "Bm" else "TP", 40)
-                    DataCell(r.epX?.let { String.format(Locale.US, "%.3f", it) } ?: "", 88)
-                    DataCell(r.epY?.let { String.format(Locale.US, "%.3f", it) } ?: "", 88)
-                    DataCell(r.epZ?.let { String.format(Locale.US, "%.3f", it) } ?: "", 72)
-                    ValCell(r.inOutMm, 72)
-                    ValCell(r.settleMm, 56)
-                    ValCell(r.d3dMm, 56)
+                    DataCell(r.baseX?.let { String.format(Locale.US, "%.3f", it) } ?: "", 80)
+                    DataCell(r.baseY?.let { String.format(Locale.US, "%.3f", it) } ?: "", 80)
+                    DataCell(r.baseZ?.let { String.format(Locale.US, "%.3f", it) } ?: "", 64)
+                    DataCell(r.epX?.let { String.format(Locale.US, "%.3f", it) } ?: "", 80)
+                    DataCell(r.epY?.let { String.format(Locale.US, "%.3f", it) } ?: "", 80)
+                    DataCell(r.epZ?.let { String.format(Locale.US, "%.3f", it) } ?: "", 64)
+                    if (tab == 0) {
+                        ValCell(r.dxMm, 56)
+                        ValCell(r.dyMm, 56)
+                        ValCell(r.dhMm, 56)
+                    } else {
+                        ValCell(r.inOutMm, 72)
+                        ValCell(r.settleMm, 56)
+                        ValCell(r.d3dMm, 56)
+                    }
                 }
             }
         }

@@ -13,12 +13,16 @@ import java.util.zip.ZipOutputStream
 
 object MonitoringExport {
 
+    /**
+     * @param mode "axial" = محوری (داخل/خارج، نشست، 3D) | "coord" = مختصاتی (ΔX, ΔY, ΔH)
+     */
     fun export(
         context: Context,
         project: MonProject,
         epoch: MonEpoch,
         rows: List<MonAnalysisRow>,
-        epochIndex: Int
+        epochIndex: Int,
+        mode: String = "axial"
     ): Uri? {
         val template = MonitoringStore.loadTemplateBytes(context, project) ?: return null
         val updates = linkedMapOf<String, Pair<String, Boolean>>()
@@ -33,8 +37,9 @@ object MonitoringExport {
 
         val ord = MonitoringAnalyzer.persianOrdinal(epochIndex.coerceAtLeast(1))
         val dateStr = listOf(epoch.year, epoch.month, epoch.day).filter { it.isNotBlank() }.joinToString("/")
+        val modeLabel = if (mode == "coord") "مختصاتی" else "محوری"
         val body =
-            "احتراما گزارش وضعیت مانیتورینگ دور برداشت $ord مورخ $dateStr با برداشت کارفرما به شرح ذیل می باشد"
+            "احتراما گزارش وضعیت مانیتورینگ $modeLabel دور برداشت $ord مورخ $dateStr با برداشت کارفرما به شرح ذیل می باشد"
         updates["D9"] = body to true
 
         rows.forEachIndexed { idx, r ->
@@ -47,14 +52,21 @@ object MonitoringExport {
             r.epX?.let { updates["J$row"] = fmt(it) to false }
             r.epY?.let { updates["K$row"] = fmt(it) to false }
             r.epZ?.let { updates["L$row"] = fmt(it) to false }
-            r.inOutMm?.let { updates["M$row"] = fmt1(it) to false }
-            r.settleMm?.let { updates["N$row"] = fmt1(it) to false }
-            r.d3dMm?.let { updates["O$row"] = fmt1(it) to false }
+            if (mode == "coord") {
+                r.dxMm?.let { updates["M$row"] = fmt1(it) to false }
+                r.dyMm?.let { updates["N$row"] = fmt1(it) to false }
+                r.dhMm?.let { updates["O$row"] = fmt1(it) to false }
+            } else {
+                r.inOutMm?.let { updates["M$row"] = fmt1(it) to false }
+                r.settleMm?.let { updates["N$row"] = fmt1(it) to false }
+                r.d3dMm?.let { updates["O$row"] = fmt1(it) to false }
+            }
         }
 
         val out = rewriteXlsx(context, template, updates)
         if (out.isEmpty()) return null
-        val name = "monitoring_${project.name}_${epoch.year}${epoch.month}${epoch.day}.xlsx"
+        val tag = if (mode == "coord") "coord" else "axial"
+        val name = "monitoring_${tag}_${project.name}_${epoch.year}${epoch.month}${epoch.day}.xlsx"
             .replace(" ", "_")
         return FileExport.exportBytesToDocuments(
             context, name, out,

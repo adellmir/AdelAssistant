@@ -25,9 +25,12 @@ data class MonAnalysisRow(
     val epX: Double?,
     val epY: Double?,
     val epZ: Double?,
-    val inOutMm: Double?,      // + inside pit
-    val settleMm: Double?,     // dZ mm (up positive)
+    val inOutMm: Double?,      // محوری: + داخل گود
+    val settleMm: Double?,     // محوری: نشست mm
     val d3dMm: Double?,
+    val dxMm: Double? = null,  // مختصاتی: اختلاف X mm
+    val dyMm: Double? = null,  // مختصاتی: اختلاف Y mm
+    val dhMm: Double? = null,  // مختصاتی: اختلاف H mm
     val matchedBy: String = "name" // name | proximity | missing
 )
 
@@ -315,6 +318,67 @@ object MonitoringAnalyzer {
 
         val rows = pairings.map { row(it) }
         // sort BM first then TP by name
+        return rows.sortedWith(compareBy({ !it.isBm }, { it.name }))
+    }
+
+
+    /** پایش مختصاتی: فقط اختلاف خام مختصات بدون Translation */
+    fun analyzeCoordinate(base: List<MonPoint>, epoch: List<MonPoint>): List<MonAnalysisRow> {
+        if (base.isEmpty()) return emptyList()
+        val used = mutableSetOf<Int>()
+        val rows = mutableListOf<MonAnalysisRow>()
+        base.forEach { b ->
+            val byName = epoch.indexOfFirst { it.name.equals(b.name, true) && it.name.isNotBlank() }
+            val e: MonPoint?
+            val by: String
+            if (byName >= 0 && byName !in used) {
+                used.add(byName)
+                e = epoch[byName]
+                by = "name"
+            } else {
+                var bestI = -1
+                var bestD = MATCH_TOL
+                epoch.forEachIndexed { i, ep ->
+                    if (i in used) return@forEachIndexed
+                    val d = hypot(ep.x - b.x, ep.y - b.y)
+                    if (d <= bestD) { bestD = d; bestI = i }
+                }
+                if (bestI >= 0) {
+                    used.add(bestI)
+                    e = epoch[bestI]
+                    by = "proximity"
+                } else {
+                    e = null
+                    by = "missing"
+                }
+            }
+            if (e == null) {
+                rows.add(
+                    MonAnalysisRow(
+                        name = b.name, isBm = b.isBm,
+                        baseX = b.x, baseY = b.y, baseZ = b.z,
+                        epX = null, epY = null, epZ = null,
+                        inOutMm = null, settleMm = null, d3dMm = null,
+                        dxMm = null, dyMm = null, dhMm = null,
+                        matchedBy = "missing"
+                    )
+                )
+            } else {
+                val dX = (e.x - b.x) * 1000.0
+                val dY = (e.y - b.y) * 1000.0
+                val dH = (e.z - b.z) * 1000.0
+                rows.add(
+                    MonAnalysisRow(
+                        name = b.name, isBm = b.isBm,
+                        baseX = b.x, baseY = b.y, baseZ = b.z,
+                        epX = e.x, epY = e.y, epZ = e.z,
+                        inOutMm = null, settleMm = null, d3dMm = null,
+                        dxMm = dX, dyMm = dY, dhMm = dH,
+                        matchedBy = by
+                    )
+                )
+            }
+        }
         return rows.sortedWith(compareBy({ !it.isBm }, { it.name }))
     }
 
