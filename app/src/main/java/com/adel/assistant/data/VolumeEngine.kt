@@ -345,7 +345,7 @@ object VolumeEngine {
      */
     fun extractBoundaryFromDxf(content: String): List<VolPoint> {
         val pairs = mutableListOf<Pair<Int, String>>()
-        val linesIn = content.replace("\r\n", "\n").replace("\r", "\n").lines()
+        val linesIn = content.lines()
         var i = 0
         while (i + 1 < linesIn.size) {
             val code = linesIn[i].trim().toIntOrNull()
@@ -590,11 +590,7 @@ object VolumeEngine {
      */
     fun extractBreaklinesFromDxf(content: String): List<List<VolPoint>> {
         val pairs = mutableListOf<Pair<Int, String>>()
-        val linesIn = content.replace("
-", "
-").replace("
-", "
-").lines()
+        val linesIn = content.lines()
         var i = 0
         while (i + 1 < linesIn.size) {
             val code = linesIn[i].trim().toIntOrNull()
