@@ -11,7 +11,8 @@ data class VolPoint(
     val id: String,
     val x: Double,
     val y: Double,
-    val z: Double
+    val z: Double,
+    val code: String = ""
 )
 
 data class VolTriangle(
@@ -537,5 +538,5 @@ object VolumeEngine {
     private fun fmt3(v: Double) = String.format(Locale.US, "%.3f", v)
 
     fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
-        points.map { VolPoint(it.id.ifBlank { "P" }, it.x, it.y, it.z) }
+        points.map { VolPoint(it.id.ifBlank { "P" }, it.x, it.y, it.z, it.code) }
 }
