@@ -402,12 +402,13 @@ private fun PlumbWorkspace(
                 }
             }
 
-            // خط محور رفرنس A→B
+            // خط محور رفرنس فقط هنگام ویرایش/انتخاب
             run {
-                val aL = if (axisPickMode && axisDraftA != null) axisDraftA!!.first else p.axisALetter
-                val aN = if (axisPickMode && axisDraftA != null) axisDraftA!!.second else p.axisANumber
-                val bL = if (axisPickMode && axisDraftB != null) axisDraftB!!.first else p.axisBLetter
-                val bN = if (axisPickMode && axisDraftB != null) axisDraftB!!.second else p.axisBNumber
+                if (!axisPickMode) return@run
+                val aL = axisDraftA?.first ?: p.axisALetter
+                val aN = axisDraftA?.second ?: p.axisANumber
+                val bL = axisDraftB?.first ?: p.axisBLetter
+                val bN = axisDraftB?.second ?: p.axisBNumber
                 if (aL >= 0 && aN >= 0 && bL >= 0 && bN >= 0) {
                     val (ax, ay) = intersectionWorld(p, aL, aN)
                     val (bx, by) = intersectionWorld(p, bL, bN)

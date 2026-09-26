@@ -55,6 +55,8 @@ import java.util.Calendar
 import java.util.Locale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import com.adel.assistant.navigation.Routes
 import com.adel.assistant.ui.theme.ToolPrimary
 
@@ -139,6 +141,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             } catch (_: Exception) { emptyList() }
         )
     }
+    var tasksOpen by rememberSaveable { mutableStateOf(false) }
     var projectTasks by remember {
         mutableStateOf(
             try {
@@ -263,8 +266,41 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             }
 
             // ---- تسک‌ها ----
-            DashboardCard(title = "تسک‌های انجام‌نشده") {
-                Text(
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceColor,
+                border = BorderStroke(0.5.dp, BorderColor),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { tasksOpen = !tasksOpen },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "تسک‌های انجام‌نشده",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "تونل ${tunnelTasks.size} عدد  پروژه ${projectTasks.size} عدد",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Icon(
+                            imageVector = if (tasksOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                    if (tasksOpen) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
                     "تسک‌های پروژه ▶",
                     color = WorkPrimary,
                     style = MaterialTheme.typography.labelLarge,
@@ -350,6 +386,8 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     }
                 }
             }
+                }
+            }
 
             // ---- عنوان بخش ----
             Text(
@@ -411,7 +449,8 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .weight(1f)
                             .clickable {
                                 sectionIndex = index
-                                tabIndex = 0
+                                // مالی: پیش‌فرض سربرگ پروژه
+                                tabIndex = if (index == 0) 1 else 0
                             },
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {

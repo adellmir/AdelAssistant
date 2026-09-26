@@ -80,9 +80,21 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
             val v = y * 100 + m
             return v in (fy * 100 + fm)..(tyi * 100 + tmi)
         }
-        val tRows = TunnelFinanceStore.all(context).filter { monthInRange(it.year, it.month) }
-        val incomeTun = tRows.sumOf { it.income }
-        val recvTun = tRows.mapNotNull { it.receiveAmount }.sum()
+        fun recvKey(row: com.adel.assistant.data.TunnelMonthRow): Long? {
+            val y = row.receiveYear.toIntOrNullFa()
+            val m = row.receiveMonth.toIntOrNullFa()
+            if (y == null || m == null || y <= 0 || m <= 0) return null
+            val d = row.receiveDay.toIntOrNullFa() ?: 1
+            return y * 10000L + m * 100L + d
+        }
+        val tRowsIncome = TunnelFinanceStore.all(context).filter { monthInRange(it.year, it.month) }
+        val incomeTun = tRowsIncome.sumOf { it.income }
+        // دریافتی تونل بر اساس تاریخ دریافت (روز/ماه/سال)، نه ماه کارکرد
+        val recvTun = TunnelFinanceStore.all(context).sumOf { row ->
+            val amt = row.receiveAmount ?: return@sumOf 0.0
+            val k = recvKey(row) ?: return@sumOf 0.0
+            if (k in fromKey..toKey) amt else 0.0
+        }
 
         result = StatusResult(
             incomeProject = incomeProj,

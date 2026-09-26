@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tools_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="#E61A1F16">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="میانبر ابزار"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="12sp"
+        android:paddingBottom="6dp" />
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/btn_draw_map" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="ترسیم\nنقشه" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+        <TextView android:id="@+id/btn_preview_map" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="نمایش\nنقشه" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+        <TextView android:id="@+id/btn_converter" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="مبدل" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/btn_dump" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="تخلیه\nدوربین" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+        <TextView android:id="@+id/btn_plumb" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="شاقولی" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+        <TextView android:id="@+id/btn_monitoring" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="پایش" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/btn_tunnel_map" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="نقشه\nتونل" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+        <TextView android:id="@+id/btn_tunnel_points" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="نقاط\nتونل" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+        <TextView android:id="@+id/btn_clients" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="کارفرمایان\nپروژه‌ها" android:textColor="#FFE8EDE0" android:textSize="11sp" android:background="#332A3A20" android:layout_margin="3dp" android:padding="6dp" />
+    </LinearLayout>
+</LinearLayout>
