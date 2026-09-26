@@ -155,6 +155,104 @@ object PlumbStore {
         return sb.toString()
     }
 
+    
+    fun importCsv(ctx: Context, text: String): Int {
+        val lines = text.replace("\r\n", "\n").replace('\r', '\n').lines().filter { it.isNotBlank() }
+        if (lines.isEmpty()) return 0
+        val header = splitCsvLine(lines.first())
+        val nameIdx = header.indexOfFirst { it.equals("name", true) }.takeIf { it >= 0 } ?: 0
+        val clientIdx = header.indexOfFirst { it.equals("client", true) }.takeIf { it >= 0 } ?: 1
+        fun idx(h: String) = header.indexOfFirst { it.equals(h, true) }
+        val rd = idx("report_d"); val rm = idx("report_m"); val ry = idx("report_y")
+        val cd = idx("control_d"); val cm = idx("control_m"); val cy = idx("control_y")
+        val hi = idx("height")
+        val colNameIdx = header.mapIndexedNotNull { i, h -> if (h.matches(Regex("col\\d+_name", RegexOption.IGNORE_CASE))) i else null }
+        val imported = mutableListOf<PlumbProject>()
+        for (line in lines.drop(1)) {
+            val c = splitCsvLine(line)
+            if (c.isEmpty()) continue
+            fun g(i: Int) = c.getOrNull(i)?.trim().orEmpty()
+            fun gd(i: Int) = g(i).replace(',', '.').toDoubleOrNull()
+            val columns = mutableListOf<PlumbColumn>()
+            for (ci in colNameIdx) {
+                val cname = g(ci)
+                if (cname.isBlank()) continue
+                // parse letter/number from name like A3
+                val letterPart = cname.takeWhile { it.isLetter() }
+                val numPart = cname.dropWhile { it.isLetter() }.filter { it.isDigit() }
+                val li = letterPart.uppercase().firstOrNull()?.let { it - 'A' } ?: 0
+                val ni = numPart.toIntOrNull()?.minus(1) ?: 0
+                val rep = PlumbReading(
+                    refBottom = gd(ci + 1), refTop = gd(ci + 2),
+                    lineBottom = gd(ci + 3), lineTop = gd(ci + 4)
+                )
+                val ctl = PlumbReading(
+                    refBottom = gd(ci + 5), refTop = gd(ci + 6),
+                    lineBottom = gd(ci + 7), lineTop = gd(ci + 8)
+                )
+                columns.add(PlumbColumn(cname, li, ni, rep, ctl))
+            }
+            val maxL = (columns.maxOfOrNull { it.letterIdx } ?: 0) + 1
+            val maxN = (columns.maxOfOrNull { it.numberIdx } ?: 0) + 1
+            imported.add(
+                PlumbProject(
+                    name = g(nameIdx),
+                    client = g(clientIdx),
+                    reportDay = if (rd >= 0) g(rd) else "",
+                    reportMonth = if (rm >= 0) g(rm) else "",
+                    reportYear = if (ry >= 0) g(ry) else "",
+                    controlDay = if (cd >= 0) g(cd) else "",
+                    controlMonth = if (cm >= 0) g(cm) else "",
+                    controlYear = if (cy >= 0) g(cy) else "",
+                    heightM = if (hi >= 0) gd(hi) ?: 22.0 else 22.0,
+                    letterCount = maxL.coerceAtLeast(1),
+                    numberCount = maxN.coerceAtLeast(1),
+                    columns = columns
+                )
+            )
+        }
+        if (imported.isEmpty()) return 0
+        val all = loadAll(ctx).toMutableList()
+        imported.forEach { p ->
+            val i = all.indexOfFirst { it.name.equals(p.name, true) && it.client.equals(p.client, true) }
+            if (i >= 0) all[i] = p.copy(id = all[i].id) else all.add(p)
+        }
+        saveAll(ctx, all)
+        return imported.size
+    }
+
+    private fun splitCsvLine(line: String): List<String> {
+        val out = mutableListOf<String>()
+        val sb = StringBuilder()
+        var inQ = false
+        var i = 0
+        while (i < line.length) {
+            val ch = line[i]
+            when {
+                ch == '"' -> {
+                    if (inQ && i + 1 < line.length && line[i + 1] == '"') {
+                        sb.append('"'); i++
+                    } else inQ = !inQ
+                }
+                ch == ',' && !inQ -> {
+                    out.add(sb.toString()); sb.clear()
+                }
+                else -> sb.append(ch)
+            }
+            i++
+        }
+        out.add(sb.toString())
+        return out
+    }
+
+    /** JSON کامل پایگاه برای زیپ پشتیبان */
+    fun exportJson(ctx: Context): String {
+        val arr = org.json.JSONArray()
+        loadAll(ctx).forEach { arr.put(toJson(it)) }
+        return arr.toString(2)
+    }
+
+
     private fun toJson(p: PlumbProject): JSONObject = JSONObject().apply {
         put("id", p.id)
         put("name", p.name)

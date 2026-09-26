@@ -1,5 +1,6 @@
 package com.adel.assistant.utils
 
+import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.CodeCategory
 import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.DxfColors
@@ -114,13 +115,15 @@ object DxfMapGenerator {
 
     private fun resolveSetting(settings: Map<String, CodeSetting>, code: String): CodeSetting? {
         settings[code]?.let { return it }
-        val base = code.substringBefore(".").ifBlank { code }
-        settings[base]?.let { return it }
+        val base = codeBase(code)
+        if (base.isNotBlank()) {
+            settings[base]?.let { return it }
+            settings[base.lowercase()]?.let { return it }
+        }
         settings[code.lowercase()]?.let { return it }
-        settings[base.lowercase()]?.let { return it }
-        val stripped = code.replace(Regex("""\.E$""", RegexOption.IGNORE_CASE), "")
-        return settings[stripped] ?: settings.entries.firstOrNull {
-            it.key.equals(code, true) || it.key.equals(base, true)
+        // هر کلیدی که پایهٔ یکسان دارد (مثلاً 1 و 1.e و e.1)
+        return settings.entries.firstOrNull {
+            codeBase(it.key).equals(base, true) || it.key.equals(code, true)
         }?.value
     }
 

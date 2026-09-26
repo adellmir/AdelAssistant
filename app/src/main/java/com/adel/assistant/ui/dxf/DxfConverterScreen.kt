@@ -13,13 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material.icons.filled.LinearScale
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material.icons.outlined.Checklist
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.filled.LinearScale
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,14 +23,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.adel.assistant.data.CodeSetting
+import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.KmlParser
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
-import com.adel.assistant.data.GsiPoint
-import com.adel.assistant.ui.PointsSpreadsheet
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.utils.DxfMapGenerator
@@ -56,15 +48,9 @@ fun DxfConverterScreen(onBack: () -> Unit) {
     var codeSettings by remember { mutableStateOf<Map<String, CodeSetting>>(emptyMap()) }
     var generatedDxf by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    var workTab by remember { mutableStateOf(0) } // 0 ویرایش نقاط 1 تعیین وضعیت
-    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    var selectAll by remember { mutableStateOf(true) }
-    var newestFirst by remember { mutableStateOf(false) }
-    var rangeMode by remember { mutableStateOf(false) }
-    var rangeAnchorId by remember { mutableStateOf<Long?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
@@ -99,15 +85,10 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                         }
                     }
                     points = parsedPoints
-                    val uniqueCodes = parsedPoints.map { it.code }.distinct().filter { it.isNotBlank() }
+                    val uniqueCodes = parsedPoints.map { codeBase(it.code) }.distinct().filter { it.isNotBlank() }
                     codeSettings = uniqueCodes.associateWith { DefaultCodeRules.createDefaultSetting(it) }
                     if (parsedPoints.isNotEmpty()) {
                         stage = 1
-                        workTab = 0
-                        selectAll = true
-                        selectedIds = parsedPoints.mapIndexed { i, _ -> i.toLong() }.toSet()
-                        rangeMode = false
-                        rangeAnchorId = null
                         statusMessage = null
                     } else {
                         statusMessage = "هیچ نقطه‌ای خوانده نشد."
@@ -189,203 +170,18 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            
             1 -> {
-                // تبدیل به GsiPoint برای جدول (id پایدار = ایندکس)
-                fun toGsi(list: List<SurveyPoint>): List<GsiPoint> =
-                    list.mapIndexed { i, sp ->
-                        GsiPoint(
-                            name = sp.id.ifBlank { (i + 1).toString() },
-                            e = sp.x,
-                            n = sp.y,
-                            z = sp.z,
-                            code = sp.code,
-                            id = i.toLong()
-                        )
+                CodeCategorizationContent(
+                    points = points,
+                    fileName = fileName,
+                    settings = codeSettings,
+                    onSettingsChange = { codeSettings = it },
+                    onConfirm = {
+                        generatedDxf = DxfMapGenerator.generate(points, codeSettings)
+                        stage = 2
                     }
-                fun fromGsi(g: GsiPoint): SurveyPoint =
-                    SurveyPoint(
-                        id = g.name,
-                        x = g.e,
-                        y = g.n,
-                        z = g.z,
-                        code = g.code
-                    )
-                val gsiPoints = remember(points) { toGsi(points) }
-                val displayList = remember(gsiPoints, newestFirst) {
-                    if (newestFirst) gsiPoints.asReversed() else gsiPoints
-                }
-                fun activePoints(): List<SurveyPoint> {
-                    if (selectAll || selectedIds.size == points.size) return points
-                    return points.filterIndexed { i, _ -> i.toLong() in selectedIds }
-                }
-                fun doGenerate() {
-                    val use = activePoints()
-                    if (use.isEmpty()) {
-                        statusMessage = "هیچ نقطه‌ای انتخاب نشده"
-                        return
-                    }
-                    // تنظیمات کد را با نقاط فعال همگام کن
-                    val codes = use.map { it.code }.distinct().filter { it.isNotBlank() }
-                    val settings = codes.associateWith { c ->
-                        codeSettings[c] ?: DefaultCodeRules.createDefaultSetting(c)
-                    }
-                    codeSettings = codeSettings + settings
-                    generatedDxf = DxfMapGenerator.generate(use, codeSettings + settings)
-                    stage = 2
-                }
-
-                Column(Modifier.fillMaxSize()) {
-                    // ردیف توضیح فایل + تولید DXF
-                    Surface(color = Color.White, modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text("فایل: $fileName", fontWeight = FontWeight.SemiBold, color = Color.Black)
-                                Text(
-                                    "${points.size} نقطه · ${selectedIds.size} گزینش‌شده",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF555555)
-                                )
-                                statusMessage?.let {
-                                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                            Button(
-                                onClick = { doGenerate() },
-                                colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary),
-                                shape = RoundedCornerShape(10.dp)
-                            ) { Text("تولید DXF") }
-                        }
-                    }
-                    TabRow(selectedTabIndex = workTab, containerColor = Color.White, contentColor = ToolPrimary) {
-                        Tab(selected = workTab == 0, onClick = { workTab = 0 }, text = { Text("ویرایش نقاط") })
-                        Tab(selected = workTab == 1, onClick = { workTab = 1 }, text = { Text("تعیین وضعیت") })
-                    }
-                    when (workTab) {
-                        0 -> {
-                            Column(Modifier.fillMaxSize().padding(8.dp)) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(onClick = { newestFirst = !newestFirst }) {
-                                        Icon(
-                                            if (newestFirst) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward,
-                                            null, tint = ToolPrimary
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        selectAll = true
-                                        selectedIds = points.indices.map { it.toLong() }.toSet()
-                                    }) {
-                                        Icon(Icons.Outlined.Checklist, "همه", tint = ToolPrimary)
-                                    }
-                                    IconButton(onClick = {
-                                        selectAll = false
-                                        selectedIds = emptySet()
-                                        rangeMode = false
-                                        rangeAnchorId = null
-                                    }) {
-                                        Icon(Icons.Outlined.Close, "گزینش", tint = ToolPrimary)
-                                    }
-                                    IconButton(onClick = {
-                                        rangeMode = !rangeMode
-                                        rangeAnchorId = null
-                                        statusMessage = if (rangeMode)
-                                            "بازه: ابتدا و انتهای برداشت را تیک بزن"
-                                        else null
-                                    }) {
-                                        Icon(
-                                            Icons.Filled.LinearScale, "بازه",
-                                            tint = if (rangeMode) Color(0xFF43A047) else ToolPrimary
-                                        )
-                                    }
-                                }
-                                if (rangeMode) {
-                                    Text(
-                                        "بازه فعال — تیک نقطهٔ اول، بعد تیک نقطهٔ آخر",
-                                        color = Color(0xFF43A047),
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp)
-                                    )
-                                }
-                                PointsSpreadsheet(
-                                    points = displayList,
-                                    color = ToolPrimary,
-                                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                                    selectedIds = selectedIds,
-                                    selectAll = selectAll,
-                                    showCheckbox = true,
-                                    onToggleSelect = { id, on ->
-                                        if (rangeMode && on) {
-                                            val order = points.indices.map { it.toLong() }
-                                            if (rangeAnchorId == null) {
-                                                rangeAnchorId = id
-                                                selectAll = false
-                                                selectedIds = setOf(id)
-                                                statusMessage = "ابتدای بازه ✓ — انتها را تیک بزن"
-                                            } else {
-                                                val i1 = order.indexOf(rangeAnchorId)
-                                                val i2 = order.indexOf(id)
-                                                if (i1 >= 0 && i2 >= 0) {
-                                                    val a = minOf(i1, i2)
-                                                    val b = maxOf(i1, i2)
-                                                    selectedIds = (a..b).map { it.toLong() }.toSet()
-                                                    selectAll = selectedIds.size == points.size
-                                                    statusMessage = "بازه: ${b - a + 1} نقطه"
-                                                }
-                                                rangeAnchorId = null
-                                            }
-                                        } else {
-                                            selectAll = false
-                                            selectedIds = if (on) selectedIds + id else selectedIds - id
-                                            rangeAnchorId = null
-                                        }
-                                    },
-                                    onChange = { g ->
-                                        val idx = g.id.toInt()
-                                        if (idx in points.indices) {
-                                            points = points.toMutableList().also {
-                                                it[idx] = fromGsi(g)
-                                            }
-                                            // بروزرسانی تنظیمات کد در صورت کد جدید
-                                            val c = g.code.trim()
-                                            if (c.isNotBlank() && c !in codeSettings) {
-                                                codeSettings = codeSettings + (c to DefaultCodeRules.createDefaultSetting(c))
-                                            }
-                                        }
-                                    },
-                                    onDelete = { g ->
-                                        val idx = g.id.toInt()
-                                        if (idx in points.indices) {
-                                            points = points.filterIndexed { i, _ -> i != idx }
-                                            // بازسازی ایندکس‌ها با نگه‌داشتن داده
-                                            selectedIds = emptySet()
-                                            selectAll = true
-                                            selectedIds = points.indices.map { it.toLong() }.toSet()
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                        else -> {
-                            // بدون دکمه تأیید پایین — تولید از بالا
-                            CodeCategorizationContent(
-                                points = activePoints(),
-                                fileName = fileName,
-                                settings = codeSettings,
-                                onSettingsChange = { codeSettings = it },
-                                onConfirm = { doGenerate() }
-                            )
-                        }
-                    }
-                }
+                )
             }
-
             2 -> {
                 Column(
                     modifier = Modifier

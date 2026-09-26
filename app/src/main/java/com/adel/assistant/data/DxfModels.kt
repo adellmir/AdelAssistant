@@ -120,7 +120,32 @@ object DefaultCodeRules {
     }
 }
 
-/** آیا نقطه پایان خط است؟ (کد شامل .E) */
-fun SurveyPoint.isEndOfLine(): Boolean =
-    code.contains(".E", ignoreCase = true) ||
-    (code.endsWith("E", ignoreCase = true) && code.contains("."))
+/**
+ * پایهٔ کد خانواده: "1.e" / "e.1" / "ple.e" / "e.ple" → "1" / "ple"
+ * نقطهٔ پایانی خط با .e یا e. مشخص می‌شود.
+ */
+fun codeBase(code: String): String {
+    val c = code.trim()
+    if (c.isEmpty()) return ""
+    val lower = c.lowercase()
+    // 1.e / ple.e
+    if (Regex("""^.+\.e$""", RegexOption.IGNORE_CASE).matches(lower)) {
+        return lower.substringBeforeLast(".").trim()
+    }
+    // e.1 / e.ple
+    if (Regex("""^e\..+$""", RegexOption.IGNORE_CASE).matches(lower)) {
+        return lower.substringAfter(".").trim()
+    }
+    // هر چیز.eدر انتها قبلاً پوشش داده شد؛ حالت عمومی بدون e
+    return lower.replace(Regex("""\.e$""", RegexOption.IGNORE_CASE), "").trim()
+}
+
+/** آیا نقطه پایان خط است؟ (.e یا e. کنار کد خانواده) */
+fun SurveyPoint.isEndOfLine(): Boolean {
+    val c = code.trim().lowercase()
+    if (c.isEmpty()) return false
+    return Regex("""^.+\.e$""").matches(c) || Regex("""^e\..+$""").matches(c)
+}
+
+/** کلید تنظیمات: همیشه پایهٔ خانواده */
+fun SurveyPoint.codeFamily(): String = codeBase(code)

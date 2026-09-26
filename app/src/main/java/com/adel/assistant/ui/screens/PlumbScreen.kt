@@ -1,6 +1,14 @@
 package com.adel.assistant.ui.screens
 
 import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,6 +46,7 @@ import com.adel.assistant.data.PlumbNeighbor
 import com.adel.assistant.data.PlumbProject
 import com.adel.assistant.data.PlumbReading
 import com.adel.assistant.data.PlumbStore
+import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
 import java.util.Locale
@@ -53,9 +62,11 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var projects by remember { mutableStateOf(PlumbStore.loadAll(context)) }
     var name by remember { mutableStateOf("") }
     var client by remember { mutableStateOf("") }
-    var day by remember { mutableStateOf("") }
-    var month by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("1405") }
+    val todayJ = remember { CalendarStore.todayJalali() }
+    var day by remember { mutableStateOf(todayJ.third.toString()) }
+    var month by remember { mutableStateOf(todayJ.second.toString()) }
+    var year by remember { mutableStateOf(todayJ.first.toString()) }
+    var importMsg by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var openProject by remember { mutableStateOf<PlumbProject?>(null) }
     var openMode by remember { mutableStateOf("report") } // report | control
@@ -93,6 +104,20 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
 
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
+    val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.use {
+                BufferedReader(InputStreamReader(it)).readText()
+            } ?: return@rememberLauncherForActivityResult
+            val n = PlumbStore.importCsv(context, text)
+            refresh()
+            importMsg = if (n > 0) "$n پروژه از CSV خوانده شد" else "هیچ پروژه‌ای خوانده نشد"
+        } catch (e: Exception) {
+            importMsg = "خطا: ${e.message}"
+        }
+    }
+
     Column(
         Modifier.fillMaxSize().background(Background).padding(12.dp)
     ) {
@@ -103,9 +128,34 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             Text("شاقولی", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = {
+                csvPicker.launch(arrayOf("text/*", "text/csv", "*/*"))
+            }) { Text("ورود CSV", color = color) }
+            TextButton(onClick = {
                 val csv = PlumbStore.exportCsv(context)
                 FileExport.exportTextToDocuments(context, "plumb_projects.csv", csv, "text/csv")
             }) { Text("CSV", color = color) }
+            TextButton(onClick = {
+                try {
+                    val bos = ByteArrayOutputStream()
+                    ZipOutputStream(bos).use { zos ->
+                        zos.putNextEntry(ZipEntry("plumb_projects.csv"))
+                        zos.write(PlumbStore.exportCsv(context).toByteArray(Charsets.UTF_8))
+                        zos.closeEntry()
+                        zos.putNextEntry(ZipEntry("plumb_projects.json"))
+                        zos.write(PlumbStore.exportJson(context).toByteArray(Charsets.UTF_8))
+                        zos.closeEntry()
+                    }
+                    FileExport.exportBytesToDocuments(
+                        context, "plumb_backup.zip", bos.toByteArray(), "application/zip"
+                    )
+                    importMsg = "زیپ پشتیبان ذخیره شد"
+                } catch (e: Exception) {
+                    importMsg = "خطا زیپ: ${e.message}"
+                }
+            }) { Text("ZIP", color = color) }
+        }
+        if (importMsg.isNotBlank()) {
+            Text(importMsg, color = Color(0xFFB0B8A8), fontSize = 11.sp)
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -334,25 +384,32 @@ private fun PlumbWorkspace(
             }
 
             // همسایه / خیابان
-            fun edgeLabel(n: PlumbNeighbor, pos: Offset) {
+            fun edgeLabel(n: PlumbNeighbor, pos: Offset, vertical: Boolean = false) {
                 val t = when {
                     n.street.isNotBlank() -> if (n.street.startsWith("خیابان")) n.street else "خیابان ${n.street}"
                     n.isNeighbor -> "همسایه"
                     else -> return
                 }
-                drawContext.canvas.nativeCanvas.drawText(
-                    t, pos.x, pos.y,
-                    android.graphics.Paint().apply {
-                        this.color = android.graphics.Color.rgb(255, 213, 79)
-                        textSize = (0.35 * scale).toFloat().coerceIn(14f, 40f)
-                        isAntiAlias = true
-                    }
-                )
+                val paint = android.graphics.Paint().apply {
+                    this.color = android.graphics.Color.rgb(255, 213, 79)
+                    textSize = (0.35 * scale).toFloat().coerceIn(14f, 40f)
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                }
+                val canvas = drawContext.canvas.nativeCanvas
+                if (vertical) {
+                    canvas.save()
+                    canvas.rotate(-90f, pos.x, pos.y)
+                    canvas.drawText(t, pos.x, pos.y, paint)
+                    canvas.restore()
+                } else {
+                    canvas.drawText(t, pos.x, pos.y, paint)
+                }
             }
-            edgeLabel(p.topN, w2s(maxX / 2, maxY + 2.2))
-            edgeLabel(p.bottomN, w2s(maxX / 2, -1.5))
-            edgeLabel(p.rightN, w2s(maxX + 2.2, maxY / 2))
-            edgeLabel(p.leftN, w2s(-2.0, maxY / 2))
+            edgeLabel(p.topN, w2s(maxX / 2, maxY + 2.2), false)
+            edgeLabel(p.bottomN, w2s(maxX / 2, -1.5), false)
+            edgeLabel(p.rightN, w2s(maxX + 2.2, maxY / 2), true)
+            edgeLabel(p.leftN, w2s(-2.0, maxY / 2), true)
 
             // ستون‌ها
             p.columns.forEach { col ->
@@ -726,14 +783,15 @@ private fun PlumbWorkspace(
         var lineV by remember(col.name, mode) { mutableStateOf(reading.lineValueMm?.toString() ?: "") }
         var wallPlumb by remember(col.name) { mutableStateOf(col.isWallPlumb) }
         fun signedFilter(s: String): String {
-            // اجازه منفی، یک نقطه، ارقام
-            val t = s.replace('٫', '.').replace(',', '.')
+            val t = s.replace('٫', '.').replace(',', '.').replace('−', '-').replace('–', '-')
+            if (t == "-" || t == "." || t == "-.") return t
             val sb = StringBuilder()
             var dot = false
-            t.forEachIndexed { i, ch ->
+            var seenDigit = false
+            for (ch in t) {
                 when {
-                    ch == '-' && i == 0 && !sb.contains('-') -> sb.append(ch)
-                    ch.isDigit() -> sb.append(ch)
+                    ch == '-' && sb.isEmpty() -> sb.append(ch)
+                    ch.isDigit() -> { sb.append(ch); seenDigit = true }
                     ch == '.' && !dot -> { sb.append(ch); dot = true }
                 }
             }
@@ -754,10 +812,10 @@ private fun PlumbWorkspace(
             title = { Text("ستون ${col.name}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("رفرنس (m) — مقدار mm", fontSize = 12.sp)
+                    Text("افست (m) — مقدار mm", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedTextField(refT, { refT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                        OutlinedTextField(refB, { refB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(refT, { refT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                        OutlinedTextField(refB, { refB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
                         OutlinedTextField(
                             refV.ifBlank {
                                 val b = d(refB); val t = d(refT)
@@ -767,13 +825,13 @@ private fun PlumbWorkspace(
                             label = { Text("مقدار") },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
-                            keyboardOptions = numKb
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                         )
                     }
                     Text("لاین (m) — مقدار mm", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedTextField(lineT, { lineT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                        OutlinedTextField(lineB, { lineB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(lineT, { lineT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                        OutlinedTextField(lineB, { lineB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
                         OutlinedTextField(
                             lineV.ifBlank {
                                 val b = d(lineB); val t = d(lineT)
@@ -783,7 +841,7 @@ private fun PlumbWorkspace(
                             label = { Text("مقدار") },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
-                            keyboardOptions = numKb
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -825,7 +883,7 @@ private fun dayNow() = ""
 private fun monthNow() = ""
 private fun yearNow() = ""
 
-private fun fmtMm(v: Double) = String.format(Locale.US, "%.0f", v)
+private fun fmtMm(v: Double) = String.format(Locale.US, "%.0f", kotlin.math.abs(v))
 
 private fun screenToWorld(tap: Offset, scale: Float, offset: Offset): Pair<Double, Double> {
     val x = (tap.x - offset.x) / scale
@@ -908,8 +966,8 @@ private fun buildPlumbText(p: PlumbProject): String {
     sb.appendLine("---")
     p.columns.forEach { c ->
         sb.appendLine(c.name)
-        sb.appendLine("  گزارش رفرنس: ${c.report.computedRefMm()} mm  لاین: ${c.report.computedLineMm()} mm")
-        sb.appendLine("  کنترل رفرنس: ${c.control.computedRefMm()} mm  لاین: ${c.control.computedLineMm()} mm")
+        sb.appendLine("  گزارش افست: ${c.report.computedRefMm()} mm  لاین: ${c.report.computedLineMm()} mm")
+        sb.appendLine("  کنترل افست: ${c.control.computedRefMm()} mm  لاین: ${c.control.computedLineMm()} mm")
     }
     return sb.toString()
 }

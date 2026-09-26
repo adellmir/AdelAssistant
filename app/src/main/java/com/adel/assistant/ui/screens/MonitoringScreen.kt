@@ -31,6 +31,7 @@ import com.adel.assistant.data.MonitoringAnalyzer
 import com.adel.assistant.data.MonitoringExport
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.MonitoringStore
+import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
 import java.io.BufferedReader
@@ -49,11 +50,10 @@ fun MonitoringScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var client by remember { mutableStateOf("") }
     var reportNo by remember { mutableStateOf("") }
-    val cal = Calendar.getInstance()
-    // rough default shamsi-like fields left to user; prefill gregorian as placeholder numbers
-    var day by remember { mutableStateOf(cal.get(Calendar.DAY_OF_MONTH).toString()) }
-    var month by remember { mutableStateOf((cal.get(Calendar.MONTH) + 1).toString()) }
-    var year by remember { mutableStateOf("1405") }
+    val todayJ = remember { CalendarStore.todayJalali() }
+    var day by remember { mutableStateOf(todayJ.third.toString()) }
+    var month by remember { mutableStateOf(todayJ.second.toString()) }
+    var year by remember { mutableStateOf(todayJ.first.toString()) }
     var query by remember { mutableStateOf("") }
 
     fun refresh() { projects = MonitoringStore.loadAll(context) }
@@ -93,8 +93,10 @@ fun MonitoringScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             Text("پایش", style = MaterialTheme.typography.titleLarge, color = Color.White)
         }
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
+        }
         OutlinedTextField(reportNo, { reportNo = it }, label = { Text("شماره گزارش") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
