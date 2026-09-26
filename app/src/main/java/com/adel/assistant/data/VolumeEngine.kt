@@ -345,7 +345,7 @@ object VolumeEngine {
      */
     fun extractBoundaryFromDxf(content: String): List<VolPoint> {
         val pairs = mutableListOf<Pair<Int, String>>()
-        val linesIn = content.replace("\r\n", "\n").replace("\r", "\n").lines()
+val linesIn = content.replace("\u000D\u000A", "\n").replace("\u000D", "\n").lines()
         var i = 0
         while (i + 1 < linesIn.size) {
             val code = linesIn[i].trim().toIntOrNull()
@@ -590,10 +590,7 @@ object VolumeEngine {
      */
     fun extractBreaklinesFromDxf(content: String): List<List<VolPoint>> {
         val pairs = mutableListOf<Pair<Int, String>>()
-        val linesIn = content.replace("
-", "
-").replace("", "
-").lines()
+val linesIn = content.replace("\u000D\u000A", "\n").replace("\u000D", "\n").lines()
         var i = 0
         while (i + 1 < linesIn.size) {
             val code = linesIn[i].trim().toIntOrNull()
@@ -842,6 +839,88 @@ object VolumeEngine {
      * {نام}-POINTS ، {نام}-CONTOUR ، {نام}-LABEL
      * سایز متن تراز = ۰٫۰۵ m (۵ سانتی‌متر)
      */
+
+    /**
+     * خروجی DXF پلی‌گان‌های رنگی Cut/Fill از سلول‌های شبکه.
+     * لایه CUT (قرمز ACI 1) و FILL (آبی ACI 5) + BOUNDARY
+     */
+    fun exportCutFillDxf(
+        cells: List<CutFillCell>,
+        boundary: List<VolPoint> = emptyList(),
+        pairLabel: String = "PAIR"
+    ): String {
+        val sb = StringBuilder()
+        pair(sb, 0, "SECTION"); pair(sb, 2, "HEADER")
+        pair(sb, 9, "\$ACADVER"); pair(sb, 1, "AC1009")
+        pair(sb, 9, "\$INSUNITS"); pair(sb, 70, "6")
+        pair(sb, 0, "ENDSEC")
+        val layers = linkedMapOf(
+            "0" to 7,
+            "CUT" to 1,
+            "FILL" to 5,
+            "BOUNDARY" to 2,
+            "CUT-LABEL" to 1,
+            "FILL-LABEL" to 5
+        )
+        pair(sb, 0, "SECTION"); pair(sb, 2, "TABLES")
+        pair(sb, 0, "TABLE"); pair(sb, 2, "LTYPE"); pair(sb, 70, "1")
+        pair(sb, 0, "LTYPE"); pair(sb, 2, "CONTINUOUS"); pair(sb, 70, "0")
+        pair(sb, 3, "Solid line"); pair(sb, 72, "65"); pair(sb, 73, "0"); pair(sb, 40, "0.0")
+        pair(sb, 0, "ENDTAB")
+        pair(sb, 0, "TABLE"); pair(sb, 2, "LAYER"); pair(sb, 70, layers.size.toString())
+        layers.forEach { (name, color) ->
+            pair(sb, 0, "LAYER"); pair(sb, 2, name); pair(sb, 70, "0")
+            pair(sb, 62, color.toString()); pair(sb, 6, "CONTINUOUS")
+        }
+        pair(sb, 0, "ENDTAB"); pair(sb, 0, "ENDSEC")
+        pair(sb, 0, "SECTION"); pair(sb, 2, "ENTITIES")
+
+        fun polyRect(cx: Double, cy: Double, size: Double, layer: String, z: Double) {
+            val hs = size / 2.0
+            val xs = doubleArrayOf(cx - hs, cx + hs, cx + hs, cx - hs, cx - hs)
+            val ys = doubleArrayOf(cy - hs, cy - hs, cy + hs, cy + hs, cy - hs)
+            // چهار خط (سازگار با AC1009)
+            for (i in 0 until 4) {
+                pair(sb, 0, "LINE"); pair(sb, 8, layer)
+                pair(sb, 10, fmt(xs[i])); pair(sb, 20, fmt(ys[i])); pair(sb, 30, fmt(z))
+                pair(sb, 11, fmt(xs[i + 1])); pair(sb, 21, fmt(ys[i + 1])); pair(sb, 31, fmt(z))
+            }
+            // SOLID پررنگ (اختیاری برای نمایش بهتر)
+            pair(sb, 0, "SOLID"); pair(sb, 8, layer)
+            pair(sb, 10, fmt(xs[0])); pair(sb, 20, fmt(ys[0])); pair(sb, 30, fmt(z))
+            pair(sb, 11, fmt(xs[1])); pair(sb, 21, fmt(ys[1])); pair(sb, 31, fmt(z))
+            pair(sb, 12, fmt(xs[3])); pair(sb, 22, fmt(ys[3])); pair(sb, 32, fmt(z))
+            pair(sb, 13, fmt(xs[2])); pair(sb, 23, fmt(ys[2])); pair(sb, 33, fmt(z))
+        }
+
+        for (cell in cells) {
+            val layer = if (cell.dz > 0) "CUT" else "FILL"
+            polyRect(cell.x, cell.y, cell.size, layer, 0.0)
+        }
+
+        if (boundary.size >= 2) {
+            for (i in boundary.indices) {
+                val a = boundary[i]
+                val b = boundary[(i + 1) % boundary.size]
+                pair(sb, 0, "LINE"); pair(sb, 8, "BOUNDARY")
+                pair(sb, 10, fmt(a.x)); pair(sb, 20, fmt(a.y)); pair(sb, 30, "0")
+                pair(sb, 11, fmt(b.x)); pair(sb, 21, fmt(b.y)); pair(sb, 31, "0")
+            }
+        }
+
+        // عنوان
+        if (cells.isNotEmpty()) {
+            val b = bounds(cells.map { VolPoint("c", it.x, it.y, 0.0) })
+            pair(sb, 0, "TEXT"); pair(sb, 8, "0")
+            pair(sb, 10, fmt(b[0])); pair(sb, 20, fmt(b[3] + 2.0)); pair(sb, 30, "0")
+            pair(sb, 40, "1.0"); pair(sb, 1, "Cut/Fill — $pairLabel")
+        }
+
+        pair(sb, 0, "ENDSEC")
+        pair(sb, 0, "EOF")
+        return sb.toString()
+    }
+
     fun exportDxf(
         surfaces: List<Pair<String, List<VolPoint>>>,
         contours: List<ContourSet>,
@@ -1006,6 +1085,148 @@ object VolumeEngine {
         return bos.toByteArray()
     }
 
-    fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
+    
+    fun buildVolumePdfMulti(
+        title: String,
+        results: List<VolumeResult>,
+        cutFactor: Double,
+        fillFactor: Double,
+        boundaryCount: Int,
+        breaklineCount: Int
+    ): ByteArray {
+        if (results.isEmpty()) return ByteArray(0)
+        if (results.size == 1) {
+            return buildVolumePdf(title, results[0], cutFactor, fillFactor, boundaryCount, breaklineCount)
+        }
+        val doc = PdfDocument()
+        val pageWidth = 595
+        val pageHeight = 842
+        val page = doc.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
+        val c: Canvas = page.canvas
+        val titleP = Paint().apply {
+            textSize = 17f; isFakeBoldText = true; textAlign = Paint.Align.RIGHT; color = 0xFF000000.toInt()
+        }
+        val body = Paint().apply {
+            textSize = 12f; textAlign = Paint.Align.RIGHT; color = 0xFF222222.toInt()
+        }
+        val small = Paint().apply {
+            textSize = 10f; textAlign = Paint.Align.RIGHT; color = 0xFF555555.toInt()
+        }
+        var y = 44f
+        val right = pageWidth - 36f
+        fun line(text: String, p: Paint = body) {
+            if (y > pageHeight - 36f) return
+            c.drawText(text, right, y, p); y += p.textSize + 7f
+        }
+        line("گزارش زنجیره احجام خاکی", titleP)
+        line(title, body)
+        if (boundaryCount > 0) line("Boundary: $boundaryCount رأس", small)
+        if (breaklineCount > 0) line("Breakline: $breaklineCount خط", small)
+        y += 6f
+        var sumCut = 0.0; var sumFill = 0.0
+        results.forEachIndexed { i, r ->
+            line("── جفت ${i + 1}: ${r.existingName} → ${r.designName} ──", body)
+            line("مساحت: ${fmt3(r.areaM2)} m² | روش: ${r.method}", small)
+            line("Cut: ${fmt3(r.cutM3)} | Fill: ${fmt3(r.fillM3)} | Net: ${fmt3(r.netM3)} m³", body)
+            line("نتیجه: ${r.earthworkLabel}", body)
+            sumCut += r.cutM3; sumFill += r.fillM3
+            y += 4f
+        }
+        y += 6f
+        line("جمع کل Cut: ${fmt3(sumCut)} m³", titleP)
+        line("جمع کل Fill: ${fmt3(sumFill)} m³", titleP)
+        line("خالص کل: ${fmt3(sumCut - sumFill)} m³", titleP)
+        val overall = when {
+            sumCut > sumFill + 1e-6 -> "خاکبرداری"
+            sumFill > sumCut + 1e-6 -> "خاکریزی"
+            else -> "متعادل"
+        }
+        line("نتیجه کلی زنجیره: $overall", titleP)
+        line("ضریب Cut: $cutFactor | Fill: $fillFactor", small)
+        y = pageHeight - 36f
+        line("AdelAssistant — گزارش زنجیره احجام", small)
+        doc.finishPage(page)
+        val bos = ByteArrayOutputStream()
+        doc.writeTo(bos)
+        doc.close()
+        return bos.toByteArray()
+    }
+
+    /** ذخیره نشست سطوح (نام + نقاط) برای بارگذاری بعدی */
+    fun exportSessionJson(
+        surfaces: List<Pair<String, List<VolPoint>>>,
+        boundary: List<VolPoint>,
+        breaklines: List<List<VolPoint>>
+    ): String {
+        fun pt(p: VolPoint) = org.json.JSONObject().apply {
+            put("id", p.id); put("x", p.x); put("y", p.y); put("z", p.z); put("code", p.code)
+        }
+        val root = org.json.JSONObject()
+        root.put("version", 1)
+        val arr = org.json.JSONArray()
+        surfaces.forEach { (name, pts) ->
+            val o = org.json.JSONObject()
+            o.put("name", name)
+            val pa = org.json.JSONArray()
+            pts.forEach { pa.put(pt(it)) }
+            o.put("points", pa)
+            arr.put(o)
+        }
+        root.put("surfaces", arr)
+        val ba = org.json.JSONArray()
+        boundary.forEach { ba.put(pt(it)) }
+        root.put("boundary", ba)
+        val bl = org.json.JSONArray()
+        breaklines.forEach { line ->
+            val la = org.json.JSONArray()
+            line.forEach { la.put(pt(it)) }
+            bl.put(la)
+        }
+        root.put("breaklines", bl)
+        return root.toString(2)
+    }
+
+    data class VolumeSession(
+        val surfaces: List<Pair<String, List<VolPoint>>>,
+        val boundary: List<VolPoint>,
+        val breaklines: List<List<VolPoint>>
+    )
+
+    fun importSessionJson(text: String): VolumeSession? {
+        return try {
+            val root = org.json.JSONObject(text)
+            fun readPt(o: org.json.JSONObject) = VolPoint(
+                o.optString("id", "P"),
+                o.optDouble("x", 0.0),
+                o.optDouble("y", 0.0),
+                o.optDouble("z", 0.0),
+                o.optString("code", "")
+            )
+            val surfaces = mutableListOf<Pair<String, List<VolPoint>>>()
+            val sa = root.optJSONArray("surfaces") ?: org.json.JSONArray()
+            for (i in 0 until sa.length()) {
+                val o = sa.getJSONObject(i)
+                val name = o.optString("name", "سطح${i + 1}")
+                val pa = o.optJSONArray("points") ?: org.json.JSONArray()
+                val pts = (0 until pa.length()).map { readPt(pa.getJSONObject(it)) }
+                surfaces.add(name to pts)
+            }
+            val boundary = mutableListOf<VolPoint>()
+            val ba = root.optJSONArray("boundary") ?: org.json.JSONArray()
+            for (i in 0 until ba.length()) boundary.add(readPt(ba.getJSONObject(i)))
+            val breaklines = mutableListOf<List<VolPoint>>()
+            val bla = root.optJSONArray("breaklines") ?: org.json.JSONArray()
+            for (i in 0 until bla.length()) {
+                val la = bla.getJSONArray(i)
+                val line = (0 until la.length()).map { readPt(la.getJSONObject(it)) }
+                if (line.size >= 2) breaklines.add(line)
+            }
+            VolumeSession(surfaces, boundary, breaklines)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
         points.map { VolPoint(it.id.ifBlank { "P" }, it.x, it.y, it.z, it.code) }
 }
