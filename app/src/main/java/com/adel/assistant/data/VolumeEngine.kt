@@ -1,5 +1,10 @@
 package com.adel.assistant.data
 
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import java.io.ByteArrayOutputStream
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
@@ -298,9 +303,11 @@ object VolumeEngine {
         fillFactor: Double = 1.0,
         existingName: String = "موجود",
         designName: String = "طراحی",
-        sampleGrid: Double = 1.0
+        sampleGrid: Double = 1.0,
+        breaklines: List<List<VolPoint>> = emptyList(),
+        breaklineStep: Double = 1.0
     ): VolumeAnalysis {
-        val r = computeTin(existing, design, boundary, cutFactor, fillFactor, existingName, designName)
+        val r = computeTin(existing, design, boundary, cutFactor, fillFactor, existingName, designName, breaklines, breaklineStep)
         // برای نمایش رنگی، از شبکه روی همان boundary نمونه‌برداری
         val hull = when {
             boundary != null && boundary.size >= 3 -> boundary
@@ -476,6 +483,179 @@ object VolumeEngine {
         return tris.filter { it.a < n && it.b < n && it.c < n }.map { VolTriangle(it.a, it.b, it.c) }
     }
 
+    /**
+     * متراکم‌سازی نقاط روی Breakline با گام مشخص (متر)
+     * و افزودن رأس‌های شکستگی به ابرنقطه سطح.
+     */
+    fun densifyBreaklines(
+        breaklines: List<List<VolPoint>>,
+        step: Double = 1.0
+    ): List<VolPoint> {
+        if (breaklines.isEmpty()) return emptyList()
+        val out = mutableListOf<VolPoint>()
+        val st = step.coerceAtLeast(0.1)
+        var k = 0
+        for (line in breaklines) {
+            if (line.size < 2) continue
+            for (i in 0 until line.size - 1) {
+                val a = line[i]; val b = line[i + 1]
+                out.add(a.copy(id = "BL${k++}"))
+                val dx = b.x - a.x; val dy = b.y - a.y; val dz = b.z - a.z
+                val len = sqrt(dx * dx + dy * dy)
+                if (len < 1e-9) continue
+                var d = st
+                while (d < len - st * 0.5) {
+                    val t = d / len
+                    out.add(
+                        VolPoint(
+                            "BL${k++}",
+                            a.x + dx * t,
+                            a.y + dy * t,
+                            a.z + dz * t,
+                            "BREAK"
+                        )
+                    )
+                    d += st
+                }
+            }
+            out.add(line.last().copy(id = "BL${k++}"))
+        }
+        return dedupe(out, 0.02).first
+    }
+
+    /** آیا دو پاره در صفحه XY همدیگر را قطع می‌کنند؟ (بدون رأس مشترک) */
+    private fun segmentsCross(
+        ax: Double, ay: Double, bx: Double, by: Double,
+        cx: Double, cy: Double, dx: Double, dy: Double
+    ): Boolean {
+        fun orient(px: Double, py: Double, qx: Double, qy: Double, rx: Double, ry: Double): Double {
+            return (qy - py) * (rx - qx) - (qx - px) * (ry - qy)
+        }
+        fun onSeg(px: Double, py: Double, qx: Double, qy: Double, rx: Double, ry: Double): Boolean {
+            return min(px, rx) - 1e-9 <= qx && qx <= max(px, rx) + 1e-9 &&
+                min(py, ry) - 1e-9 <= qy && qy <= max(py, ry) + 1e-9
+        }
+        val o1 = orient(ax, ay, bx, by, cx, cy)
+        val o2 = orient(ax, ay, bx, by, dx, dy)
+        val o3 = orient(cx, cy, dx, dy, ax, ay)
+        val o4 = orient(cx, cy, dx, dy, bx, by)
+        if (o1 * o2 < 0 && o3 * o4 < 0) return true
+        return false
+    }
+
+    /**
+     * TIN با محدودیت Breakline:
+     * ۱) نقاط متراکم‌شدهٔ breakline به سطح اضافه می‌شوند
+     * ۲) مثلث‌هایی که یالشان breakline را قطع کند حذف می‌شوند
+     */
+    fun buildTinWithBreaklines(
+        points: List<VolPoint>,
+        breaklines: List<List<VolPoint>>,
+        densifyStep: Double = 1.0
+    ): Pair<List<VolPoint>, List<VolTriangle>> {
+        val extra = densifyBreaklines(breaklines, densifyStep)
+        val merged = dedupe(points + extra, 0.02).first
+        var tris = buildTin(merged)
+        if (breaklines.isEmpty() || tris.isEmpty()) return merged to tris
+
+        val edges = mutableListOf<Pair<VolPoint, VolPoint>>()
+        for (line in breaklines) {
+            for (i in 0 until line.size - 1) edges.add(line[i] to line[i + 1])
+        }
+        tris = tris.filter { t ->
+            val p1 = merged[t.a]; val p2 = merged[t.b]; val p3 = merged[t.c]
+            val triEdges = listOf(p1 to p2, p2 to p3, p3 to p1)
+            var ok = true
+            for ((a, b) in triEdges) {
+                for ((c, d) in edges) {
+                    // یال منطبق با breakline مجاز است
+                    val same =
+                        (abs(a.x - c.x) < 0.05 && abs(a.y - c.y) < 0.05 && abs(b.x - d.x) < 0.05 && abs(b.y - d.y) < 0.05) ||
+                        (abs(a.x - d.x) < 0.05 && abs(a.y - d.y) < 0.05 && abs(b.x - c.x) < 0.05 && abs(b.y - c.y) < 0.05)
+                    if (same) continue
+                    if (segmentsCross(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y)) {
+                        ok = false
+                        break
+                    }
+                }
+                if (!ok) break
+            }
+            ok
+        }
+        return merged to tris
+    }
+
+    /**
+     * استخراج چند Breakline از DXF (LINE و LWPOLYLINE — باز یا بسته)
+     */
+    fun extractBreaklinesFromDxf(content: String): List<List<VolPoint>> {
+        val pairs = mutableListOf<Pair<Int, String>>()
+        val linesIn = content.replace("
+", "
+").replace("", "
+").lines()
+        var i = 0
+        while (i + 1 < linesIn.size) {
+            val code = linesIn[i].trim().toIntOrNull()
+            val value = linesIn[i + 1]
+            if (code != null) pairs.add(code to value)
+            i += 2
+        }
+        val result = mutableListOf<List<VolPoint>>()
+        var idx = 0
+        fun next(): Pair<Int, String>? = if (idx < pairs.size) pairs[idx++] else null
+        fun peek(): Pair<Int, String>? = if (idx < pairs.size) pairs[idx] else null
+        while (idx < pairs.size) {
+            val (c0, v0) = next() ?: break
+            if (c0 != 0) continue
+            when (v0.trim().uppercase()) {
+                "LWPOLYLINE" -> {
+                    val verts = mutableListOf<VolPoint>()
+                    var x: Double? = null
+                    var n = 0
+                    while (true) {
+                        val p = peek() ?: break
+                        if (p.first == 0) break
+                        val (c, v) = next()!!
+                        when (c) {
+                            10 -> x = v.trim().replace(',', '.').toDoubleOrNull()
+                            20 -> {
+                                val y = v.trim().replace(',', '.').toDoubleOrNull()
+                                if (x != null && y != null) {
+                                    verts.add(VolPoint("V${n++}", x!!, y, 0.0, "BREAK"))
+                                }
+                                x = null
+                            }
+                        }
+                    }
+                    if (verts.size >= 2) result.add(verts)
+                }
+                "LINE" -> {
+                    var x1 = 0.0; var y1 = 0.0; var x2 = 0.0; var y2 = 0.0
+                    while (true) {
+                        val p = peek() ?: break
+                        if (p.first == 0) break
+                        val (c, v) = next()!!
+                        val d = v.trim().replace(',', '.').toDoubleOrNull() ?: continue
+                        when (c) {
+                            10 -> x1 = d
+                            20 -> y1 = d
+                            11 -> x2 = d
+                            21 -> y2 = d
+                        }
+                    }
+                    result.add(
+                        listOf(
+                            VolPoint("L0", x1, y1, 0.0, "BREAK"),
+                            VolPoint("L1", x2, y2, 0.0, "BREAK")
+                        )
+                    )
+                }
+            }
+        }
+        return result
+    }
+
     fun triangleArea2d(p: VolPoint, q: VolPoint, r: VolPoint): Double =
         abs((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)) / 2.0
 
@@ -500,7 +680,9 @@ object VolumeEngine {
         cutFactor: Double = 1.0,
         fillFactor: Double = 1.0,
         existingName: String = "موجود",
-        designName: String = "طراحی"
+        designName: String = "طراحی",
+        breaklines: List<List<VolPoint>> = emptyList(),
+        breaklineStep: Double = 1.0
     ): VolumeResult {
         val warnings = mutableListOf<String>()
         val (ex, remEx) = dedupe(existing)
@@ -511,18 +693,24 @@ object VolumeEngine {
             warnings.add("برای TIN حداقل ۳ نقطه در هر سطح لازم است")
             return VolumeResult("TIN", ex.size, de.size, existingName, designName, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, null, warnings)
         }
-        val trisEx = buildTin(ex)
+        val (exPts, trisEx) = if (breaklines.isNotEmpty()) {
+            val pair = buildTinWithBreaklines(ex, breaklines, breaklineStep)
+            warnings.add("Breakline: ${breaklines.size} خط — ${pair.first.size - ex.size} نقطه اضافه")
+            pair
+        } else {
+            ex to buildTin(ex)
+        }
         val trisDe = buildTin(de)
         if (trisEx.isEmpty()) {
             warnings.add("ساخت TIN سطح «$existingName» ناموفق")
             return VolumeResult("TIN", ex.size, de.size, existingName, designName, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, null, warnings)
         }
-        val hull = boundary ?: convexHull(ex + de)
+        val hull = boundary ?: convexHull(exPts + de)
         var cut = 0.0; var fill = 0.0; var area = 0.0; var sumDz = 0.0
         var minDz = Double.POSITIVE_INFINITY; var maxDz = Double.NEGATIVE_INFINITY; var used = 0
         fun designZ(x: Double, y: Double) = tinZAt(x, y, de, trisDe) ?: interpolateIdw(x, y, de)
         for (t in trisEx) {
-            val p1 = ex[t.a]; val p2 = ex[t.b]; val p3 = ex[t.c]
+            val p1 = exPts[t.a]; val p2 = exPts[t.b]; val p3 = exPts[t.c]
             val cx = (p1.x + p2.x + p3.x) / 3.0; val cy = (p1.y + p2.y + p3.y) / 3.0
             if (!pointInPolygon(cx, cy, hull)) continue
             val z1d = designZ(p1.x, p1.y) ?: continue
@@ -755,6 +943,68 @@ object VolumeEngine {
     }
 
     private fun fmt3(v: Double) = String.format(Locale.US, "%.3f", v)
+
+
+    fun buildVolumePdf(
+        title: String,
+        result: VolumeResult,
+        cutFactor: Double,
+        fillFactor: Double,
+        boundaryCount: Int,
+        breaklineCount: Int
+    ): ByteArray {
+        val doc = PdfDocument()
+        val pageWidth = 595
+        val pageHeight = 842
+        val page = doc.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
+        val c: Canvas = page.canvas
+        val titleP = Paint().apply {
+            textSize = 18f; isFakeBoldText = true; textAlign = Paint.Align.RIGHT; color = 0xFF000000.toInt()
+        }
+        val body = Paint().apply {
+            textSize = 13f; textAlign = Paint.Align.RIGHT; color = 0xFF222222.toInt()
+        }
+        val small = Paint().apply {
+            textSize = 11f; textAlign = Paint.Align.RIGHT; color = 0xFF555555.toInt()
+        }
+        var y = 48f
+        val right = pageWidth - 40f
+        fun line(text: String, p: Paint = body) {
+            c.drawText(text, right, y, p); y += p.textSize + 8f
+        }
+        line("گزارش تحلیل احجام خاکی", titleP)
+        line(title, body)
+        y += 6f
+        line("سطح اصلی: ${result.existingName}", body)
+        line("سطح دوم: ${result.designName}", body)
+        line("روش محاسبه: ${result.method}", body)
+        line("نقاط سطح اصلی: ${result.existingCount}   |   سطح دوم: ${result.designCount}", small)
+        if (boundaryCount > 0) line("Boundary: $boundaryCount رأس", small)
+        if (breaklineCount > 0) line("Breakline: $breaklineCount خط", small)
+        y += 8f
+        line("مساحت منطقه مشترک: ${fmt3(result.areaM2)} m²", body)
+        line("حجم خاکبرداری (Cut): ${fmt3(result.cutM3)} m³", body)
+        line("حجم خاکریزی (Fill): ${fmt3(result.fillM3)} m³", body)
+        line("حجم خالص (Net): ${fmt3(result.netM3)} m³", body)
+        line("نتیجه احجام خاکی: ${result.earthworkLabel}", titleP)
+        y += 8f
+        line("ضریب Cut: $cutFactor   |   ضریب Fill: $fillFactor", small)
+        line("ΔZ حداقل: ${fmt3(result.minDz)}   حداکثر: ${fmt3(result.maxDz)}   میانگین: ${fmt3(result.avgDz)}", small)
+        if (result.gridSize != null) line("اندازه شبکه: ${fmt3(result.gridSize)} m", small)
+        line("تعداد سلول/مثلث: ${result.cellOrTriCount}", small)
+        if (result.warnings.isNotEmpty()) {
+            y += 10f
+            line("هشدارها:", body)
+            result.warnings.take(12).forEach { line("• $it", small) }
+        }
+        y = pageHeight - 40f
+        line("AdelAssistant — گزارش احجام", small)
+        doc.finishPage(page)
+        val bos = ByteArrayOutputStream()
+        doc.writeTo(bos)
+        doc.close()
+        return bos.toByteArray()
+    }
 
     fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
         points.map { VolPoint(it.id.ifBlank { "P" }, it.x, it.y, it.z, it.code) }

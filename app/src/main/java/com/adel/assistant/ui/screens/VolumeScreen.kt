@@ -85,6 +85,8 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var cutFillCells by remember { mutableStateOf<List<CutFillCell>>(emptyList()) }
     var boundaryUsed by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
     var showCutFill by remember { mutableStateOf(true) }
+    var breaklines by remember { mutableStateOf<List<List<VolPoint>>>(emptyList()) }
+    var breaklineStep by remember { mutableStateOf("1.0") }
 
     // تنظیمات نقشه
     var contourInterval by remember { mutableStateOf("1.0") }
@@ -137,6 +139,30 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             }
         } catch (e: Exception) {
             message = "خطا Boundary: ${e.message}"
+        }
+    }
+
+    val breaklinePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: ""
+            val lines = if (name.endsWith(".dxf", true) || text.contains("SECTION")) {
+                VolumeEngine.extractBreaklinesFromDxf(text)
+            } else {
+                // TXT: هر خط یک پلی‌لاین نیست؛ همه نقاط به‌ترتیب یک breakline
+                val pts = parseSimplePoints(text)
+                if (pts.size >= 2) listOf(pts) else emptyList()
+            }
+            if (lines.isEmpty()) {
+                message = "Breakline یافت نشد"
+            } else {
+                breaklines = lines
+                message = "Breakline: ${lines.size} خط / ${lines.sumOf { it.size }} رأس"
+                result = null
+            }
+        } catch (e: Exception) {
+            message = "خطا Breakline: ${e.message}"
         }
     }
 
@@ -228,8 +254,11 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         try {
             val n1 = s1.name.ifBlank { "سطح${i1 + 1}" }
             val n2 = s2.name.ifBlank { "سطح${i2 + 1}" }
+            val blStep = breaklineStep.replace(',', '.').toDoubleOrNull() ?: 1.0
             val analysis: VolumeAnalysis = if (methodTin) {
-                VolumeEngine.computeTinAnalysis(s1.points, s2.points, bnd, cf, ff, n1, n2, gs)
+                VolumeEngine.computeTinAnalysis(
+                    s1.points, s2.points, bnd, cf, ff, n1, n2, gs, breaklines, blStep
+                )
             } else {
                 VolumeEngine.computeGridAnalysis(s1.points, s2.points, gs, bnd, cf, ff, n1, n2)
             }
@@ -255,6 +284,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             result = result!!,
             cutFillCells = cutFillCells,
             boundaryUsed = boundaryUsed,
+            breaklines = breaklines,
             showCutFill = showCutFill,
             contourInterval = contourInterval,
             fixedColorMode = fixedColorMode,
@@ -422,6 +452,39 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             }
         }
         Spacer(Modifier.height(8.dp))
+        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Breakline (لبه / دیواره)", color = color, fontWeight = FontWeight.Bold)
+                Text(
+                    if (breaklines.isNotEmpty())
+                        "${breaklines.size} خط — ${breaklines.sumOf { it.size }} رأس"
+                    else "اختیاری — برای TIN روی لبه و دیواره",
+                    color = Color(0xFFB0B8A8), fontSize = 12.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = { breaklinePicker.launch(arrayOf("*/*")) },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) { Text("ورود DXF/TXT", fontSize = 12.sp) }
+                    OutlinedTextField(
+                        breaklineStep, { breaklineStep = it },
+                        label = { Text("گام m") },
+                        modifier = Modifier.width(80.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    if (breaklines.isNotEmpty()) {
+                        TextButton(onClick = {
+                            breaklines = emptyList()
+                            message = "Breakline پاک شد"
+                            result = null
+                        }) { Text("پاک", color = Color(0xFFFF8A65)) }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilterChip(selected = !methodTin, onClick = { methodTin = false }, label = { Text("Grid") })
             Spacer(Modifier.width(6.dp))
@@ -502,9 +565,11 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = {
-                        val text = VolumeEngine.reportText("تحلیل", r, 1.0, 1.0)
+                        val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
+                        val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
+                        val text = VolumeEngine.reportText("تحلیل", r, cf, ff)
                         FileExport.exportTextToDocuments(context, "volume_analysis.txt", text, "text/plain")
-                        message = "گزارش ذخیره شد"
+                        message = "گزارش TXT ذخیره شد"
                     },
                     modifier = Modifier.weight(1f)
                 ) { Text("گزارش", color = color) }
@@ -521,6 +586,27 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                     modifier = Modifier.weight(1f)
                 ) { Text("DXF", color = color) }
             }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
+                    val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
+                    val bytes = VolumeEngine.buildVolumePdf(
+                        title = "${r.existingName} ↔ ${r.designName}",
+                        result = r,
+                        cutFactor = cf,
+                        fillFactor = ff,
+                        boundaryCount = boundaryPoints.size,
+                        breaklineCount = breaklines.size
+                    )
+                    val uri = FileExport.exportBytesToDocuments(
+                        context, "volume_report.pdf", bytes, "application/pdf"
+                    )
+                    message = if (uri != null) "PDF ذخیره شد" else "خطا در PDF"
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5D4037)),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("خروجی PDF گزارش") }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -670,6 +756,7 @@ private fun VolumeMapView(
     result: VolumeResult,
     cutFillCells: List<CutFillCell>,
     boundaryUsed: List<VolPoint>,
+    breaklines: List<List<VolPoint>> = emptyList(),
     showCutFill: Boolean,
     contourInterval: String,
     fixedColorMode: Boolean,
@@ -833,7 +920,22 @@ private fun VolumeMapView(
                     }
                 }
 
+                // Breakline نارنجی
+                for (line in breaklines) {
+                    for (i in 0 until line.size - 1) {
+                        val a = line[i]; val b = line[i + 1]
+                        drawLine(
+                            Color(0xFFFF9800),
+                            project(a.x, a.y, a.z),
+                            project(b.x, b.y, b.z),
+                            strokeWidth = 3f
+                        )
+                    }
+                }
 
+
+                // Breakline
+                // (خطوط نارنجی در صورت وجود در contours/surfaces جدا نیست — از state در map پاس نشده)
                 // Cut / Fill رنگی
                 if (showCutFill && cutFillCells.isNotEmpty()) {
                     val maxAbs = cutFillCells.maxOf { kotlin.math.abs(it.dz) }.coerceAtLeast(1e-6)
