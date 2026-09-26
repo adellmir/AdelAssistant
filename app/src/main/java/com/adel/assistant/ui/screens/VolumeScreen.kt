@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,6 +78,16 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var fillFactor by remember { mutableStateOf("1.0") }
 
     var result by remember { mutableStateOf<VolumeResult?>(null) }
+    var pairResults by remember { mutableStateOf<List<VolumeAnalysis>>(emptyList()) }
+    var selectedPairIndex by remember { mutableStateOf(0) }
+    var chainMode by remember { mutableStateOf(false) }
+    /** حالت: pair | chain | custom */
+    var compareMode by remember { mutableStateOf("pair") } // pair, chain, custom
+    var customPairs by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
+    var customA by remember { mutableStateOf(0) }
+    var customB by remember { mutableStateOf(1) }
+    var drawBoundaryMode by remember { mutableStateOf(false) }
+    var draftBoundary by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
     var contours by remember { mutableStateOf<List<ContourSet>>(emptyList()) }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -139,6 +150,37 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             }
         } catch (e: Exception) {
             message = "خطا Boundary: ${e.message}"
+        }
+    }
+
+    val sessionPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
+            val session = VolumeEngine.importSessionJson(text)
+            if (session == null || session.surfaces.isEmpty()) {
+                message = "نشست معتبر نیست"
+                return@rememberLauncherForActivityResult
+            }
+            surfaces = session.surfaces.mapIndexed { i, (name, pts) ->
+                SurfaceSlot(name, pts, selectedForCompare = i < 2)
+            }
+            boundaryPoints = session.boundary
+            breaklines = session.breaklines
+            poolPoints = session.surfaces.flatMap { it.second }.distinctBy { pointKey(it) }
+            val asg = mutableMapOf<String, Set<Int>>()
+            session.surfaces.forEachIndexed { si, (_, pts) ->
+                pts.forEach { p ->
+                    val k = pointKey(p)
+                    asg[k] = (asg[k] ?: emptySet()) + si
+                }
+            }
+            assignment = asg
+            result = null
+            pairResults = emptyList()
+            message = "نشست بارگذاری شد: ${session.surfaces.size} سطح"
+        } catch (e: Exception) {
+            message = "خطا نشست: ${e.message}"
         }
     }
 
@@ -233,47 +275,116 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         result = null
     }
 
-    fun runAnalysis() {
-        val picked = surfaces.mapIndexed { i, s -> i to s }.filter { it.second.selectedForCompare }
-        if (picked.size != 2) {
-            message = "دقیقاً دو سطح را با چک‌باکس برای مقایسه انتخاب کنید"
-            return
-        }
-        val (i1, s1) = picked[0]
-        val (i2, s2) = picked[1]
-        if (s1.points.size < 3 || s2.points.size < 3) {
-            message = "هر سطح انتخاب‌شده حداقل ۳ نقطه نیاز دارد"
-            return
-        }
+    fun runOnePair(s1: SurfaceSlot, s2: SurfaceSlot, i1: Int, i2: Int): VolumeAnalysis {
         val gs = gridSize.replace(',', '.').toDoubleOrNull() ?: 1.0
-        val iv = contourInterval.replace(',', '.').toDoubleOrNull() ?: 1.0
         val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
         val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
         val bnd = boundaryPoints.takeIf { it.size >= 3 }
+        val blStep = breaklineStep.replace(',', '.').toDoubleOrNull() ?: 1.0
+        val n1 = s1.name.ifBlank { "سطح${i1 + 1}" }
+        val n2 = s2.name.ifBlank { "سطح${i2 + 1}" }
+        return if (methodTin) {
+            VolumeEngine.computeTinAnalysis(
+                s1.points, s2.points, bnd, cf, ff, n1, n2, gs, breaklines, blStep
+            )
+        } else {
+            VolumeEngine.computeGridAnalysis(s1.points, s2.points, gs, bnd, cf, ff, n1, n2)
+        }
+    }
+
+    fun runAnalysis() {
+        val gs = gridSize.replace(',', '.').toDoubleOrNull() ?: 1.0
+        val iv = contourInterval.replace(',', '.').toDoubleOrNull() ?: 1.0
+        val pairs = mutableListOf<Pair<Pair<Int, SurfaceSlot>, Pair<Int, SurfaceSlot>>>()
+        when (compareMode) {
+            "chain" -> {
+                val chain = surfaces.mapIndexed { i, s -> i to s }.filter { it.second.points.size >= 3 }
+                if (chain.size < 2) {
+                    message = "برای زنجیره حداقل ۲ سطح با نقطه لازم است"
+                    return
+                }
+                for (k in 0 until chain.size - 1) {
+                    pairs.add(chain[k] to chain[k + 1])
+                }
+            }
+            "custom" -> {
+                if (customPairs.isEmpty()) {
+                    message = "حداقل یک جفت دلخواه اضافه کنید"
+                    return
+                }
+                for ((ia, ib) in customPairs) {
+                    val sa = surfaces.getOrNull(ia)
+                    val sb = surfaces.getOrNull(ib)
+                    if (sa == null || sb == null) continue
+                    if (sa.points.size < 3 || sb.points.size < 3) {
+                        message = "سطح‌های جفت ${ia + 1}→${ib + 1} نقطه کافی ندارند"
+                        return
+                    }
+                    pairs.add((ia to sa) to (ib to sb))
+                }
+                if (pairs.isEmpty()) {
+                    message = "جفت معتبری وجود ندارد"
+                    return
+                }
+            }
+            else -> {
+                val picked = surfaces.mapIndexed { i, s -> i to s }.filter { it.second.selectedForCompare }
+                if (picked.size != 2) {
+                    message = "دقیقاً دو سطح را تیک بزنید"
+                    return
+                }
+                if (picked[0].second.points.size < 3 || picked[1].second.points.size < 3) {
+                    message = "هر سطح انتخاب‌شده حداقل ۳ نقطه نیاز دارد"
+                    return
+                }
+                pairs.add(picked[0] to picked[1])
+            }
+        }
         busy = true
         try {
-            val n1 = s1.name.ifBlank { "سطح${i1 + 1}" }
-            val n2 = s2.name.ifBlank { "سطح${i2 + 1}" }
-            val blStep = breaklineStep.replace(',', '.').toDoubleOrNull() ?: 1.0
-            val analysis: VolumeAnalysis = if (methodTin) {
-                VolumeEngine.computeTinAnalysis(
-                    s1.points, s2.points, bnd, cf, ff, n1, n2, gs, breaklines, blStep
-                )
-            } else {
-                VolumeEngine.computeGridAnalysis(s1.points, s2.points, gs, bnd, cf, ff, n1, n2)
+            val analyses = pairs.map { (a, b) ->
+                runOnePair(a.second, b.second, a.first, b.first)
             }
-            result = analysis.result
-            cutFillCells = analysis.cells
-            boundaryUsed = analysis.boundaryUsed
-            contours = listOf(
-                VolumeEngine.buildContours(n1, s1.points, iv),
-                VolumeEngine.buildContours(n2, s2.points, iv)
-            )
-            message = "تحلیل انجام شد — ${analysis.cells.size} سلول Cut/Fill"
+            pairResults = analyses
+            selectedPairIndex = 0
+            val first = analyses.first()
+            result = first.result
+            cutFillCells = first.cells
+            boundaryUsed = first.boundaryUsed
+            val names = analyses.flatMap { listOf(it.result.existingName, it.result.designName) }.distinct()
+            contours = names.mapNotNull { name ->
+                val s = surfaces.firstOrNull { it.name == name || it.name.ifBlank { null } == name }
+                    ?: surfaces.getOrNull(names.indexOf(name))
+                val pts = s?.points ?: return@mapNotNull null
+                VolumeEngine.buildContours(name, pts, iv)
+            }.ifEmpty {
+                pairs.flatMap { (a, b) ->
+                    listOf(
+                        VolumeEngine.buildContours(
+                            a.second.name.ifBlank { "S${a.first}" }, a.second.points, iv
+                        ),
+                        VolumeEngine.buildContours(
+                            b.second.name.ifBlank { "S${b.first}" }, b.second.points, iv
+                        )
+                    )
+                }
+            }
+            message = if (analyses.size == 1)
+                "تحلیل انجام شد — ${first.cells.size} سلول"
+            else
+                "زنجیره: ${analyses.size} جفت تحلیل شد"
         } catch (e: Exception) {
             message = "خطا: ${e.message}"
         }
         busy = false
+    }
+
+    fun selectPair(index: Int) {
+        val a = pairResults.getOrNull(index) ?: return
+        selectedPairIndex = index
+        result = a.result
+        cutFillCells = a.cells
+        boundaryUsed = a.boundaryUsed
     }
 
     if (showMap && result != null) {
@@ -286,6 +397,25 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             boundaryUsed = boundaryUsed,
             breaklines = breaklines,
             showCutFill = showCutFill,
+            drawBoundaryMode = drawBoundaryMode,
+            draftBoundary = draftBoundary,
+            onDraftBoundaryChange = { draftBoundary = it },
+            onConfirmBoundary = {
+                if (it.size >= 3) {
+                    boundaryPoints = it
+                    draftBoundary = it
+                    drawBoundaryMode = false
+                    message = "Boundary ثبت شد: ${it.size} رأس"
+                    result = null
+                    pairResults = emptyList()
+                } else {
+                    message = "حداقل ۳ رأس لازم است"
+                }
+            },
+            onCancelDrawBoundary = {
+                drawBoundaryMode = false
+                draftBoundary = boundaryPoints
+            },
             contourInterval = contourInterval,
             fixedColorMode = fixedColorMode,
             fixedColorHue = fixedColorHue,
@@ -441,9 +571,42 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) { Text("ورود DXF/TXT", fontSize = 12.sp) }
+                    Button(
+                        onClick = {
+                            if (result == null && surfaces.none { it.points.size >= 3 }) {
+                                message = "ابتدا نقاط سطح را بارگذاری کنید"
+                            } else {
+                                draftBoundary = boundaryPoints
+                                drawBoundaryMode = true
+                                mode3d = false
+                                // اگر هنوز تحلیل نشده، یک نتیجه موقت برای ورود به نقشه
+                                if (result == null) {
+                                    val any = surfaces.firstOrNull { it.points.size >= 3 }
+                                    if (any != null) {
+                                        pairResults = emptyList()
+                                        result = VolumeResult(
+                                            "—", any.points.size, any.points.size,
+                                            any.name, any.name,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, null,
+                                            listOf("حالت رسم Boundary")
+                                        )
+                                        cutFillCells = emptyList()
+                                        boundaryUsed = boundaryPoints
+                                        showMap = true
+                                    }
+                                } else {
+                                    showMap = true
+                                }
+                                message = "نقشه ۲بعدی: لمس = رأس Boundary"
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5D4037)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) { Text("رسم روی نقشه", fontSize = 12.sp) }
                     if (boundaryPoints.isNotEmpty()) {
                         TextButton(onClick = {
                             boundaryPoints = emptyList()
+                            draftBoundary = emptyList()
                             message = "Boundary پاک شد — Convex Hull"
                             result = null
                         }) { Text("پاک", color = Color(0xFFFF8A65)) }
@@ -515,42 +678,203 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(10.dp))
 
+        Text("حالت مقایسه", color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(
+                selected = compareMode == "pair",
+                onClick = { compareMode = "pair"; chainMode = false },
+                label = { Text("دو سطح") }
+            )
+            FilterChip(
+                selected = compareMode == "chain",
+                onClick = { compareMode = "chain"; chainMode = true },
+                label = { Text("زنجیره") }
+            )
+            FilterChip(
+                selected = compareMode == "custom",
+                onClick = { compareMode = "custom"; chainMode = false },
+                label = { Text("جفت دلخواه") }
+            )
+        }
+        Text(
+            when (compareMode) {
+                "chain" -> "سطوح با نقطه به ترتیب لیست مقایسه می‌شوند"
+                "custom" -> "جفت‌های A→B را خودتان تعریف کنید"
+                else -> "فقط دو سطح تیک‌خورده"
+            },
+            color = Color(0xFF9BA888), fontSize = 11.sp
+        )
+        if (compareMode == "custom") {
+            Spacer(Modifier.height(6.dp))
+            Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ساخت جفت دلخواه", color = color, fontWeight = FontWeight.Bold)
+                    // انتخاب A و B با دکمه‌های چرخشی ساده
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("از:", color = Color.White, fontSize = 12.sp)
+                        surfaces.forEachIndexed { i, s ->
+                            FilterChip(
+                                selected = customA == i,
+                                onClick = { customA = i },
+                                label = { Text(s.name.ifBlank { "S${i + 1}" }, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("به:", color = Color.White, fontSize = 12.sp)
+                        surfaces.forEachIndexed { i, s ->
+                            FilterChip(
+                                selected = customB == i,
+                                onClick = { customB = i },
+                                label = { Text(s.name.ifBlank { "S${i + 1}" }, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            onClick = {
+                                if (customA == customB) {
+                                    message = "سطح مبدأ و مقصد یکی است"
+                                    return@Button
+                                }
+                                val p = customA to customB
+                                if (p in customPairs) {
+                                    message = "این جفت قبلاً اضافه شده"
+                                } else {
+                                    customPairs = customPairs + p
+                                    message = "جفت اضافه شد"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) { Text("افزودن جفت", fontSize = 12.sp) }
+                        if (customPairs.isNotEmpty()) {
+                            TextButton(onClick = { customPairs = emptyList() }) {
+                                Text("پاک همه", color = Color(0xFFFF8A65))
+                            }
+                        }
+                    }
+                    customPairs.forEachIndexed { idx, (a, b) ->
+                        val na = surfaces.getOrNull(a)?.name?.ifBlank { "S${a + 1}" } ?: "S${a + 1}"
+                        val nb = surfaces.getOrNull(b)?.name?.ifBlank { "S${b + 1}" } ?: "S${b + 1}"
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("${idx + 1}) $na → $nb", color = Color.White, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                customPairs = customPairs.filterIndexed { i, _ -> i != idx }
+                            }) { Text("حذف", color = Color(0xFFFF8A65), fontSize = 11.sp) }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+                onClick = {
+                    val json = VolumeEngine.exportSessionJson(
+                        surfaces.map { it.name.ifBlank { "سطح" } to it.points },
+                        boundaryPoints,
+                        breaklines
+                    )
+                    val uri = FileExport.exportTextToDocuments(
+                        context, "volume_session.json", json, "application/json"
+                    )
+                    message = if (uri != null) "نشست ذخیره شد" else "خطا ذخیره نشست"
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("ذخیره نشست", color = color) }
+            OutlinedButton(
+                onClick = { sessionPicker.launch(arrayOf("*/*", "application/json")) },
+                modifier = Modifier.weight(1f)
+            ) { Text("بارگذاری نشست", color = color) }
+        }
+        Spacer(Modifier.height(8.dp))
         Button(
             onClick = { runAnalysis() },
             enabled = !busy,
             colors = ButtonDefaults.buttonColors(containerColor = color),
             modifier = Modifier.fillMaxWidth().height(48.dp)
-        ) { Text(if (busy) "بررسی..." else "بررسی") }
+        ) { Text(if (busy) "بررسی..." else when (compareMode) {
+            "chain" -> "بررسی زنجیره"
+            "custom" -> "بررسی جفت‌ها"
+            else -> "بررسی"
+        }) }
 
         if (message.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
             Text(message, color = Color(0xFFB0B8A8), fontSize = 12.sp)
         }
 
-        result?.let { r ->
+        if (pairResults.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("جدول احجام", color = color, fontWeight = FontWeight.Bold)
+            Text(
+                if (pairResults.size > 1) "جدول زنجیره احجام (${pairResults.size} جفت)"
+                else "جدول احجام",
+                color = color, fontWeight = FontWeight.Bold
+            )
             Spacer(Modifier.height(6.dp))
-            Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
-                Column {
-                    AnalysisRow("سطح اصلی", r.existingName, Color.White, true)
-                    AnalysisRow("سطح دوم", r.designName, Color.White, true)
-                    HorizontalDivider(color = Color(0xFF3A4530))
-                    AnalysisRow("مساحت مشترک (m²)", fmt(r.areaM2), Color.White)
-                    AnalysisRow("خاکبرداری Cut (m³)", fmt(r.cutM3), Color(0xFFE57373))
-                    AnalysisRow("خاکریزی Fill (m³)", fmt(r.fillM3), Color(0xFF64B5F6))
-                    AnalysisRow("خالص Net (m³)", fmt(r.netM3), Color(0xFFFFD54F))
-                    AnalysisRow(
-                        "نتیجه احجام خاکی", r.earthworkLabel,
-                        when (r.earthworkLabel) {
-                            "خاکبرداری" -> Color(0xFFE57373)
-                            "خاکریزی" -> Color(0xFF64B5F6)
-                            else -> Color(0xFF81C784)
-                        },
-                        true
-                    )
+            pairResults.forEachIndexed { idx, analysis ->
+                val r = analysis.result
+                val selected = idx == selectedPairIndex
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selected) Color(0xFF243020) else Color(0xFF1A1F16),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { selectPair(idx) }
+                ) {
+                    Column {
+                        AnalysisRow(
+                            "جفت ${idx + 1}",
+                            "${r.existingName} → ${r.designName}",
+                            color, true
+                        )
+                        AnalysisRow("مساحت مشترک (m²)", fmt(r.areaM2), Color.White)
+                        AnalysisRow("خاکبرداری Cut (m³)", fmt(r.cutM3), Color(0xFFE57373))
+                        AnalysisRow("خاکریزی Fill (m³)", fmt(r.fillM3), Color(0xFF64B5F6))
+                        AnalysisRow("خالص Net (m³)", fmt(r.netM3), Color(0xFFFFD54F))
+                        AnalysisRow(
+                            "نتیجه", r.earthworkLabel,
+                            when (r.earthworkLabel) {
+                                "خاکبرداری" -> Color(0xFFE57373)
+                                "خاکریزی" -> Color(0xFF64B5F6)
+                                else -> Color(0xFF81C784)
+                            },
+                            true
+                        )
+                        if (pairResults.size > 1) {
+                            Text(
+                                if (selected) "◀ انتخاب برای نقشه" else "برای نقشه لمس کنید",
+                                color = Color(0xFF9BA888), fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
+            if (pairResults.size > 1) {
+                val sumCut = pairResults.sumOf { it.result.cutM3 }
+                val sumFill = pairResults.sumOf { it.result.fillM3 }
+                val overall = when {
+                    sumCut > sumFill + 1e-6 -> "خاکبرداری"
+                    sumFill > sumCut + 1e-6 -> "خاکریزی"
+                    else -> "متعادل"
+                }
+                Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF2A2010), modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        AnalysisRow("جمع Cut زنجیره", fmt(sumCut), Color(0xFFE57373), true)
+                        AnalysisRow("جمع Fill زنجیره", fmt(sumFill), Color(0xFF64B5F6), true)
+                        AnalysisRow("خالص کل", fmt(sumCut - sumFill), Color(0xFFFFD54F), true)
+                        AnalysisRow("نتیجه کلی", overall, Color(0xFFFFCC80), true)
+                    }
+                }
+            }
+            val r = result!!
             Spacer(Modifier.height(10.dp))
             Button(
                 onClick = { showMap = true },
@@ -591,14 +915,25 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 onClick = {
                     val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
                     val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
-                    val bytes = VolumeEngine.buildVolumePdf(
-                        title = "${r.existingName} ↔ ${r.designName}",
-                        result = r,
-                        cutFactor = cf,
-                        fillFactor = ff,
-                        boundaryCount = boundaryPoints.size,
-                        breaklineCount = breaklines.size
-                    )
+                    val bytes = if (pairResults.size > 1) {
+                        VolumeEngine.buildVolumePdfMulti(
+                            title = "زنجیره احجام",
+                            results = pairResults.map { it.result },
+                            cutFactor = cf,
+                            fillFactor = ff,
+                            boundaryCount = boundaryPoints.size,
+                            breaklineCount = breaklines.size
+                        )
+                    } else {
+                        VolumeEngine.buildVolumePdf(
+                            title = "${r.existingName} ↔ ${r.designName}",
+                            result = r,
+                            cutFactor = cf,
+                            fillFactor = ff,
+                            boundaryCount = boundaryPoints.size,
+                            breaklineCount = breaklines.size
+                        )
+                    }
                     val uri = FileExport.exportBytesToDocuments(
                         context, "volume_report.pdf", bytes, "application/pdf"
                     )
@@ -607,6 +942,30 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5D4037)),
                 modifier = Modifier.fillMaxWidth()
             ) { Text("خروجی PDF گزارش") }
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = {
+                    val cells = if (pairResults.isNotEmpty())
+                        pairResults.getOrNull(selectedPairIndex)?.cells ?: cutFillCells
+                    else cutFillCells
+                    if (cells.isEmpty()) {
+                        message = "ابتدا بررسی کنید تا سلول Cut/Fill ساخته شود"
+                        return@OutlinedButton
+                    }
+                    val r = result
+                    val label = if (r != null) "${r.existingName}-${r.designName}" else "pair"
+                    val dxf = VolumeEngine.exportCutFillDxf(
+                        cells = cells,
+                        boundary = boundaryUsed.ifEmpty { boundaryPoints },
+                        pairLabel = label
+                    )
+                    FileExport.exportTextToDocuments(
+                        context, "volume_cutfill.dxf", dxf, "application/dxf"
+                    )
+                    message = "DXF Cut/Fill ذخیره شد (${cells.size} سلول)"
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("خروجی DXF پلی‌گان Cut/Fill", color = color) }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -758,6 +1117,11 @@ private fun VolumeMapView(
     boundaryUsed: List<VolPoint>,
     breaklines: List<List<VolPoint>> = emptyList(),
     showCutFill: Boolean,
+    drawBoundaryMode: Boolean = false,
+    draftBoundary: List<VolPoint> = emptyList(),
+    onDraftBoundaryChange: (List<VolPoint>) -> Unit = {},
+    onConfirmBoundary: (List<VolPoint>) -> Unit = {},
+    onCancelDrawBoundary: () -> Unit = {},
     contourInterval: String,
     fixedColorMode: Boolean,
     fixedColorHue: Float,
@@ -785,8 +1149,8 @@ private fun VolumeMapView(
     var rotY by remember { mutableStateOf(0.4f) }
     var rotX by remember { mutableStateOf(0.6f) }
 
-    val allPts = surfaces.flatMap { it.points }
-    val bounds = remember(allPts) {
+    val allPts = surfaces.flatMap { it.points } + draftBoundary + boundaryUsed
+    val bounds = remember(allPts, draftBoundary, boundaryUsed) {
         if (allPts.isEmpty()) doubleArrayOf(0.0, 0.0, 1.0, 1.0)
         else VolumeEngine.bounds(allPts)
     }
@@ -812,6 +1176,31 @@ private fun VolumeMapView(
             }
             TextButton(onClick = { menuOpen = !menuOpen }) {
                 Text(if (menuOpen) "▲" else "▼", color = color)
+            }
+        }
+        if (drawBoundaryMode) {
+            Surface(color = Color(0xCC5D4037), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(8.dp)) {
+                    Text(
+                        "رسم Boundary: لمس = رأس جدید | ${draftBoundary.size} رأس",
+                        color = Color.White, fontSize = 12.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick = {
+                            if (draftBoundary.isNotEmpty())
+                                onDraftBoundaryChange(draftBoundary.dropLast(1))
+                        }) { Text("برگشت رأس", color = Color.White) }
+                        TextButton(onClick = { onDraftBoundaryChange(emptyList()) }) {
+                            Text("پاک", color = Color(0xFFFFCCBC))
+                        }
+                        TextButton(onClick = { onConfirmBoundary(draftBoundary) }) {
+                            Text("ثبت Boundary", color = Color(0xFFC8E6C9))
+                        }
+                        TextButton(onClick = onCancelDrawBoundary) {
+                            Text("انصراف", color = Color(0xFFFFCDD2))
+                        }
+                    }
+                }
             }
         }
         if (menuOpen) {
@@ -847,6 +1236,26 @@ private fun VolumeMapView(
                             scale = (scale * zoom).coerceIn(0.2f, 50f)
                             offset += pan
                         }
+                    }
+                }
+                .pointerInput(drawBoundaryMode, mode3d, scale, offset, bounds) {
+                    if (!drawBoundaryMode || mode3d) return@pointerInput
+                    detectTapGestures { tap ->
+                        val w = size.width
+                        val h = size.height
+                        val minX = bounds[0]; val minY = bounds[1]
+                        val maxX = bounds[2]; val maxY = bounds[3]
+                        val dx = (maxX - minX).coerceAtLeast(1.0)
+                        val dy = (maxY - minY).coerceAtLeast(1.0)
+                        val baseScale = (min(w, h) * 0.85f) / max(dx, dy).toFloat()
+                        val lx = (tap.x - w / 2f - offset.x) / (dx.toFloat() * baseScale * scale)
+                        val ly = -(tap.y - h / 2f - offset.y) / (dy.toFloat() * baseScale * scale)
+                        val wx = (lx + 0.5) * dx + minX
+                        val wy = (ly + 0.5) * dy + minY
+                        val id = "B${draftBoundary.size + 1}"
+                        onDraftBoundaryChange(
+                            draftBoundary + VolPoint(id, wx, wy, 0.0, "BOUNDARY")
+                        )
                     }
                 }
         ) {
@@ -917,6 +1326,32 @@ private fun VolumeMapView(
                         }
                         path.close()
                         drawPath(path, Color(0x88FFEB3B), style = Stroke(width = 2f))
+                    }
+                }
+
+                // Boundary در حال رسم (پیش‌نویس)
+                if (draftBoundary.isNotEmpty()) {
+                    for (i in 0 until draftBoundary.size - 1) {
+                        val a = draftBoundary[i]; val b = draftBoundary[i + 1]
+                        drawLine(
+                            Color(0xFFFF5722),
+                            project(a.x, a.y), project(b.x, b.y),
+                            strokeWidth = 3f
+                        )
+                    }
+                    // بستن موقت اگر ≥۳
+                    if (draftBoundary.size >= 3) {
+                        val a = draftBoundary.last(); val b = draftBoundary.first()
+                        drawLine(
+                            Color(0x66FF5722),
+                            project(a.x, a.y), project(b.x, b.y),
+                            strokeWidth = 2f
+                        )
+                    }
+                    draftBoundary.forEachIndexed { i, p ->
+                        val o = project(p.x, p.y)
+                        drawCircle(Color(0xFFFFEB3B), radius = 8f, center = o)
+                        drawCircle(Color(0xFFFF5722), radius = 4f, center = o)
                     }
                 }
 
