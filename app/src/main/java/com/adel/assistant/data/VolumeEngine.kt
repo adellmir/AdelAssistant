@@ -1449,9 +1449,10 @@ object VolumeEngine {
         }
     }
 
-fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
+
+    fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
         points.map { VolPoint(it.id.ifBlank { "P" }, it.x, it.y, it.z, it.code) }
-}
+
     data class ProfileSample(
         val chainage: Double,
         val x: Double,
@@ -1469,8 +1470,7 @@ fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
     )
 
     /**
-     * پروفیل طولی بین دو نقطه روی دو سطح (درون‌یابی IDW / نزدیک‌ترین).
-     * @param step فاصله نمونه‌برداری (متر)
+     * پروفیل طولی بین دو نقطه روی دو سطح.
      */
     fun sampleProfile(
         existing: List<VolPoint>,
@@ -1479,15 +1479,17 @@ fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
         x2: Double, y2: Double,
         step: Double = 1.0
     ): ProfileResult {
-        val dx = x2 - x1; val dy = y2 - y1
+        val dx = x2 - x1
+        val dy = y2 - y1
         val len = sqrt(dx * dx + dy * dy)
         if (len < 1e-9) return ProfileResult(emptyList(), 0.0, 0.0, 0.0)
         val st = step.coerceAtLeast(0.1)
         val samples = mutableListOf<ProfileSample>()
         var d = 0.0
         while (d <= len + 1e-9) {
-            val t = (d / len).coerceIn(0.0, 1.0)
-            val x = x1 + dx * t; val y = y1 + dy * t
+            val tt = (d / len).coerceIn(0.0, 1.0)
+            val x = x1 + dx * tt
+            val y = y1 + dy * tt
             val ze = interpolateIdw(x, y, existing)
             val zd = interpolateIdw(x, y, design)
             val dz = if (ze != null && zd != null) ze - zd else null
@@ -1496,8 +1498,8 @@ fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
             d += st
             if (d > len) d = len
         }
-        // مساحت تقریبی پروفیل (ذوزنقه روی dZ)
-        var cutA = 0.0; var fillA = 0.0
+        var cutA = 0.0
+        var fillA = 0.0
         for (i in 0 until samples.size - 1) {
             val a = samples[i].dz ?: continue
             val b = samples[i + 1].dz ?: continue
@@ -1525,5 +1527,4 @@ fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
         }
         return sb.toString()
     }
-
-
+}
