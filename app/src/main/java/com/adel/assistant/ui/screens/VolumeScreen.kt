@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,59 +21,60 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adel.assistant.data.ContourSet
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.VolPoint
 import com.adel.assistant.data.VolumeEngine
 import com.adel.assistant.data.VolumeResult
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.util.Locale
 
 /**
- * محاسبه احجام خاکبرداری / خاکریزی
- * سطح موجود (Existing) و سطح طراحی (Design)
- * روش Grid (پیشنهادی برای سرعت) و TIN (دقیق‌تر)
+ * احجام + تراز + تحلیل دو سطح
+ * ۱) سطح اصلی (نام + نقاط)
+ * ۲) سطح دوم (نام + نقاط)
+ * مقایسه → جدول: مساحت مشترک، Cut، Fill، نتیجه خاکی
+ * DXF: لایه‌های {نام}-POINTS / -CONTOUR / -LABEL (متن ۵ cm)
  */
 @Composable
 fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     val context = LocalContext.current
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Decimal)
 
-    var existing by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
-    var design by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
-    var existingName by remember { mutableStateOf("") }
-    var designName by remember { mutableStateOf("") }
+    var primaryName by remember { mutableStateOf("موجود") }
+    var secondaryName by remember { mutableStateOf("طراحی") }
+    var primary by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
+    var secondary by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
+    var primaryFile by remember { mutableStateOf("") }
+    var secondaryFile by remember { mutableStateOf("") }
 
-    var methodTin by remember { mutableStateOf(false) } // false=Grid true=TIN
+    var methodTin by remember { mutableStateOf(false) }
     var gridSize by remember { mutableStateOf("1.0") }
+    var contourInterval by remember { mutableStateOf("1.0") }
     var cutFactor by remember { mutableStateOf("1.0") }
     var fillFactor by remember { mutableStateOf("1.0") }
-    var calcName by remember { mutableStateOf("محاسبه احجام") }
+    var calcName by remember { mutableStateOf("تحلیل احجام") }
 
     var result by remember { mutableStateOf<VolumeResult?>(null) }
-    var resultTin by remember { mutableStateOf<VolumeResult?>(null) }
-    var resultGrid by remember { mutableStateOf<VolumeResult?>(null) }
+    var contours by remember { mutableStateOf<List<ContourSet>>(emptyList()) }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-
-    var importTarget by remember { mutableStateOf("existing") } // existing | design
+    var importTarget by remember { mutableStateOf("primary") }
 
     fun loadUri(uri: Uri, name: String): List<VolPoint> {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: return emptyList()
-        val pts = try {
+        val pts: List<SurveyPoint> = try {
             PointConverter.readBytes(bytes, name)
         } catch (_: Exception) {
-            // fallback simple CSV/TXT
-            val text = bytes.toString(Charsets.UTF_8)
-            parseSimplePoints(text)
+            emptyList()
         }
-        return VolumeEngine.fromSurvey(pts).ifEmpty {
-            parseSimplePoints(bytes.toString(Charsets.UTF_8))
-        }
+        val fromSurvey = VolumeEngine.fromSurvey(pts)
+        return if (fromSurvey.isNotEmpty()) fromSurvey
+        else parseSimplePoints(bytes.toString(Charsets.UTF_8))
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -86,46 +86,50 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 message = "نقطه‌ای خوانده نشد"
                 return@rememberLauncherForActivityResult
             }
-            if (importTarget == "existing") {
-                existing = pts
-                existingName = name
-                message = "سطح موجود: ${pts.size} نقطه"
+            if (importTarget == "primary") {
+                primary = pts
+                primaryFile = name
+                message = "سطح اصلی «$primaryName»: ${pts.size} نقطه"
             } else {
-                design = pts
-                designName = name
-                message = "سطح طراحی: ${pts.size} نقطه"
+                secondary = pts
+                secondaryFile = name
+                message = "سطح دوم «$secondaryName»: ${pts.size} نقطه"
             }
             result = null
-            resultTin = null
-            resultGrid = null
+            contours = emptyList()
         } catch (e: Exception) {
             message = "خطا: ${e.message}"
         }
     }
 
-    fun runCalc() {
-        if (existing.size < 3 || design.size < 3) {
+    fun runAnalysis() {
+        if (primary.size < 3 || secondary.size < 3) {
             message = "هر سطح حداقل ۳ نقطه نیاز دارد"
             return
         }
         val gs = gridSize.replace(',', '.').toDoubleOrNull() ?: 1.0
+        val iv = contourInterval.replace(',', '.').toDoubleOrNull() ?: 1.0
         val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
         val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
         busy = true
-        message = "در حال محاسبه..."
+        message = "در حال تحلیل..."
         try {
-            val g = VolumeEngine.computeGrid(existing, design, gs, null, cf, ff)
-            resultGrid = g
-            val t = if (existing.size <= 3000 && design.size <= 3000) {
-                VolumeEngine.computeTin(existing, design, null, cf, ff)
+            val r = if (methodTin) {
+                VolumeEngine.computeTin(
+                    primary, secondary, null, cf, ff, primaryName, secondaryName
+                )
             } else {
-                null
+                VolumeEngine.computeGrid(
+                    primary, secondary, gs, null, cf, ff, primaryName, secondaryName
+                )
             }
-            resultTin = t
-            result = if (methodTin && t != null) t else g
-            message = "محاسبه انجام شد"
+            result = r
+            val c1 = VolumeEngine.buildContours(primaryName, primary, iv)
+            val c2 = VolumeEngine.buildContours(secondaryName, secondary, iv)
+            contours = listOf(c1, c2)
+            message = "تحلیل انجام شد — تراز: ${c1.segments.size + c2.segments.size} قطعه"
         } catch (e: Exception) {
-            message = "خطا در محاسبه: ${e.message}"
+            message = "خطا: ${e.message}"
         }
         busy = false
     }
@@ -141,12 +145,11 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, null, tint = color)
             }
-            Text("محاسبه احجام", style = MaterialTheme.typography.titleLarge, color = Color.White)
+            Text("احجام و تراز", style = MaterialTheme.typography.titleLarge, color = Color.White)
         }
         Text(
-            "سطح موجود (Existing) و سطح طراحی (Design) → Cut / Fill / Net",
-            color = Color(0xFF9BA888),
-            fontSize = 12.sp
+            "سطح اصلی → سطح دوم → تحلیل Cut/Fill + خطوط تراز",
+            color = Color(0xFF9BA888), fontSize = 12.sp
         )
         Spacer(Modifier.height(8.dp))
 
@@ -156,31 +159,34 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
 
-        // سطح موجود
+        // ---- سطح اصلی ----
         Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("سطح موجود (Existing)", color = color, fontWeight = FontWeight.Bold)
+                Text("۱. سطح اصلی", color = color, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    primaryName, { primaryName = it },
+                    label = { Text("نام سطح اصلی") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 Text(
-                    if (existing.isEmpty()) "فایلی انتخاب نشده"
-                    else "$existingName — ${existing.size} نقطه",
-                    color = Color(0xFFB0B8A8),
-                    fontSize = 12.sp
+                    if (primary.isEmpty()) "نقاط فراخوانی نشده"
+                    else "$primaryFile — ${primary.size} نقطه",
+                    color = Color(0xFFB0B8A8), fontSize = 12.sp
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            importTarget = "existing"
+                            importTarget = "primary"
                             filePicker.launch(arrayOf("*/*"))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = color)
-                    ) { Text("ورود فایل") }
-                    if (existing.isNotEmpty()) {
+                    ) { Text("فراخوانی نقاط") }
+                    if (primary.isNotEmpty()) {
                         TextButton(onClick = {
-                            existing = emptyList()
-                            existingName = ""
-                            result = null
+                            primary = emptyList(); primaryFile = ""; result = null
                         }) { Text("پاک", color = Color(0xFFFF8A65)) }
                     }
                 }
@@ -188,29 +194,32 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
 
-        // سطح طراحی
+        // ---- سطح دوم ----
         Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("سطح طراحی (Design / کف)", color = color, fontWeight = FontWeight.Bold)
+                Text("۲. سطح دوم (مقایسه)", color = color, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    secondaryName, { secondaryName = it },
+                    label = { Text("نام سطح دوم") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 Text(
-                    if (design.isEmpty()) "فایلی انتخاب نشده"
-                    else "$designName — ${design.size} نقطه",
-                    color = Color(0xFFB0B8A8),
-                    fontSize = 12.sp
+                    if (secondary.isEmpty()) "نقاط فراخوانی نشده"
+                    else "$secondaryFile — ${secondary.size} نقطه",
+                    color = Color(0xFFB0B8A8), fontSize = 12.sp
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            importTarget = "design"
+                            importTarget = "secondary"
                             filePicker.launch(arrayOf("*/*"))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = color)
-                    ) { Text("ورود فایل") }
-                    if (design.isNotEmpty()) {
+                    ) { Text("فراخوانی نقاط") }
+                    if (secondary.isNotEmpty()) {
                         TextButton(onClick = {
-                            design = emptyList()
-                            designName = ""
-                            result = null
+                            secondary = emptyList(); secondaryFile = ""; result = null
                         }) { Text("پاک", color = Color(0xFFFF8A65)) }
                     }
                 }
@@ -218,54 +227,57 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(10.dp))
 
-        Text("روش محاسبه", color = Color.White, fontWeight = FontWeight.SemiBold)
+        Text("پارامترها", color = Color.White, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilterChip(
                 selected = !methodTin,
-                onClick = { methodTin = false; result = resultGrid ?: result },
-                label = { Text("Grid (سریع)") }
+                onClick = { methodTin = false },
+                label = { Text("Grid") }
             )
             Spacer(Modifier.width(8.dp))
             FilterChip(
                 selected = methodTin,
-                onClick = { methodTin = true; result = resultTin ?: result },
-                label = { Text("TIN (دقیق‌تر)") }
+                onClick = { methodTin = true },
+                label = { Text("TIN") }
             )
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(
                 gridSize, { gridSize = it },
-                label = { Text("Grid Size (m)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = numKb,
-                enabled = !methodTin
+                label = { Text("Grid (m)") },
+                modifier = Modifier.weight(1f), singleLine = true,
+                keyboardOptions = numKb, enabled = !methodTin
             )
+            OutlinedTextField(
+                contourInterval, { contourInterval = it },
+                label = { Text("فاصله تراز (m)") },
+                modifier = Modifier.weight(1f), singleLine = true,
+                keyboardOptions = numKb
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(
                 cutFactor, { cutFactor = it },
                 label = { Text("ضریب Cut") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = numKb
+                modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
             )
             OutlinedTextField(
                 fillFactor, { fillFactor = it },
                 label = { Text("ضریب Fill") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = numKb
+                modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
             )
         }
         Spacer(Modifier.height(10.dp))
 
         Button(
-            onClick = { runCalc() },
-            enabled = !busy && existing.size >= 3 && design.size >= 3,
+            onClick = { runAnalysis() },
+            enabled = !busy && primary.size >= 3 && secondary.size >= 3,
             colors = ButtonDefaults.buttonColors(containerColor = color),
             modifier = Modifier.fillMaxWidth().height(48.dp)
         ) {
-            Text(if (busy) "محاسبه..." else "محاسبه Cut / Fill")
+            Text(if (busy) "تحلیل..." else "تحلیل سطوح")
         }
 
         if (message.isNotBlank()) {
@@ -275,51 +287,52 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
 
         result?.let { r ->
             Spacer(Modifier.height(12.dp))
-            ResultCard("نتایج ${r.method}", color, listOf(
-                "خاکبرداری Cut (m³)" to r.cutM3,
-                "خاکریزی Fill (m³)" to r.fillM3,
-                "خالص Net (m³)" to r.netM3,
-                "مساحت (m²)" to r.areaM2,
-                "حداقل ΔZ (m)" to r.minDz,
-                "حداکثر ΔZ (m)" to r.maxDz,
-                "میانگین ΔZ (m)" to r.avgDz
-            ), extra = buildString {
-                append("نقاط موجود: ${r.existingCount} | طراحی: ${r.designCount}\n")
-                append(if (r.gridSize != null) "شبکه: ${r.gridSize} m | " else "")
-                append("تعداد واحد: ${r.cellOrTriCount}")
-            })
+            Text("جدول تحلیل", color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(6.dp))
+            Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(0.dp)) {
+                    AnalysisRow("سطح اصلی", r.existingName, Color.White, bold = true)
+                    AnalysisRow("سطح دوم", r.designName, Color.White, bold = true)
+                    AnalysisRow("روش", r.method, Color(0xFFB0B8A8))
+                    HorizontalDivider(color = Color(0xFF3A4530))
+                    AnalysisRow("مساحت منطقه مشترک (m²)", fmt(r.areaM2), Color.White)
+                    AnalysisRow("حجم خاکبرداری Cut (m³)", fmt(r.cutM3), Color(0xFFE57373))
+                    AnalysisRow("حجم خاکریزی Fill (m³)", fmt(r.fillM3), Color(0xFF64B5F6))
+                    AnalysisRow("خالص Net (m³)", fmt(r.netM3), Color(0xFFFFD54F))
+                    HorizontalDivider(color = Color(0xFF3A4530))
+                    AnalysisRow(
+                        "نتیجه احجام خاکی",
+                        r.earthworkLabel,
+                        when (r.earthworkLabel) {
+                            "خاکبرداری" -> Color(0xFFE57373)
+                            "خاکریزی" -> Color(0xFF64B5F6)
+                            else -> Color(0xFF81C784)
+                        },
+                        bold = true
+                    )
+                    AnalysisRow("نقاط اصلی / دوم", "${r.existingCount} / ${r.designCount}", Color(0xFF9BA888))
+                    if (r.gridSize != null)
+                        AnalysisRow("اندازه شبکه", "${fmt(r.gridSize)} m", Color(0xFF9BA888))
+                    AnalysisRow("ΔZ min / max / avg",
+                        "${fmt(r.minDz)} / ${fmt(r.maxDz)} / ${fmt(r.avgDz)}", Color(0xFF9BA888))
+                }
+            }
+
             if (r.warnings.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
-                Text("هشدارها:", color = Color(0xFFFFB74D), fontSize = 12.sp)
                 r.warnings.forEach {
                     Text("• $it", color = Color(0xFFFFB74D), fontSize = 11.sp)
                 }
             }
 
-            // مقایسه دو روش اگر هر دو موجود
-            val g = resultGrid
-            val t = resultTin
-            if (g != null && t != null) {
-                Spacer(Modifier.height(10.dp))
-                Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text("مقایسه TIN و Grid", color = color, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Cut: TIN ${fmt(t.cutM3)} | Grid ${fmt(g.cutM3)}",
-                            color = Color.White, fontSize = 12.sp
-                        )
-                        Text(
-                            "Fill: TIN ${fmt(t.fillM3)} | Grid ${fmt(g.fillM3)}",
-                            color = Color.White, fontSize = 12.sp
-                        )
-                        val dCut = if (g.cutM3 > 1e-6) absPct(t.cutM3, g.cutM3) else 0.0
-                        val dFill = if (g.fillM3 > 1e-6) absPct(t.fillM3, g.fillM3) else 0.0
-                        Text(
-                            "اختلاف نسبی Cut ≈ ${fmt(dCut)}%  Fill ≈ ${fmt(dFill)}%",
-                            color = Color(0xFF9BA888), fontSize = 11.sp
-                        )
-                    }
-                }
+            if (contours.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    contours.joinToString(" | ") {
+                        "${it.surfaceName}: ${it.segments.size} خط تراز، ${it.labels.size} برچسب"
+                    },
+                    color = Color(0xFF9BA888), fontSize = 11.sp
+                )
             }
 
             Spacer(Modifier.height(10.dp))
@@ -330,90 +343,98 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
                         val text = VolumeEngine.reportText(calcName, r, cf, ff)
                         val uri = FileExport.exportTextToDocuments(
-                            context,
-                            "volume_report.txt",
-                            text,
-                            "text/plain"
+                            context, "volume_analysis.txt", text, "text/plain"
                         )
                         message = if (uri != null) "گزارش ذخیره شد" else "خطا در ذخیره"
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = color),
                     modifier = Modifier.weight(1f)
-                ) { Text("خروجی گزارش") }
+                ) { Text("گزارش") }
+
                 Button(
                     onClick = {
-                        val csv = buildString {
-                            appendLine("name,method,existing_n,design_n,cut_m3,fill_m3,net_m3,area_m2,min_dz,max_dz,avg_dz,units,grid_m")
-                            appendLine(
-                                listOf(
-                                    "\"$calcName\"", r.method, r.existingCount, r.designCount,
-                                    fmt(r.cutM3), fmt(r.fillM3), fmt(r.netM3), fmt(r.areaM2),
-                                    fmt(r.minDz), fmt(r.maxDz), fmt(r.avgDz), r.cellOrTriCount,
-                                    r.gridSize?.let { fmt(it) } ?: ""
-                                ).joinToString(",")
-                            )
-                        }
-                        val uri = FileExport.exportTextToDocuments(
-                            context, "volume_result.csv", csv, "text/csv"
+                        val dxf = VolumeEngine.exportDxf(
+                            surfaces = listOf(
+                                primaryName to primary,
+                                secondaryName to secondary
+                            ),
+                            contours = contours,
+                            textSizeM = 0.05
                         )
-                        message = if (uri != null) "CSV ذخیره شد" else "خطا در CSV"
+                        val safe = calcName.replace(Regex("[^A-Za-z0-9_\\-\\u0600-\\u06FF]"), "_")
+                            .ifBlank { "volume" }
+                        val uri = FileExport.exportTextToDocuments(
+                            context, "${safe}_contour.dxf", dxf, "application/dxf"
+                        )
+                        message = if (uri != null)
+                            "DXF ذخیره شد\nلایه‌ها: $primaryName-CONTOUR/LABEL و $secondaryName-..."
+                        else "خطا در DXF"
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF455A64)),
                     modifier = Modifier.weight(1f)
-                ) { Text("خروجی CSV") }
+                ) { Text("DXF تراز") }
             }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    val csv = buildString {
+                        appendLine("item,value")
+                        appendLine("سطح اصلی,${r.existingName}")
+                        appendLine("سطح دوم,${r.designName}")
+                        appendLine("مساحت مشترک m2,${fmtPlain(r.areaM2)}")
+                        appendLine("خاکبرداری m3,${fmtPlain(r.cutM3)}")
+                        appendLine("خاکریزی m3,${fmtPlain(r.fillM3)}")
+                        appendLine("خالص m3,${fmtPlain(r.netM3)}")
+                        appendLine("نتیجه,${r.earthworkLabel}")
+                    }
+                    val uri = FileExport.exportTextToDocuments(
+                        context, "volume_table.csv", csv, "text/csv"
+                    )
+                    message = if (uri != null) "جدول CSV ذخیره شد" else "خطا"
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("خروجی جدول CSV") }
         }
 
         Spacer(Modifier.height(16.dp))
         Text(
-            "ΔZ = Z موجود − Z طراحی  |  مثبت = خاکبرداری (Cut)  |  منفی = خاکریزی (Fill)\n" +
-                "Boundary پیش‌فرض: Convex Hull مشترک دو سطح\n" +
-                "فرمت فایل: CSV/TXT/DAT با X,Y,Z یا N,X,Y,Z",
-            color = Color(0xFF7A8570),
-            fontSize = 11.sp
+            "لایه‌های DXF برای هر سطح:\n" +
+                "  {نام}-POINTS  نقاط\n" +
+                "  {نام}-CONTOUR خطوط تراز\n" +
+                "  {نام}-LABEL  ارتفاع تراز (سایز ۵ cm)\n" +
+                "ΔZ = Z اصلی − Z دوم  | مثبت=خاکبرداری | منفی=خاکریزی",
+            color = Color(0xFF7A8570), fontSize = 11.sp
         )
         Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun ResultCard(
-    title: String,
-    color: Color,
-    rows: List<Pair<String, Double>>,
-    extra: String
+private fun AnalysisRow(
+    label: String,
+    value: String,
+    valueColor: Color,
+    bold: Boolean = false
 ) {
-    Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1A1F16), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, color = color, fontWeight = FontWeight.Bold)
-            Text(extra, color = Color(0xFF9BA888), fontSize = 11.sp)
-            HorizontalDivider(color = Color(0xFF3A4530))
-            rows.forEach { (label, value) ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(label, color = Color(0xFFB0B8A8), fontSize = 13.sp)
-                    Text(
-                        fmt(value),
-                        color = when {
-                            label.contains("Cut") -> Color(0xFFE57373)
-                            label.contains("Fill") -> Color(0xFF64B5F6)
-                            label.contains("Net") -> Color(0xFFFFD54F)
-                            else -> Color.White
-                        },
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-        }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = Color(0xFFB0B8A8), fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(
+            value,
+            color = valueColor,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.SemiBold,
+            fontSize = 13.sp
+        )
     }
 }
 
 private fun fmt(v: Double) = String.format(Locale.US, "%,.3f", v)
-
-private fun absPct(a: Double, b: Double): Double {
-    if (kotlin.math.abs(b) < 1e-9) return 0.0
-    return kotlin.math.abs(a - b) / kotlin.math.abs(b) * 100.0
-}
+private fun fmtPlain(v: Double) = String.format(Locale.US, "%.3f", v)
 
 private fun parseSimplePoints(text: String): List<VolPoint> {
     val out = mutableListOf<VolPoint>()
@@ -422,20 +443,13 @@ private fun parseSimplePoints(text: String): List<VolPoint> {
         if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) return@forEachIndexed
         val parts = line.split(',', ';', '\t', ' ').map { it.trim() }.filter { it.isNotEmpty() }
         if (parts.size < 3) return@forEachIndexed
-        // try N,X,Y,Z or X,Y,Z or X,Y,Z,ID
         fun d(s: String) = s.replace(',', '.').toDoubleOrNull()
         when {
             parts.size >= 4 && d(parts[1]) != null && d(parts[2]) != null && d(parts[3]) != null -> {
-                // N X Y Z  OR  X Y Z ID
-                val a = d(parts[0])
-                val b = d(parts[1])!!
-                val c = d(parts[2])!!
-                val e = d(parts[3])
+                val a = d(parts[0]); val b = d(parts[1])!!; val c = d(parts[2])!!; val e = d(parts[3])
                 if (a != null && e != null && kotlin.math.abs(a) > 1000) {
-                    // X Y Z ID
                     out.add(VolPoint(parts.getOrElse(3) { "P$idx" }, a, b, c))
                 } else {
-                    // N X Y Z
                     out.add(VolPoint(parts[0], b, c, e ?: 0.0))
                 }
             }
