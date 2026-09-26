@@ -36,7 +36,6 @@ import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 
@@ -321,10 +320,10 @@ private fun ProjectDetail(
 @Composable
 private fun NewEpochDialog(color: Color, onDismiss: () -> Unit, onCreated: (MonEpoch) -> Unit) {
     val context = LocalContext.current
-    val cal = Calendar.getInstance()
-    var day by remember { mutableStateOf(cal.get(Calendar.DAY_OF_MONTH).toString()) }
-    var month by remember { mutableStateOf((cal.get(Calendar.MONTH) + 1).toString()) }
-    var year by remember { mutableStateOf("1405") }
+    val todayJ = remember { CalendarStore.todayJalali() }
+    var day by remember { mutableStateOf(todayJ.third.toString()) }
+    var month by remember { mutableStateOf(todayJ.second.toString()) }
+    var year by remember { mutableStateOf(todayJ.first.toString()) }
     var points by remember { mutableStateOf<List<MonPoint>>(emptyList()) }
     var msg by remember { mutableStateOf("") }
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
