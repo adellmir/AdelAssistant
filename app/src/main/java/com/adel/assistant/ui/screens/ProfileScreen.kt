@@ -166,7 +166,8 @@ private fun ProfileMap(bounds: DoubleArray, alignment: List<com.adel.assistant.d
         val w=size.width.toDouble(); val h=size.height.toDouble(); val pad=24.0
         val minX=bounds[0]; val minY=bounds[1]; val dx=max(bounds[2]-minX,1e-9); val dy=max(bounds[3]-minY,1e-9)
         val scale=min((w-2*pad)/dx,(h-2*pad)/dy); val ox=(w-dx*scale)/2.0; val oy=(h-dy*scale)/2.0
-        fun sx(x:Double)=((x-minX)*scale+ox).toFloat(); fun sy(y:Double)=((bounds[3]-y)*scale+oy).toFloat()
+        fun sx(x: Double): Float = ((x - minX) * scale + ox).toFloat()
+        fun sy(y: Double): Float = ((bounds[3] - y) * scale + oy).toFloat()
         drawRect(Color.LightGray, topLeft=Offset(0f,0f), size=androidx.compose.ui.geometry.Size(size.width,size.height), style=Stroke(1f))
         if (alignment.size >= 2) {
             val path=Path(); alignment.forEachIndexed { i,p -> if(i==0) path.moveTo(sx(p.x),sy(p.y)) else path.lineTo(sx(p.x),sy(p.y)) }
@@ -198,7 +199,8 @@ private fun ProfileChart(r: ProfileResult2, surfaces: List<ProfileSurface>, colo
 }
 
 @Composable
-private fun ProfileTable(r: ProfileResult2, surfaces: List<ProfileSurface>) {
+private fun ProfileTable(r: ProfileResult2, slots: List<ProfileSurfaceSlot>) {
+    val surfaces = slots.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
     Row(Modifier.horizontalScroll(rememberScrollState()).fillMaxWidth().padding(top=6.dp)) {
         Column(Modifier.border(1.dp, Color.LightGray)) {
             Row { listOf("Station","X","Y").plus(surfaces.map { it.name }).forEach { Text(it, Modifier.width(105.dp).padding(5.dp), fontWeight=FontWeight.Bold, fontSize=11.sp) } }
@@ -210,5 +212,5 @@ private fun ProfileTable(r: ProfileResult2, surfaces: List<ProfileSurface>) {
 private fun exportCsv(context: Context, r: ProfileResult2, slots: List<ProfileSurfaceSlot>) {
     val surfaces = slots.mapNotNull { ProfileEngine.buildSurface(it.name,it.points) }
     val text = ProfileEngine.csv(r,surfaces)
-    FileExport.shareText(context, "profile.csv", text, "text/csv")
+    FileExport.exportTextToDocuments(context, "profile.csv", text, "text/csv")
 }
