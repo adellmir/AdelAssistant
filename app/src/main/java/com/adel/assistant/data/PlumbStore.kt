@@ -182,31 +182,32 @@ object PlumbStore {
         return sb.toString()
     }
 
-    fun importCsvfun importCsv(ctx: Context, text: String): Int {
+    fun importCsv(ctx: Context, text: String): Int {
         val lines = text.replace("\r\n", "\n").replace('\r', '\n').lines().filter { it.isNotBlank() }
         if (lines.isEmpty()) return 0
         val header = splitCsvLine(lines.first())
-        val nameIdx = header.indexOfFirst { it.equals("name", true) }.takeIf { it >= 0 } ?: 0
-        val clientIdx = header.indexOfFirst { it.equals("client", true) }.takeIf { it >= 0 } ?: 1
         fun idx(h: String) = header.indexOfFirst { it.equals(h, true) }
+        val nameIdx = idx("name").takeIf { it >= 0 } ?: 0
+        val clientIdx = idx("client").takeIf { it >= 0 } ?: 1
         val rd = idx("report_d"); val rm = idx("report_m"); val ry = idx("report_y")
         val cd = idx("control_d"); val cm = idx("control_m"); val cy = idx("control_y")
         val hi = idx("height")
-        val colNameIdx = header.mapIndexedNotNull { i, h -> if (h.matches(Regex("col\\d+_name", RegexOption.IGNORE_CASE))) i else null }
         val imported = mutableListOf<PlumbProject>()
         for (line in lines.drop(1)) {
-            val c = splitCsvLine(line)
-            if (c.isEmpty()) continue
-            fun g(i: Int) = c.getOrNull(i)?.trim().orEmpty()
+            val cols = splitCsvLine(line)
+            if (cols.isEmpty()) continue
+            fun g(i: Int) = cols.getOrNull(i)?.trim().orEmpty()
             fun gd(i: Int) = g(i).replace(',', '.').toDoubleOrNull()
+            fun gi(h: String): Int? = idx(h).let { if (it >= 0) g(it).toIntOrNull() else null }
+            fun gb(h: String): Boolean = idx(h).let { if (it >= 0) g(it) in listOf("1", "true", "TRUE") else false }
+            fun gs(h: String): String = idx(h).let { if (it >= 0) g(it) else "" }
             val columns = mutableListOf<PlumbColumn>()
             for (n in 1..200) {
-                val nameH = "col${n}_name"
-                val niHdr = header.indexOfFirst { it.equals(nameH, true) }
+                val niHdr = idx("col${n}_name")
                 if (niHdr < 0) break
                 val cname = g(niHdr)
                 if (cname.isBlank()) continue
-                fun colH(suffix: String) = header.indexOfFirst { it.equals("col${n}_$suffix", true) }
+                fun colH(suffix: String) = idx("col${n}_$suffix")
                 fun gcol(suffix: String) = colH(suffix).let { if (it >= 0) gd(it) else null }
                 fun gcoli(suffix: String) = colH(suffix).let { if (it >= 0) g(it).toIntOrNull() else null }
                 fun gcolb(suffix: String) = colH(suffix).let { if (it >= 0) g(it) in listOf("1", "true", "TRUE") else false }
@@ -214,13 +215,11 @@ object PlumbStore {
                 val numPart = cname.dropWhile { it.isLetter() }.filter { it.isDigit() }
                 val li = gcoli("letter") ?: letterPart.uppercase().firstOrNull()?.let { it - 'A' } ?: 0
                 val numi = gcoli("number") ?: numPart.toIntOrNull()?.minus(1) ?: 0
-                // old layout: name, rep_ref_b, rep_ref_t, rep_line_b, rep_line_t, ctl...
-                val hasNew = colH("letter") >= 0 || colH("wall") >= 0
+                val hasNew = colH("letter") >= 0 || colH("wall") >= 0 || colH("rep_ref_mm") >= 0
+                val wall = if (hasNew) gcolb("wall") else false
                 val rep: PlumbReading
                 val ctl: PlumbReading
-                val wall: Boolean
                 if (hasNew) {
-                    wall = gcolb("wall")
                     rep = PlumbReading(
                         refBottom = gcol("rep_ref_b"), refTop = gcol("rep_ref_t"),
                         lineBottom = gcol("rep_line_b"), lineTop = gcol("rep_line_t"),
@@ -232,7 +231,6 @@ object PlumbStore {
                         refValueMm = gcol("ctl_ref_mm"), lineValueMm = gcol("ctl_line_mm")
                     )
                 } else {
-                    wall = false
                     rep = PlumbReading(
                         refBottom = gd(niHdr + 1), refTop = gd(niHdr + 2),
                         lineBottom = gd(niHdr + 3), lineTop = gd(niHdr + 4)
@@ -246,9 +244,6 @@ object PlumbStore {
             }
             val maxL = (columns.maxOfOrNull { it.letterIdx } ?: 0) + 1
             val maxN = (columns.maxOfOrNull { it.numberIdx } ?: 0) + 1
-            fun gi(h: String) = idx(h).let { if (it >= 0) g(it).toIntOrNull() else null }
-            fun gb(h: String) = idx(h).let { if (it >= 0) g(it) in listOf("1", "true", "TRUE") else false }
-            fun gs(h: String) = idx(h).let { if (it >= 0) g(it) else "" }
             imported.add(
                 PlumbProject(
                     name = g(nameIdx),

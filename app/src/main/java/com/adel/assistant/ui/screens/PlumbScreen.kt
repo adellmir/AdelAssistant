@@ -418,13 +418,17 @@ private fun PlumbWorkspace(
                     drawContext.canvas.nativeCanvas.drawText(
                         "A", pa.x, pa.y - 12f,
                         android.graphics.Paint().apply {
-                            color = android.graphics.Color.YELLOW; textSize = 28f; isAntiAlias = true
+                            this.color = android.graphics.Color.YELLOW
+                            textSize = 28f
+                            isAntiAlias = true
                         }
                     )
                     drawContext.canvas.nativeCanvas.drawText(
                         "B", pb.x, pb.y - 12f,
                         android.graphics.Paint().apply {
-                            color = android.graphics.Color.YELLOW; textSize = 28f; isAntiAlias = true
+                            this.color = android.graphics.Color.YELLOW
+                            textSize = 28f
+                            isAntiAlias = true
                         }
                     )
                 }
