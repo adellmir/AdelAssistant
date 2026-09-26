@@ -124,10 +124,10 @@ fun MonitoringScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             }
             OutlinedButton(onClick = {
                 val text = MonitoringStore.exportCsv(context)
-                val uri = FileExport.exportTextToDocuments(context, "monitoring_backup.csv", text, "text/csv")
+                val uri = FileExport.exportTextToDocuments(context, "monitoring_export.csv", text, "text/csv")
                 // silent
             }, modifier = Modifier.weight(1f)) {
-                Text("پشتیبان")
+                Text("خروجی CSV")
             }
         }
         Spacer(Modifier.height(8.dp))

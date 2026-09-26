@@ -245,6 +245,10 @@ private fun PlumbWorkspace(
         mutableStateOf(p.letterCount <= 0 || p.numberCount <= 0)
     }
     var showSettings by remember { mutableStateOf(false) }
+    var axisPickMode by remember { mutableStateOf(false) } // انتخاب تقاطع A سپس B
+    var axisPickStep by remember { mutableStateOf(0) } // 0=A 1=B
+    var axisDraftA by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var axisDraftB by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var pickColumns by remember { mutableStateOf(false) }
     var showNeighbors by remember { mutableStateOf(false) }
     var showHeight by remember { mutableStateOf(false) }
@@ -306,9 +310,24 @@ private fun PlumbWorkspace(
                         offset += pan
                     }
                 }
-                .pointerInput(pickColumns, p.columns, p.letterCount, p.numberCount, scale, offset, mode) {
+                .pointerInput(pickColumns, axisPickMode, axisPickStep, p.columns, p.letterCount, p.numberCount, scale, offset, mode) {
                     detectTapGestures { tap ->
                         val world = screenToWorld(tap, scale, offset)
+                        if (axisPickMode) {
+                            val ix = nearestIntersection(p, world)
+                            if (ix != null) {
+                                val (li, ni, name) = ix
+                                if (axisPickStep == 0) {
+                                    axisDraftA = li to ni
+                                    axisPickStep = 1
+                                    message = "A=$name — حالا تقاطع B را بزنید"
+                                } else {
+                                    axisDraftB = li to ni
+                                    message = "B=$name — ثبت را بزنید"
+                                }
+                            }
+                            return@detectTapGestures
+                        }
                         if (pickColumns) {
                             val hitCol = hitColumn(p, world, 0.15)
                             if (hitCol != null) {
@@ -383,6 +402,34 @@ private fun PlumbWorkspace(
                 }
             }
 
+            // خط محور رفرنس A→B
+            run {
+                val aL = if (axisPickMode && axisDraftA != null) axisDraftA!!.first else p.axisALetter
+                val aN = if (axisPickMode && axisDraftA != null) axisDraftA!!.second else p.axisANumber
+                val bL = if (axisPickMode && axisDraftB != null) axisDraftB!!.first else p.axisBLetter
+                val bN = if (axisPickMode && axisDraftB != null) axisDraftB!!.second else p.axisBNumber
+                if (aL >= 0 && aN >= 0 && bL >= 0 && bN >= 0) {
+                    val (ax, ay) = intersectionWorld(p, aL, aN)
+                    val (bx, by) = intersectionWorld(p, bL, bN)
+                    val pa = w2s(ax, ay)
+                    val pb = w2s(bx, by)
+                    drawLine(Color(0xFFFFEB3B), pa, pb, 4f)
+                    // برچسب A / B
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "A", pa.x, pa.y - 12f,
+                        android.graphics.Paint().apply {
+                            color = android.graphics.Color.YELLOW; textSize = 28f; isAntiAlias = true
+                        }
+                    )
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "B", pb.x, pb.y - 12f,
+                        android.graphics.Paint().apply {
+                            color = android.graphics.Color.YELLOW; textSize = 28f; isAntiAlias = true
+                        }
+                    )
+                }
+            }
+
             // همسایه / خیابان
             fun edgeLabel(n: PlumbNeighbor, pos: Offset, vertical: Boolean = false) {
                 val t = when {
@@ -410,6 +457,24 @@ private fun PlumbWorkspace(
             edgeLabel(p.bottomN, w2s(maxX / 2, -1.5), false)
             edgeLabel(p.rightN, w2s(maxX + 2.2, maxY / 2), true)
             edgeLabel(p.leftN, w2s(-2.0, maxY / 2), true)
+
+            // بردار محور A→B (برای جهت فلش‌ها)
+            val (axisUx, axisUy, axisRx, axisRy) = if (p.hasAxis()) {
+                val (ax, ay) = intersectionWorld(p, p.axisALetter, p.axisANumber)
+                val (bx, by) = intersectionWorld(p, p.axisBLetter, p.axisBNumber)
+                val dx = bx - ax
+                val dy = by - ay
+                val len = hypot(dx, dy).coerceAtLeast(1e-9)
+                val ux = (dx / len).toFloat()
+                val uy = (dy / len).toFloat()
+                // راستِ جهت A→B در مختصات صفحه (y معکوس در ترسیم)
+                val rx = uy
+                val ry = -ux
+                arrayOf(ux, uy, rx, ry)
+            } else {
+                arrayOf(0f, -1f, -1f, 0f) // پیش‌فرض: لاین بالا/پایین، رفرنس چپ/راست
+            }
+            val aUx = axisUx; val aUy = axisUy; val aRx = axisRx; val aRy = axisRy
 
             // ستون‌ها
             p.columns.forEach { col ->
@@ -476,10 +541,11 @@ private fun PlumbWorkspace(
                             isAntiAlias = true
                         }
                     )
-                    // فلش: مثبت چپ، منفی راست
-                    val dir = if (mm >= 0) -1f else 1f
+                    // فلش رفرنس: مثبت → چپِ AB ، منفی → راستِ AB
                     val ay = y - textH * 0.7f
-                    drawArrow(Offset(pos.x, ay), Offset(pos.x + dir * 24f, ay), Color(colr))
+                    val sign = if (mm >= 0) -1f else 1f // مثبت به چپ محور
+                    val tip = Offset(pos.x + sign * aRx * 28f, ay + sign * aRy * 28f)
+                    drawArrow(Offset(pos.x, ay), tip, Color(colr))
                 }
 
                 fun drawLineVal(mm: Double, gray: Boolean, rightExtra: Float) {
@@ -504,9 +570,10 @@ private fun PlumbWorkspace(
                         }
                     )
                     drawContext.canvas.nativeCanvas.restore()
-                    // فلش لاین: منفی بالا، مثبت پایین
-                    val dir = if (mm >= 0) 1f else -1f
-                    drawArrow(Offset(x + 8f, pos.y), Offset(x + 8f, pos.y + dir * 24f), Color(colr))
+                    // فلش لاین: مثبت → سمت A ، منفی → سمت B
+                    val sign = if (mm >= 0) -1f else 1f // مثبت به سمت A (خلاف A→B)
+                    val tip = Offset(x + 8f + sign * aUx * 28f, pos.y + sign * aUy * 28f)
+                    drawArrow(Offset(x + 8f, pos.y), tip, Color(colr))
                 }
 
                 if (showBeforeAfter) {
@@ -559,6 +626,52 @@ private fun PlumbWorkspace(
                 fontSize = 12.sp,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
             )
+        }
+    }
+
+
+    // نوار انتخاب محور
+    if (axisPickMode) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(Color(0xCC2A3A20))
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                when {
+                    axisPickStep == 0 -> "محور: تقاطع A را انتخاب کنید"
+                    axisDraftB == null -> "محور: تقاطع B را انتخاب کنید"
+                    else -> "A=${axisDraftA?.let { "${PlumbStore.letterLabel(it.first)}${it.second + 1}" }} → B=${axisDraftB?.let { "${PlumbStore.letterLabel(it.first)}${it.second + 1}" }}"
+                },
+                color = Color.White,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = {
+                val a = axisDraftA
+                val b = axisDraftB
+                if (a != null && b != null) {
+                    p = p.copy(
+                        axisALetter = a.first, axisANumber = a.second,
+                        axisBLetter = b.first, axisBNumber = b.second
+                    )
+                    persist()
+                    message = "محور ثبت شد"
+                    axisPickMode = false
+                } else message = "هر دو نقطه A و B لازم است"
+            }) { Text("ثبت", color = Color(0xFF81C784)) }
+            TextButton(onClick = {
+                axisDraftA = null
+                axisDraftB = null
+                axisPickStep = 0
+                p = p.copy(axisALetter = -1, axisANumber = -1, axisBLetter = -1, axisBNumber = -1)
+                persist()
+                message = "محور پاک شد"
+            }) { Text("ریست", color = Color(0xFFFF8A65)) }
+            TextButton(onClick = { axisPickMode = false }) { Text("بستن", color = Color.White) }
         }
     }
 
@@ -635,6 +748,14 @@ private fun PlumbWorkspace(
                         "ارتفاع" to {
                             showHeight = true
                             showSettings = false
+                        },
+                        "محور (رفرنس)" to {
+                            axisPickMode = true
+                            axisPickStep = 0
+                            axisDraftA = if (p.hasAxis()) p.axisALetter to p.axisANumber else null
+                            axisDraftB = if (p.hasAxis()) p.axisBLetter to p.axisBNumber else null
+                            showSettings = false
+                            message = "تقاطع A را روی شبکه بزنید"
                         },
                         "ریست" to {
                             p = p.copy(
@@ -889,6 +1010,17 @@ private fun screenToWorld(tap: Offset, scale: Float, offset: Offset): Pair<Doubl
     val x = (tap.x - offset.x) / scale
     val y = -(tap.y - offset.y) / scale
     return x.toDouble() to y.toDouble()
+}
+
+private fun intersectionWorld(p: PlumbProject, letterIdx: Int, numberIdx: Int): Pair<Double, Double> {
+    val longIsLet = p.longIsLetters()
+    val ls = p.longSpacing()
+    val cs = p.crossSpacing()
+    return if (longIsLet) {
+        letterIdx * ls to numberIdx * cs
+    } else {
+        numberIdx * ls to letterIdx * cs
+    }
 }
 
 private fun columnWorld(p: PlumbProject, col: PlumbColumn): Pair<Double, Double> {

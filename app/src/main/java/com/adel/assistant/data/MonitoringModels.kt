@@ -94,7 +94,14 @@ object MonitoringStore {
 
     fun exportCsv(ctx: Context, list: List<MonProject> = loadAll(ctx)): String {
         val sb = StringBuilder()
-        sb.appendLine("project_id,project_name,client,report_no,day,month,year,epoch_id,epoch_day,epoch_month,epoch_year,point_name,is_bm,base_x,base_y,base_z,epoch_x,epoch_y,epoch_z,in_out_mm,settle_mm,d3d_mm")
+        sb.appendLine(
+            "project_id,project_name,client,report_no,day,month,year," +
+            "epoch_id,epoch_day,epoch_month,epoch_year," +
+            "point_name,is_bm," +
+            "base_x,base_y,base_z,epoch_x,epoch_y,epoch_z," +
+            "dx_mm,dy_mm,dh_mm," +
+            "in_out_mm,settle_mm,d3d_mm"
+        )
         list.forEach { p ->
             if (p.epochs.isEmpty()) {
                 p.basePoints.forEach { b ->
@@ -102,20 +109,24 @@ object MonitoringStore {
                         p.id, esc(p.name), esc(p.client), esc(p.reportNo), p.day, p.month, p.year,
                         "", "", "", "",
                         esc(b.name), if (b.isBm) "1" else "0",
-                        b.x, b.y, b.z, "", "", "", "", "", ""
+                        b.x, b.y, b.z, "", "", "",
+                        "", "", "", "", "", ""
                     ).joinToString(","))
                 }
             } else {
                 p.epochs.forEach { e ->
-                    val rows = MonitoringAnalyzer.analyze(p.basePoints, e.points)
-                    rows.forEach { r ->
+                    val axial = MonitoringAnalyzer.analyze(p.basePoints, e.points).associateBy { it.name.lowercase() }
+                    val coord = MonitoringAnalyzer.analyzeCoordinate(p.basePoints, e.points)
+                    coord.forEach { r ->
+                        val a = axial[r.name.lowercase()]
                         sb.appendLine(listOf(
                             p.id, esc(p.name), esc(p.client), esc(p.reportNo), p.day, p.month, p.year,
                             e.id, e.day, e.month, e.year,
                             esc(r.name), if (r.isBm) "1" else "0",
                             r.baseX ?: "", r.baseY ?: "", r.baseZ ?: "",
                             r.epX ?: "", r.epY ?: "", r.epZ ?: "",
-                            r.inOutMm ?: "", r.settleMm ?: "", r.d3dMm ?: ""
+                            r.dxMm ?: "", r.dyMm ?: "", r.dhMm ?: "",
+                            a?.inOutMm ?: "", a?.settleMm ?: "", a?.d3dMm ?: ""
                         ).joinToString(","))
                     }
                 }

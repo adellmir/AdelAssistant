@@ -66,8 +66,16 @@ data class PlumbProject(
     var rightN: PlumbNeighbor = PlumbNeighbor(),
     var leftN: PlumbNeighbor = PlumbNeighbor(),
     var axesVisible: Boolean = true,
+    /** محور رفرنس: تقاطع A و B (letterIdx/numberIdx)؛ -1 = تعریف‌نشده */
+    var axisALetter: Int = -1,
+    var axisANumber: Int = -1,
+    var axisBLetter: Int = -1,
+    var axisBNumber: Int = -1,
     var updatedAt: Long = System.currentTimeMillis()
 ) {
+    fun hasAxis(): Boolean =
+        axisALetter >= 0 && axisANumber >= 0 && axisBLetter >= 0 && axisBNumber >= 0
+
     fun toleranceMm(): Double = heightM / 600.0 * 1000.0 // height/600 in meters → mm: height/600*1000 = height*1000/600
 
     fun sortKey(): String {
@@ -122,32 +130,51 @@ object PlumbStore {
 
     fun exportCsv(ctx: Context, list: List<PlumbProject> = loadAll(ctx)): String {
         val maxCols = list.maxOfOrNull { it.columns.size } ?: 0
-        val header = StringBuilder("name,client,report_d,report_m,report_y,control_d,control_m,control_y,height")
+        val header = StringBuilder(
+            "name,client,report_d,report_m,report_y,control_d,control_m,control_y,height," +
+            "letter_count,number_count,factor," +
+            "top_neighbor,top_street,bottom_neighbor,bottom_street,right_neighbor,right_street,left_neighbor,left_street," +
+            "axis_a_letter,axis_a_number,axis_b_letter,axis_b_number"
+        )
         for (i in 0 until maxCols) {
             val n = i + 1
-            header.append(",col${n}_name,col${n}_rep_ref_b,col${n}_rep_ref_t,col${n}_rep_line_b,col${n}_rep_line_t")
+            header.append(",col${n}_name,col${n}_letter,col${n}_number,col${n}_wall")
+            header.append(",col${n}_rep_ref_b,col${n}_rep_ref_t,col${n}_rep_line_b,col${n}_rep_line_t")
+            header.append(",col${n}_rep_ref_mm,col${n}_rep_line_mm")
             header.append(",col${n}_ctl_ref_b,col${n}_ctl_ref_t,col${n}_ctl_line_b,col${n}_ctl_line_t")
+            header.append(",col${n}_ctl_ref_mm,col${n}_ctl_line_mm")
         }
         header.append('\n')
         val sb = StringBuilder(header)
         list.forEach { p ->
             fun esc(s: String) = "\"${s.replace("\"", "\"\"")}\""
-            sb.append(esc(p.name)).append(',')
-            sb.append(esc(p.client)).append(',')
+            fun n(v: Double?) = v?.let { String.format(java.util.Locale.US, "%.6f", it) } ?: ""
+            fun b(v: Boolean) = if (v) "1" else "0"
+            sb.append(esc(p.name)).append(',').append(esc(p.client)).append(',')
             sb.append(p.reportDay).append(',').append(p.reportMonth).append(',').append(p.reportYear).append(',')
             sb.append(p.controlDay).append(',').append(p.controlMonth).append(',').append(p.controlYear).append(',')
-            sb.append(p.heightM)
+            sb.append(n(p.heightM)).append(',')
+            sb.append(p.letterCount).append(',').append(p.numberCount).append(',').append(n(p.factor)).append(',')
+            sb.append(b(p.topN.isNeighbor)).append(',').append(esc(p.topN.street)).append(',')
+            sb.append(b(p.bottomN.isNeighbor)).append(',').append(esc(p.bottomN.street)).append(',')
+            sb.append(b(p.rightN.isNeighbor)).append(',').append(esc(p.rightN.street)).append(',')
+            sb.append(b(p.leftN.isNeighbor)).append(',').append(esc(p.leftN.street)).append(',')
+            sb.append(p.axisALetter).append(',').append(p.axisANumber).append(',')
+            sb.append(p.axisBLetter).append(',').append(p.axisBNumber)
             for (i in 0 until maxCols) {
                 val c = p.columns.getOrNull(i)
                 if (c == null) {
-                    sb.append(",,,,,,,,")
+                    sb.append(",,,,,,,,,,,,,,,,")
                 } else {
-                    fun n(v: Double?) = v?.let { String.format(java.util.Locale.US, "%.4f", it) } ?: ""
                     sb.append(',').append(esc(c.name))
+                    sb.append(',').append(c.letterIdx).append(',').append(c.numberIdx)
+                    sb.append(',').append(b(c.isWallPlumb))
                     sb.append(',').append(n(c.report.refBottom)).append(',').append(n(c.report.refTop))
                     sb.append(',').append(n(c.report.lineBottom)).append(',').append(n(c.report.lineTop))
+                    sb.append(',').append(n(c.report.refValueMm)).append(',').append(n(c.report.lineValueMm))
                     sb.append(',').append(n(c.control.refBottom)).append(',').append(n(c.control.refTop))
                     sb.append(',').append(n(c.control.lineBottom)).append(',').append(n(c.control.lineTop))
+                    sb.append(',').append(n(c.control.refValueMm)).append(',').append(n(c.control.lineValueMm))
                 }
             }
             sb.append('\n')
@@ -155,8 +182,7 @@ object PlumbStore {
         return sb.toString()
     }
 
-    
-    fun importCsv(ctx: Context, text: String): Int {
+    fun importCsvfun importCsv(ctx: Context, text: String): Int {
         val lines = text.replace("\r\n", "\n").replace('\r', '\n').lines().filter { it.isNotBlank() }
         if (lines.isEmpty()) return 0
         val header = splitCsvLine(lines.first())
@@ -174,26 +200,55 @@ object PlumbStore {
             fun g(i: Int) = c.getOrNull(i)?.trim().orEmpty()
             fun gd(i: Int) = g(i).replace(',', '.').toDoubleOrNull()
             val columns = mutableListOf<PlumbColumn>()
-            for (ci in colNameIdx) {
-                val cname = g(ci)
+            for (n in 1..200) {
+                val nameH = "col${n}_name"
+                val niHdr = header.indexOfFirst { it.equals(nameH, true) }
+                if (niHdr < 0) break
+                val cname = g(niHdr)
                 if (cname.isBlank()) continue
-                // parse letter/number from name like A3
+                fun colH(suffix: String) = header.indexOfFirst { it.equals("col${n}_$suffix", true) }
+                fun gcol(suffix: String) = colH(suffix).let { if (it >= 0) gd(it) else null }
+                fun gcoli(suffix: String) = colH(suffix).let { if (it >= 0) g(it).toIntOrNull() else null }
+                fun gcolb(suffix: String) = colH(suffix).let { if (it >= 0) g(it) in listOf("1", "true", "TRUE") else false }
                 val letterPart = cname.takeWhile { it.isLetter() }
                 val numPart = cname.dropWhile { it.isLetter() }.filter { it.isDigit() }
-                val li = letterPart.uppercase().firstOrNull()?.let { it - 'A' } ?: 0
-                val ni = numPart.toIntOrNull()?.minus(1) ?: 0
-                val rep = PlumbReading(
-                    refBottom = gd(ci + 1), refTop = gd(ci + 2),
-                    lineBottom = gd(ci + 3), lineTop = gd(ci + 4)
-                )
-                val ctl = PlumbReading(
-                    refBottom = gd(ci + 5), refTop = gd(ci + 6),
-                    lineBottom = gd(ci + 7), lineTop = gd(ci + 8)
-                )
-                columns.add(PlumbColumn(cname, li, ni, rep, ctl))
+                val li = gcoli("letter") ?: letterPart.uppercase().firstOrNull()?.let { it - 'A' } ?: 0
+                val numi = gcoli("number") ?: numPart.toIntOrNull()?.minus(1) ?: 0
+                // old layout: name, rep_ref_b, rep_ref_t, rep_line_b, rep_line_t, ctl...
+                val hasNew = colH("letter") >= 0 || colH("wall") >= 0
+                val rep: PlumbReading
+                val ctl: PlumbReading
+                val wall: Boolean
+                if (hasNew) {
+                    wall = gcolb("wall")
+                    rep = PlumbReading(
+                        refBottom = gcol("rep_ref_b"), refTop = gcol("rep_ref_t"),
+                        lineBottom = gcol("rep_line_b"), lineTop = gcol("rep_line_t"),
+                        refValueMm = gcol("rep_ref_mm"), lineValueMm = gcol("rep_line_mm")
+                    )
+                    ctl = PlumbReading(
+                        refBottom = gcol("ctl_ref_b"), refTop = gcol("ctl_ref_t"),
+                        lineBottom = gcol("ctl_line_b"), lineTop = gcol("ctl_line_t"),
+                        refValueMm = gcol("ctl_ref_mm"), lineValueMm = gcol("ctl_line_mm")
+                    )
+                } else {
+                    wall = false
+                    rep = PlumbReading(
+                        refBottom = gd(niHdr + 1), refTop = gd(niHdr + 2),
+                        lineBottom = gd(niHdr + 3), lineTop = gd(niHdr + 4)
+                    )
+                    ctl = PlumbReading(
+                        refBottom = gd(niHdr + 5), refTop = gd(niHdr + 6),
+                        lineBottom = gd(niHdr + 7), lineTop = gd(niHdr + 8)
+                    )
+                }
+                columns.add(PlumbColumn(cname, li, numi, rep, ctl, wall))
             }
             val maxL = (columns.maxOfOrNull { it.letterIdx } ?: 0) + 1
             val maxN = (columns.maxOfOrNull { it.numberIdx } ?: 0) + 1
+            fun gi(h: String) = idx(h).let { if (it >= 0) g(it).toIntOrNull() else null }
+            fun gb(h: String) = idx(h).let { if (it >= 0) g(it) in listOf("1", "true", "TRUE") else false }
+            fun gs(h: String) = idx(h).let { if (it >= 0) g(it) else "" }
             imported.add(
                 PlumbProject(
                     name = g(nameIdx),
@@ -205,9 +260,18 @@ object PlumbStore {
                     controlMonth = if (cm >= 0) g(cm) else "",
                     controlYear = if (cy >= 0) g(cy) else "",
                     heightM = if (hi >= 0) gd(hi) ?: 22.0 else 22.0,
-                    letterCount = maxL.coerceAtLeast(1),
-                    numberCount = maxN.coerceAtLeast(1),
-                    columns = columns
+                    letterCount = (gi("letter_count") ?: maxL).coerceAtLeast(1),
+                    numberCount = (gi("number_count") ?: maxN).coerceAtLeast(1),
+                    factor = idx("factor").let { if (it >= 0) gd(it) ?: 1.0 else 1.0 },
+                    columns = columns,
+                    topN = PlumbNeighbor(gb("top_neighbor"), gs("top_street")),
+                    bottomN = PlumbNeighbor(gb("bottom_neighbor"), gs("bottom_street")),
+                    rightN = PlumbNeighbor(gb("right_neighbor"), gs("right_street")),
+                    leftN = PlumbNeighbor(gb("left_neighbor"), gs("left_street")),
+                    axisALetter = gi("axis_a_letter") ?: -1,
+                    axisANumber = gi("axis_a_number") ?: -1,
+                    axisBLetter = gi("axis_b_letter") ?: -1,
+                    axisBNumber = gi("axis_b_number") ?: -1
                 )
             )
         }
@@ -262,6 +326,10 @@ object PlumbStore {
         put("heightM", p.heightM)
         put("letterCount", p.letterCount); put("numberCount", p.numberCount); put("factor", p.factor)
         put("axesVisible", p.axesVisible)
+        put("axisALetter", p.axisALetter)
+        put("axisANumber", p.axisANumber)
+        put("axisBLetter", p.axisBLetter)
+        put("axisBNumber", p.axisBNumber)
         put("updatedAt", p.updatedAt)
         put("topN", neighborJson(p.topN))
         put("bottomN", neighborJson(p.bottomN))
@@ -327,6 +395,10 @@ object PlumbStore {
             rightN = parseNeighbor(o.optJSONObject("rightN")),
             leftN = parseNeighbor(o.optJSONObject("leftN")),
             axesVisible = o.optBoolean("axesVisible", true),
+            axisALetter = o.optInt("axisALetter", -1),
+            axisANumber = o.optInt("axisANumber", -1),
+            axisBLetter = o.optInt("axisBLetter", -1),
+            axisBNumber = o.optInt("axisBNumber", -1),
             updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
         )
     }
