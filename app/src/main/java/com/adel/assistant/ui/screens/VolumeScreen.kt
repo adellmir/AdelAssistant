@@ -88,6 +88,11 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var customB by remember { mutableStateOf(1) }
     var drawBoundaryMode by remember { mutableStateOf(false) }
     var draftBoundary by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
+    var profileMode by remember { mutableStateOf(false) }
+    var profileP1 by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var profileP2 by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var profileResult by remember { mutableStateOf<VolumeEngine.ProfileResult?>(null) }
+    var showProfileDialog by remember { mutableStateOf(false) }
     var contours by remember { mutableStateOf<List<ContourSet>>(emptyList()) }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -387,6 +392,41 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         boundaryUsed = a.boundaryUsed
     }
 
+
+    if (showProfileDialog && profileResult != null) {
+        val pr = profileResult!!
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            title = { Text("پروفیل طولی") },
+            text = {
+                Column {
+                    Text("طول: ${"%.2f".format(pr.length)} m")
+                    Text("مساحت Cut: ${"%.2f".format(pr.cutArea)} m²")
+                    Text("مساحت Fill: ${"%.2f".format(pr.fillArea)} m²")
+                    Text("نمونه‌ها: ${pr.samples.size}")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val r = result
+                    val text = VolumeEngine.profileReportText(
+                        pr,
+                        r?.existingName ?: "سطح۱",
+                        r?.designName ?: "سطح۲"
+                    )
+                    FileExport.exportTextToDocuments(
+                        context, "volume_profile.txt", text, "text/plain"
+                    )
+                    showProfileDialog = false
+                    message = "پروفیل TXT ذخیره شد"
+                }) { Text("ذخیره TXT") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProfileDialog = false }) { Text("بستن") }
+            }
+        )
+    }
+
     if (showMap && result != null) {
         VolumeMapView(
             color = color,
@@ -397,6 +437,52 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             boundaryUsed = boundaryUsed,
             breaklines = breaklines,
             showCutFill = showCutFill,
+            profileMode = profileMode,
+            profileP1 = profileP1,
+            profileP2 = profileP2,
+            onProfilePoint = { x, y ->
+                when {
+                    profileP1 == null -> {
+                        profileP1 = x to y
+                        profileP2 = null
+                        profileResult = null
+                    }
+                    profileP2 == null -> {
+                        profileP2 = x to y
+                        val r = result
+                        if (r != null && pairResults.isNotEmpty()) {
+                            val a = pairResults.getOrNull(selectedPairIndex)
+                            val s1 = surfaces.firstOrNull { it.name == r.existingName || it.points.size >= 3 }
+                            val s2 = surfaces.firstOrNull { it.name == r.designName }
+                            val pts1 = a?.let {
+                                surfaces.firstOrNull { s -> s.name == it.result.existingName }?.points
+                            } ?: s1?.points
+                            val pts2 = a?.let {
+                                surfaces.firstOrNull { s -> s.name == it.result.designName }?.points
+                            } ?: s2?.points
+                            if (pts1 != null && pts2 != null && profileP1 != null) {
+                                val pr = VolumeEngine.sampleProfile(
+                                    pts1, pts2,
+                                    profileP1!!.first, profileP1!!.second,
+                                    x, y, 1.0
+                                )
+                                profileResult = pr
+                                showProfileDialog = true
+                            }
+                        }
+                    }
+                    else -> {
+                        profileP1 = x to y
+                        profileP2 = null
+                        profileResult = null
+                    }
+                }
+            },
+            onExitProfile = {
+                profileMode = false
+                profileP1 = null
+                profileP2 = null
+            },
             drawBoundaryMode = drawBoundaryMode,
             draftBoundary = draftBoundary,
             onDraftBoundaryChange = { draftBoundary = it },
@@ -885,6 +971,19 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 Text("نمایش نقشه")
             }
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = {
+                    profileMode = true
+                    profileP1 = null
+                    profileP2 = null
+                    profileResult = null
+                    mode3d = false
+                    showMap = true
+                    message = "پروفیل: دو نقطه روی نقشه لمس کنید"
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("پروفیل طولی روی نقشه", color = color) }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
@@ -1117,6 +1216,11 @@ private fun VolumeMapView(
     boundaryUsed: List<VolPoint>,
     breaklines: List<List<VolPoint>> = emptyList(),
     showCutFill: Boolean,
+    profileMode: Boolean = false,
+    profileP1: Pair<Double, Double>? = null,
+    profileP2: Pair<Double, Double>? = null,
+    onProfilePoint: (Double, Double) -> Unit = { _, _ -> },
+    onExitProfile: () -> Unit = {},
     drawBoundaryMode: Boolean = false,
     draftBoundary: List<VolPoint> = emptyList(),
     onDraftBoundaryChange: (List<VolPoint>) -> Unit = {},
@@ -1203,6 +1307,21 @@ private fun VolumeMapView(
                 }
             }
         }
+        if (profileMode) {
+            Surface(color = Color(0xCC1565C0), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(8.dp)) {
+                    Text(
+                        when {
+                            profileP1 == null -> "پروفیل: نقطه اول را لمس کنید"
+                            profileP2 == null -> "پروفیل: نقطه دوم را لمس کنید"
+                            else -> "پروفیل آماده"
+                        },
+                        color = Color.White, fontSize = 12.sp
+                    )
+                    TextButton(onClick = onExitProfile) { Text("خروج پروفیل", color = Color.White) }
+                }
+            }
+        }
         if (menuOpen) {
             Surface(color = Color(0xCC1A1F16), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp)) {
@@ -1218,6 +1337,7 @@ private fun VolumeMapView(
                         TextButton(onClick = onExportDxf) { Text("خروجی DXF", color = color) }
                         TextButton(onClick = onRebuildContours) { Text("بازسازی تراز", color = color) }
                     }
+                    // پروفیل از والد — دکمه در نوار draw/profile
                 }
             }
         }
@@ -1238,8 +1358,9 @@ private fun VolumeMapView(
                         }
                     }
                 }
-                .pointerInput(drawBoundaryMode, mode3d, scale, offset, bounds) {
-                    if (!drawBoundaryMode || mode3d) return@pointerInput
+                .pointerInput(drawBoundaryMode, profileMode, mode3d, scale, offset, bounds) {
+                    if (mode3d) return@pointerInput
+                    if (!drawBoundaryMode && !profileMode) return@pointerInput
                     detectTapGestures { tap ->
                         val w = size.width
                         val h = size.height
@@ -1252,10 +1373,14 @@ private fun VolumeMapView(
                         val ly = -(tap.y - h / 2f - offset.y) / (dy.toFloat() * baseScale * scale)
                         val wx = (lx + 0.5) * dx + minX
                         val wy = (ly + 0.5) * dy + minY
-                        val id = "B${draftBoundary.size + 1}"
-                        onDraftBoundaryChange(
-                            draftBoundary + VolPoint(id, wx, wy, 0.0, "BOUNDARY")
-                        )
+                        if (drawBoundaryMode) {
+                            val id = "B${draftBoundary.size + 1}"
+                            onDraftBoundaryChange(
+                                draftBoundary + VolPoint(id, wx, wy, 0.0, "BOUNDARY")
+                            )
+                        } else if (profileMode) {
+                            onProfilePoint(wx, wy)
+                        }
                     }
                 }
         ) {
@@ -1352,6 +1477,22 @@ private fun VolumeMapView(
                         val o = project(p.x, p.y)
                         drawCircle(Color(0xFFFFEB3B), radius = 8f, center = o)
                         drawCircle(Color(0xFFFF5722), radius = 4f, center = o)
+                    }
+                }
+
+                // پروفیل خط
+                if (profileP1 != null) {
+                    val a = profileP1!!
+                    drawCircle(Color(0xFF42A5F5), 10f, project(a.first, a.second))
+                    if (profileP2 != null) {
+                        val b = profileP2!!
+                        drawLine(
+                            Color(0xFF42A5F5),
+                            project(a.first, a.second),
+                            project(b.first, b.second),
+                            strokeWidth = 4f
+                        )
+                        drawCircle(Color(0xFF66BB6A), 10f, project(b.first, b.second))
                     }
                 }
 

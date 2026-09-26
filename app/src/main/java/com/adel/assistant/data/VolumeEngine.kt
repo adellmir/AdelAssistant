@@ -558,31 +558,121 @@ object VolumeEngine {
         var tris = buildTin(merged)
         if (breaklines.isEmpty() || tris.isEmpty()) return merged to tris
 
-        val edges = mutableListOf<Pair<VolPoint, VolPoint>>()
-        for (line in breaklines) {
-            for (i in 0 until line.size - 1) edges.add(line[i] to line[i + 1])
+        // یال‌های مقید به‌صورت اندیس نقطه
+        fun nearestIndex(x: Double, y: Double): Int {
+            var best = 0; var bd = Double.POSITIVE_INFINITY
+            for (i in merged.indices) {
+                val dx = merged[i].x - x; val dy = merged[i].y - y
+                val d = dx * dx + dy * dy
+                if (d < bd) { bd = d; best = i }
+            }
+            return best
         }
+        val constrained = mutableListOf<Pair<Int, Int>>()
+        for (line in breaklines) {
+            for (i in 0 until line.size - 1) {
+                val u = nearestIndex(line[i].x, line[i].y)
+                val v = nearestIndex(line[i + 1].x, line[i + 1].y)
+                if (u != v) constrained.add(if (u < v) u to v else v to u)
+            }
+        }
+
+        // حذف مثلث‌هایی که یال مقید را قطع می‌کنند
+        val edges = constrained.map { (u, v) -> merged[u] to merged[v] }
         tris = tris.filter { t ->
             val p1 = merged[t.a]; val p2 = merged[t.b]; val p3 = merged[t.c]
             val triEdges = listOf(p1 to p2, p2 to p3, p3 to p1)
-            var ok = true
-            for ((a, b) in triEdges) {
-                for ((c, d) in edges) {
-                    // یال منطبق با breakline مجاز است
+            triEdges.all { (a, b) ->
+                edges.none { (c, d) ->
                     val same =
                         (abs(a.x - c.x) < 0.05 && abs(a.y - c.y) < 0.05 && abs(b.x - d.x) < 0.05 && abs(b.y - d.y) < 0.05) ||
                         (abs(a.x - d.x) < 0.05 && abs(a.y - d.y) < 0.05 && abs(b.x - c.x) < 0.05 && abs(b.y - c.y) < 0.05)
-                    if (same) continue
-                    if (segmentsCross(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y)) {
-                        ok = false
-                        break
-                    }
+                    !same && segmentsCross(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y)
                 }
-                if (!ok) break
             }
-            ok
         }
+
+        // بازیابی یال مقید با edge-flip (Lawson محدود)
+        tris = enforceConstrainedEdges(merged, tris, constrained)
         return merged to tris
+    }
+
+    private data class MTri(var a: Int, var b: Int, var c: Int) {
+        fun edges(): List<Pair<Int, Int>> {
+            fun n(u: Int, v: Int) = if (u < v) u to v else v to u
+            return listOf(n(a, b), n(b, c), n(c, a))
+        }
+        fun hasEdge(u: Int, v: Int): Boolean {
+            val e = if (u < v) u to v else v to u
+            return e in edges()
+        }
+        fun third(u: Int, v: Int): Int? = when {
+            (a == u && b == v) || (a == v && b == u) -> c
+            (b == u && c == v) || (b == v && c == u) -> a
+            (c == u && a == v) || (c == v && a == u) -> b
+            else -> null
+        }
+    }
+
+    /**
+     * تلاش برای قرار دادن یال‌های Breakline در TIN با چند دور edge-flip.
+     * اگر یال uv موجود نباشد، یال متقاطع را پیدا و در صورت امکان flip می‌کند.
+     */
+    private fun enforceConstrainedEdges(
+        pts: List<VolPoint>,
+        input: List<VolTriangle>,
+        constrained: List<Pair<Int, Int>>
+    ): List<VolTriangle> {
+        if (constrained.isEmpty() || input.isEmpty()) return input
+        val tris = input.map { MTri(it.a, it.b, it.c) }.toMutableList()
+
+        fun edgeKey(u: Int, v: Int) = if (u < v) u to v else v to u
+        fun findTrisWithEdge(u: Int, v: Int): List<Int> {
+            val k = edgeKey(u, v)
+            return tris.indices.filter { tris[it].hasEdge(u, v) || tris[it].edges().any { e -> e == k } }
+        }
+
+        fun tryFlipCrossing(u: Int, v: Int): Boolean {
+            // نقطه میانی یال مقید
+            val mx = (pts[u].x + pts[v].x) / 2.0
+            val my = (pts[u].y + pts[v].y) / 2.0
+            // یال مثلثی که میانه را قطع کند
+            for (ti in tris.indices) {
+                val t = tris[ti]
+                val eds = listOf(t.a to t.b, t.b to t.c, t.c to t.a)
+                for ((p, q) in eds) {
+                    if (p == u || p == v || q == u || q == v) continue
+                    if (!segmentsCross(
+                            pts[u].x, pts[u].y, pts[v].x, pts[v].y,
+                            pts[p].x, pts[p].y, pts[q].x, pts[q].y
+                        )
+                    ) continue
+                    // دو مثلث در دو طرف یال pq
+                    val adj = findTrisWithEdge(p, q)
+                    if (adj.size != 2) continue
+                    val t1 = tris[adj[0]]; val t2 = tris[adj[1]]
+                    val a = t1.third(p, q) ?: continue
+                    val b = t2.third(p, q) ?: continue
+                    if (a == b) continue
+                    // flip: حذف t1,t2 — افزودن (a,b,p) و (a,b,q)
+                    val remove = adj.sortedDescending()
+                    remove.forEach { tris.removeAt(it) }
+                    tris.add(MTri(a, b, p))
+                    tris.add(MTri(a, b, q))
+                    return true
+                }
+            }
+            return false
+        }
+
+        for ((u, v) in constrained) {
+            var guard = 0
+            while (findTrisWithEdge(u, v).isEmpty() && guard < 24) {
+                if (!tryFlipCrossing(u, v)) break
+                guard++
+            }
+        }
+        return tris.map { VolTriangle(it.a, it.b, it.c) }
     }
 
     /**
@@ -844,6 +934,115 @@ object VolumeEngine {
      * خروجی DXF پلی‌گان‌های رنگی Cut/Fill از سلول‌های شبکه.
      * لایه CUT (قرمز ACI 1) و FILL (آبی ACI 5) + BOUNDARY
      */
+
+    data class CutFillPolygon(
+        val isCut: Boolean,
+        val ring: List<Pair<Double, Double>>, // closed ring XY
+        val cellCount: Int,
+        val avgDz: Double
+    )
+
+    /**
+     * ادغام سلول‌های هم‌علامت همسایه به پلی‌گان‌های یکپارچه (مرز بیرونی شبکه).
+     */
+    fun mergeCutFillPolygons(cells: List<CutFillCell>): List<CutFillPolygon> {
+        if (cells.isEmpty()) return emptyList()
+        val size = cells.first().size
+        val tol = size * 0.01
+        fun key(x: Double, y: Double): String {
+            val ix = kotlin.math.round(x / size).toLong()
+            val iy = kotlin.math.round(y / size).toLong()
+            return "$ix,$iy"
+        }
+        data class CellNode(val x: Double, val y: Double, val dz: Double, val isCut: Boolean)
+        val byKey = linkedMapOf<String, CellNode>()
+        for (c in cells) {
+            byKey[key(c.x, c.y)] = CellNode(c.x, c.y, c.dz, c.dz > 0)
+        }
+        val visited = mutableSetOf<String>()
+        val polys = mutableListOf<CutFillPolygon>()
+        val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
+
+        fun neighbors(k: String): List<String> {
+            val parts = k.split(",")
+            val ix = parts[0].toLong(); val iy = parts[1].toLong()
+            return dirs.map { (dx, dy) -> "${ix + dx},${iy + dy}" }
+        }
+
+        for ((start, node0) in byKey) {
+            if (start in visited) continue
+            val isCut = node0.isCut
+            val stack = ArrayDeque<String>()
+            stack.add(start)
+            visited.add(start)
+            val component = mutableListOf<CellNode>()
+            while (stack.isNotEmpty()) {
+                val k = stack.removeLast()
+                val n = byKey[k] ?: continue
+                if (n.isCut != isCut) continue
+                component.add(n)
+                for (nb in neighbors(k)) {
+                    val nn = byKey[nb] ?: continue
+                    if (nb in visited) continue
+                    if (nn.isCut != isCut) continue
+                    visited.add(nb)
+                    stack.add(nb)
+                }
+            }
+            if (component.isEmpty()) continue
+            // مرز بیرونی: یال‌های مربع که فقط یک‌طرف داخل component است
+            val inSet = component.map { key(it.x, it.y) }.toSet()
+            data class Edge(val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+            val edgeCount = mutableMapOf<String, Edge>()
+            fun ek(x1: Double, y1: Double, x2: Double, y2: Double): String {
+                return if (x1 < x2 - tol || (abs(x1 - x2) <= tol && y1 < y2 - tol))
+                    "${"%.4f".format(x1)},${"%.4f".format(y1)}|${"%.4f".format(x2)},${"%.4f".format(y2)}"
+                else
+                    "${"%.4f".format(x2)},${"%.4f".format(y2)}|${"%.4f".format(x1)},${"%.4f".format(y1)}"
+            }
+            fun addEdge(x1: Double, y1: Double, x2: Double, y2: Double) {
+                val k = ek(x1, y1, x2, y2)
+                if (k in edgeCount) edgeCount.remove(k) else edgeCount[k] = Edge(x1, y1, x2, y2)
+            }
+            for (c in component) {
+                val hs = size / 2.0
+                val x0 = c.x - hs; val x1 = c.x + hs
+                val y0 = c.y - hs; val y1 = c.y + hs
+                addEdge(x0, y0, x1, y0)
+                addEdge(x1, y0, x1, y1)
+                addEdge(x1, y1, x0, y1)
+                addEdge(x0, y1, x0, y0)
+            }
+            // زنجیر کردن یال‌های مرزی به حلقه
+            val remain = edgeCount.values.toMutableList()
+            if (remain.isEmpty()) continue
+            val ring = mutableListOf<Pair<Double, Double>>()
+            var cx = remain[0].x1; var cy = remain[0].y1
+            ring.add(cx to cy)
+            var guard = 0
+            while (remain.isNotEmpty() && guard < edgeCount.size + 5) {
+                guard++
+                val idx = remain.indexOfFirst {
+                    (abs(it.x1 - cx) < tol && abs(it.y1 - cy) < tol) ||
+                        (abs(it.x2 - cx) < tol && abs(it.y2 - cy) < tol)
+                }
+                if (idx < 0) break
+                val e = remain.removeAt(idx)
+                if (abs(e.x1 - cx) < tol && abs(e.y1 - cy) < tol) {
+                    cx = e.x2; cy = e.y2
+                } else {
+                    cx = e.x1; cy = e.y1
+                }
+                ring.add(cx to cy)
+            }
+            if (ring.size >= 3) {
+                val avg = component.map { it.dz }.average()
+                polys.add(CutFillPolygon(isCut, ring, component.size, avg))
+            }
+        }
+        return polys
+    }
+
     fun exportCutFillDxf(
         cells: List<CutFillCell>,
         boundary: List<VolPoint> = emptyList(),
@@ -893,9 +1092,32 @@ object VolumeEngine {
             pair(sb, 13, fmt(xs[2])); pair(sb, 23, fmt(ys[2])); pair(sb, 33, fmt(z))
         }
 
-        for (cell in cells) {
-            val layer = if (cell.dz > 0) "CUT" else "FILL"
-            polyRect(cell.x, cell.y, cell.size, layer, 0.0)
+        val polys = mergeCutFillPolygons(cells)
+        if (polys.isNotEmpty()) {
+            for (poly in polys) {
+                val layer = if (poly.isCut) "CUT" else "FILL"
+                val ring = poly.ring
+                for (i in 0 until ring.size - 1) {
+                    val (x1, y1) = ring[i]
+                    val (x2, y2) = ring[i + 1]
+                    pair(sb, 0, "LINE"); pair(sb, 8, layer)
+                    pair(sb, 10, fmt(x1)); pair(sb, 20, fmt(y1)); pair(sb, 30, "0")
+                    pair(sb, 11, fmt(x2)); pair(sb, 21, fmt(y2)); pair(sb, 31, "0")
+                }
+                // برچسب میانگین
+                val cx = ring.map { it.first }.average()
+                val cy = ring.map { it.second }.average()
+                val labLayer = if (poly.isCut) "CUT-LABEL" else "FILL-LABEL"
+                pair(sb, 0, "TEXT"); pair(sb, 8, labLayer)
+                pair(sb, 10, fmt(cx)); pair(sb, 20, fmt(cy)); pair(sb, 30, "0")
+                pair(sb, 40, "0.5")
+                pair(sb, 1, "${if (poly.isCut) "CUT" else "FILL"} n=${poly.cellCount} dZ=${fmt(poly.avgDz)}")
+            }
+        } else {
+            for (cell in cells) {
+                val layer = if (cell.dz > 0) "CUT" else "FILL"
+                polyRect(cell.x, cell.y, cell.size, layer, 0.0)
+            }
         }
 
         if (boundary.size >= 2) {
@@ -1230,3 +1452,78 @@ object VolumeEngine {
 fun fromSurvey(points: List<SurveyPoint>): List<VolPoint> =
         points.map { VolPoint(it.id.ifBlank { "P" }, it.x, it.y, it.z, it.code) }
 }
+    data class ProfileSample(
+        val chainage: Double,
+        val x: Double,
+        val y: Double,
+        val zExisting: Double?,
+        val zDesign: Double?,
+        val dz: Double?
+    )
+
+    data class ProfileResult(
+        val samples: List<ProfileSample>,
+        val length: Double,
+        val cutArea: Double,
+        val fillArea: Double
+    )
+
+    /**
+     * پروفیل طولی بین دو نقطه روی دو سطح (درون‌یابی IDW / نزدیک‌ترین).
+     * @param step فاصله نمونه‌برداری (متر)
+     */
+    fun sampleProfile(
+        existing: List<VolPoint>,
+        design: List<VolPoint>,
+        x1: Double, y1: Double,
+        x2: Double, y2: Double,
+        step: Double = 1.0
+    ): ProfileResult {
+        val dx = x2 - x1; val dy = y2 - y1
+        val len = sqrt(dx * dx + dy * dy)
+        if (len < 1e-9) return ProfileResult(emptyList(), 0.0, 0.0, 0.0)
+        val st = step.coerceAtLeast(0.1)
+        val samples = mutableListOf<ProfileSample>()
+        var d = 0.0
+        while (d <= len + 1e-9) {
+            val t = (d / len).coerceIn(0.0, 1.0)
+            val x = x1 + dx * t; val y = y1 + dy * t
+            val ze = interpolateIdw(x, y, existing)
+            val zd = interpolateIdw(x, y, design)
+            val dz = if (ze != null && zd != null) ze - zd else null
+            samples.add(ProfileSample(d, x, y, ze, zd, dz))
+            if (d >= len) break
+            d += st
+            if (d > len) d = len
+        }
+        // مساحت تقریبی پروفیل (ذوزنقه روی dZ)
+        var cutA = 0.0; var fillA = 0.0
+        for (i in 0 until samples.size - 1) {
+            val a = samples[i].dz ?: continue
+            val b = samples[i + 1].dz ?: continue
+            val seg = samples[i + 1].chainage - samples[i].chainage
+            val avg = (a + b) / 2.0
+            if (avg > 0) cutA += avg * seg else fillA += abs(avg) * seg
+        }
+        return ProfileResult(samples, len, cutA, fillA)
+    }
+
+    fun profileReportText(pr: ProfileResult, name1: String, name2: String): String {
+        val sb = StringBuilder()
+        sb.appendLine("پروفیل طولی — $name1 / $name2")
+        sb.appendLine("طول: ${fmt3(pr.length)} m")
+        sb.appendLine("مساحت Cut پروفیل: ${fmt3(pr.cutArea)} m²")
+        sb.appendLine("مساحت Fill پروفیل: ${fmt3(pr.fillArea)} m²")
+        sb.appendLine("chainage,x,y,z1,z2,dz")
+        for (s in pr.samples) {
+            sb.appendLine(
+                "${fmt3(s.chainage)},${fmt(s.x)},${fmt(s.y)}," +
+                    "${s.zExisting?.let { fmt3(it) } ?: ""}," +
+                    "${s.zDesign?.let { fmt3(it) } ?: ""}," +
+                    "${s.dz?.let { fmt3(it) } ?: ""}"
+            )
+        }
+        return sb.toString()
+    }
+
+
