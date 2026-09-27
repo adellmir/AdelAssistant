@@ -80,11 +80,15 @@ private data class ViewerDrawing(
 )
 
 @Composable
-fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
+fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = null) {
     val context = LocalContext.current
     var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
     var nextDrawingId by remember { mutableStateOf(1) }
     var message by remember { mutableStateOf("") }
+    var profilePlacementModel by remember { mutableStateOf<DxfModel?>(null) }
+    var profilePlacementName by remember { mutableStateOf("پروفیل.dxf") }
+    var profilePlacementActive by remember { mutableStateOf(false) }
+    val profileAlignmentMode = profileMode == "alignment"
     var zoneText by remember { mutableStateOf("40") }
     var baseMap by remember { mutableStateOf(BaseMap.NONE) }
     var emptyMapColor by remember { mutableStateOf(Color(0xFF202124)) }
@@ -196,6 +200,64 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
     val zone = zoneText.toIntOrNull()?.coerceIn(1, 60) ?: 40
     val activeDrawings = drawings.filter { it.visible }
     val allModels = activeDrawings.map { it.model }
+
+    LaunchedEffect(profileMode) {
+        if (profileMode == "placement") {
+            ProfileSession.consumePlacement()?.let { (text, name) ->
+                try {
+                    val model = DxfParser.parse(text)
+                    if (!model.isEmpty) {
+                        profilePlacementModel = model
+                        profilePlacementName = name
+                        profilePlacementActive = true
+                        message = "محل قرارگیری پروفیل را روی نقشه انتخاب کن"
+                    }
+                } catch (e: Exception) {
+                    message = "خطا در آماده‌سازی پروفیل: ${e.message}"
+                }
+            }
+        }
+        if (profileAlignmentMode) {
+            linePickMode = false
+            linePickIds = emptyList()
+            message = "از منوی «پروفیل» گزینه «ترسیم پروفیل» را بزن، سپس خطوط الایمنت را لمس کن"
+        }
+    }
+
+    fun selectedProfileAlignment(): List<AlignmentVertex> {
+        val out = mutableListOf<AlignmentVertex>()
+        linePickIds.forEach { (did, li) ->
+            val line = drawings.find { it.id == did }?.model?.lines?.getOrNull(li) ?: return@forEach
+            val a = AlignmentVertex(line.x1, line.y1)
+            val b = AlignmentVertex(line.x2, line.y2)
+            if (out.isEmpty()) {
+                out += a; out += b
+            } else {
+                val last = out.last()
+                val da = hypot(last.x - a.x, last.y - a.y)
+                val db = hypot(last.x - b.x, last.y - b.y)
+                if (db < da) out += b else out += a
+            }
+        }
+        return out.distinctBy { "%.5f,%.5f".format(java.util.Locale.US, it.x, it.y) }
+    }
+
+    fun placeProfileAt(x: Double, y: Double) {
+        val model = profilePlacementModel ?: return
+        val dx = x - model.minX
+        val dy = y - model.minY
+        val placed = model.copy(
+            lines = model.lines.map { CadEngine.translateLine(it, dx, dy) },
+            circles = model.circles.map { CadEngine.translateCircle(it, dx, dy) },
+            texts = model.texts.map { CadEngine.translateText(it, dx, dy) }
+        ).recalculatedBounds()
+        drawings = drawings + ViewerDrawing(nextDrawingId, profilePlacementName, placed)
+        nextDrawingId++
+        profilePlacementActive = false
+        profilePlacementModel = null
+        fitTrigger++
+        message = "پروفیل در لایه «پروفیل» قرار گرفت؛ از منوی فایل می‌توان کل نقشه را ذخیره کرد"
+    }
 
     LaunchedEffect(Unit) {
         PendingMapOpen.consume()?.let { (text, name) ->
@@ -815,6 +877,11 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit) {
                                     scale = ns
                                 },
                                 onTap = { tap ->
+                                    if (profilePlacementActive) {
+                                        val raw = screenToWorld(tap.x, tap.y)
+                                        placeProfileAt(raw.first, raw.second)
+                                        return@detectTapGestures
+                                    }
                                     if (pickCoordinateMode) {
                                         val raw = screenToWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
@@ -1563,6 +1630,22 @@ if (zoomWindowMode) {
                                     8 -> {
                                         GlassIcon(Icons.Filled.MyLocation, "گیر") { showOsnapPanel = true }
                                     }
+                                    9 -> {
+                                        if (profileAlignmentMode) {
+                                            GlassIcon(Icons.Filled.Route, "ترسیم پروفیل", if (linePickMode) Color(0xFF81C995) else Color.White) {
+                                                linePickMode = !linePickMode
+                                                measureMode = false; pathMode = false; areaMode = false; cadTool = CadTool.None
+                                                message = if (linePickMode) "خطوط الایمنت را لمس کن" else "انتخاب خطوط متوقف شد"
+                                                closeMenus()
+                                            }
+                                        } else if (profilePlacementModel != null) {
+                                            GlassIcon(Icons.Filled.Place, "محل پروفیل", if (profilePlacementActive) Color(0xFF81C995) else Color.White) {
+                                                profilePlacementActive = true
+                                                message = "محل قرارگیری پروفیل را روی نقشه انتخاب کن"
+                                                closeMenus()
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1650,7 +1733,8 @@ if (zoomWindowMode) {
                                 Triple(Icons.Filled.Transform, 5, "الاین"),
                                 Triple(Icons.Filled.Undo, 6, "عقب"),
                                 Triple(Icons.Filled.Redo, 7, "جلو"),
-                                Triple(Icons.Filled.MyLocation, 8, "گیر")
+                                Triple(Icons.Filled.MyLocation, 8, "گیر"),
+                                Triple(Icons.Filled.ShowChart, 9, "پروفیل")
                             )
                             mainIcons.forEach { (ic, g, label) ->
                                 Column(
@@ -1758,6 +1842,22 @@ if (zoomWindowMode) {
                     }
                     Text(String.format(java.util.Locale.US, "جمع: %.2f m", sum), color = Color.White, fontSize = 11.sp)
                     TextButton(onClick = { linePickIds = emptyList(); linePickMode = false }) { Text("پاک", fontSize = 11.sp) }
+                }
+                if (profileAlignmentMode) {
+                    Text(String.format(java.util.Locale.US, "خطوط الایمنت: %d", linePickIds.size), color = Color(0xFF81C995), fontSize = 11.sp)
+                    if (linePickIds.isNotEmpty()) {
+                        TextButton(onClick = {
+                            val vertices = selectedProfileAlignment()
+                            if (vertices.size >= 2) {
+                                ProfileSession.finishAlignment(vertices)
+                                message = "الایمنت به پروفیل برگشت داده شد"
+                                onBack()
+                            } else message = "حداقل یک خط معتبر انتخاب کن"
+                        }) { Text("تأیید الایمنت", fontSize = 11.sp) }
+                    }
+                }
+                if (profilePlacementActive) {
+                    Text("انتخاب محل پروفیل", color = Color(0xFF81C995), fontSize = 11.sp)
                 }
                 if (undoStack.isNotEmpty()) {
                     TextButton(onClick = { doUndo() }) { Text("Undo", fontSize = 11.sp) }

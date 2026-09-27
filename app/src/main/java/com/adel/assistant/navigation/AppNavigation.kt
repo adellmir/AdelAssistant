@@ -28,6 +28,7 @@ import com.adel.assistant.ui.screens.InterpolateScreen
 import com.adel.assistant.ui.screens.InvoiceScreen
 import com.adel.assistant.ui.screens.LetterScreen
 import com.adel.assistant.ui.screens.PlumbScreen
+import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.MonitoringScreen
 import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
@@ -42,7 +43,6 @@ import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.VolumeScreen
-import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
@@ -208,6 +208,29 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         composable(Routes.TOOL_DXF_PREVIEW) {
             DxfPreviewScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
+        composable(Routes.TOOL_PROFILE) {
+            ProfileScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onOpenMap = { mode ->
+                    navController.navigate(if (mode == "alignment") Routes.TOOL_PROFILE_ALIGNMENT else Routes.TOOL_PROFILE_PLACEMENT)
+                }
+            )
+        }
+        composable(Routes.TOOL_PROFILE_ALIGNMENT) {
+            DxfPreviewScreen(
+                color = ToolPrimary,
+                profileMode = "alignment",
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.TOOL_PROFILE_PLACEMENT) {
+            DxfPreviewScreen(
+                color = ToolPrimary,
+                profileMode = "placement",
+                onBack = { navController.popBackStack() }
+            )
+        }
         composable(Routes.TOOL_TOTAL_STATION) {
             TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
@@ -225,9 +248,6 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         }
         composable(Routes.TOOL_VOLUME) {
             VolumeScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.TOOL_PROFILE) {
-            ProfileScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

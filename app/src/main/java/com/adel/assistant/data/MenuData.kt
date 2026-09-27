@@ -79,13 +79,15 @@ object AppMenu {
             MenuTab("", listOf(
                 MenuItem("تبدیل به DXF", Icons.Filled.Architecture, Routes.TOOL_DXF),
                 MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
+                MenuItem("پروفیل طولی", Icons.Filled.ShowChart, Routes.TOOL_PROFILE),
+                MenuItem("شاقولی", Icons.Filled.VerticalAlignCenter, Routes.TOOL_PLUMB),
+                MenuItem("پایش", Icons.Filled.Timeline, Routes.TOOL_MONITORING),
                 MenuItem("تخلیه دوربین", Icons.Filled.Bluetooth, Routes.TOOL_TOTAL_STATION),
                 MenuItem("مبدل GSI", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
                 MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
                 MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
-                MenuItem("پروفیل طولی", Icons.Filled.ShowChart, Routes.TOOL_PROFILE),
                 MenuItem("نامه‌نگاری", Icons.Filled.Mail, Routes.TOOL_LETTER),
                 MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))
