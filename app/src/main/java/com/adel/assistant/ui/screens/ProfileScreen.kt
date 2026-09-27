@@ -145,7 +145,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                         Text("الایمنت", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Button(onClick = {
                             if (surfaces.isEmpty()) message = "ابتدا سطح وارد کن"
-                            else { ProfileSession.beginAlignment(); onOpenMap("alignment") }
+                            else { ProfileSession.beginAlignment(surfaces); onOpenMap("alignment") }
                         }) {
                             Icon(Icons.Filled.Route, null, Modifier.size(18.dp)); Spacer(Modifier.width(5.dp)); Text("رسم الایمنت")
                         }

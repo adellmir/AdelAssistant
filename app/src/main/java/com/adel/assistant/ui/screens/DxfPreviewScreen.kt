@@ -108,6 +108,8 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
     var areaFinished by remember { mutableStateOf(false) }
     var linePickIds by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) } // drawingId, lineIndex
     var linePickMode by remember { mutableStateOf(false) }
+    var profileDrawMode by remember { mutableStateOf(false) }
+    var profileDraftVertices by remember { mutableStateOf<List<AlignmentVertex>>(emptyList()) }
     var showCoordSub by remember { mutableStateOf(false) }
     var showAreaSub by remember { mutableStateOf(false) }
     var showSaveAndView by remember { mutableStateOf(false) }
@@ -220,7 +222,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
         if (profileAlignmentMode) {
             linePickMode = false
             linePickIds = emptyList()
-            message = "از منوی «پروفیل» گزینه «ترسیم پروفیل» را بزن، سپس خطوط الایمنت را لمس کن"
+            profileDrawMode = true
+            profileDraftVertices = emptyList()
+            ProfileSession.consumeAlignmentMapModel()?.let { model ->
+                drawings = drawings + ViewerDrawing(nextDrawingId, "سطوح پروفیل", model)
+                nextDrawingId++
+                fitTrigger++
+                message = "نقاط سطح وارد شد؛ روی نقشه پشت‌سرهم کلیک کن تا الایمنت رسم شود"
+            } ?: run {
+                message = "روی نقشه پشت‌سرهم کلیک کن تا الایمنت رسم شود"
+            }
         }
     }
 
@@ -866,7 +877,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
                             }
                         )
                     }
-                    .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId, cadTool, pathMode, areaMode, linePickMode, zoomWindowMode, annotMode, mapAlignPick, pathFinished, areaFinished) {
+                    .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId, cadTool, pathMode, areaMode, linePickMode, profileAlignmentMode, profileDrawMode, zoomWindowMode, annotMode, mapAlignPick, pathFinished, areaFinished) {
                         if (editingPointId == null) {
                             detectTapGestures(
                                 onDoubleTap = { tap ->
@@ -880,6 +891,16 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
                                     if (profilePlacementActive) {
                                         val raw = screenToWorld(tap.x, tap.y)
                                         placeProfileAt(raw.first, raw.second)
+                                        return@detectTapGestures
+                                    }
+                                    if (profileAlignmentMode && profileDrawMode) {
+                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val p = snapWorld(raw.first, raw.second)
+                                        val last = profileDraftVertices.lastOrNull()
+                                        if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.01 / scale.coerceAtLeast(1e-6f))) {
+                                            profileDraftVertices = profileDraftVertices + AlignmentVertex(p.first, p.second)
+                                            message = "الایمنت: ${profileDraftVertices.size} رأس"
+                                        }
                                         return@detectTapGestures
                                     }
                                     if (pickCoordinateMode) {
@@ -1178,6 +1199,22 @@ if (zoomWindowMode) {
 
 
                 
+                // الایمنت در حال ترسیم با کلیک‌های متوالی
+                if (profileAlignmentMode && profileDraftVertices.isNotEmpty()) {
+                    var prev: Offset? = null
+                    profileDraftVertices.forEachIndexed { idx, v ->
+                        val p = worldToScreen(v.x, v.y)
+                        drawCircle(Color(0xFFFFEB3B), 7f, p)
+                        drawCircle(Color.Black, 3f, p)
+                        prev?.let { drawLine(Color(0xFFFFEB3B), it, p, 4f) }
+                        prev = p
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "${idx + 1}", p.x + 9f, p.y - 9f,
+                            android.graphics.Paint().apply { color = android.graphics.Color.WHITE; textSize = 24f; isAntiAlias = true }
+                        )
+                    }
+                }
+
                 // هایلایت شیء انتخاب‌شده
                 selected?.let { sel ->
                     val col = Color(0xFFFFEB3B)
@@ -1480,13 +1517,14 @@ if (zoomWindowMode) {
             pathMode = false; pathEdit = false; pathFinished = false
             areaMode = false; areaEdit = false; areaFinished = false
             linePickMode = false
+            profileDrawMode = false
             zoomWindowMode = false
             annotMode = ""
             mapAlignPick = null
             closeMenus()
             message = ""
         }
-        val anyTool = cadTool != CadTool.None || measureMode || pathMode || areaMode || linePickMode ||
+        val anyTool = cadTool != CadTool.None || measureMode || pathMode || areaMode || linePickMode || profileDrawMode ||
             zoomWindowMode || annotMode.isNotEmpty() || mapAlignPick != null
 
         Column(
@@ -1632,10 +1670,11 @@ if (zoomWindowMode) {
                                     }
                                     9 -> {
                                         if (profileAlignmentMode) {
-                                            GlassIcon(Icons.Filled.Route, "ترسیم پروفیل", if (linePickMode) Color(0xFF81C995) else Color.White) {
-                                                linePickMode = !linePickMode
+                                            GlassIcon(Icons.Filled.Route, "ترسیم پروفیل", if (profileDrawMode) Color(0xFF81C995) else Color.White) {
+                                                profileDrawMode = !profileDrawMode
+                                                linePickMode = false
                                                 measureMode = false; pathMode = false; areaMode = false; cadTool = CadTool.None
-                                                message = if (linePickMode) "خطوط الایمنت را لمس کن" else "انتخاب خطوط متوقف شد"
+                                                message = if (profileDrawMode) "روی نقشه کلیک کن؛ هر کلیک یک رأس الایمنت است" else "ترسیم الایمنت متوقف شد"
                                                 closeMenus()
                                             }
                                         } else if (profilePlacementModel != null) {
@@ -1844,15 +1883,15 @@ if (zoomWindowMode) {
                     TextButton(onClick = { linePickIds = emptyList(); linePickMode = false }) { Text("پاک", fontSize = 11.sp) }
                 }
                 if (profileAlignmentMode) {
-                    Text(String.format(java.util.Locale.US, "خطوط الایمنت: %d", linePickIds.size), color = Color(0xFF81C995), fontSize = 11.sp)
-                    if (linePickIds.isNotEmpty()) {
+                    Text(String.format(java.util.Locale.US, "الایمنت: %d رأس", profileDraftVertices.size), color = Color(0xFF81C995), fontSize = 11.sp)
+                    if (profileDraftVertices.isNotEmpty()) {
+                        TextButton(onClick = { profileDraftVertices = emptyList(); message = "الایمنت پاک شد" }) { Text("پاک", fontSize = 11.sp) }
+                    }
+                    if (profileDraftVertices.size >= 2) {
                         TextButton(onClick = {
-                            val vertices = selectedProfileAlignment()
-                            if (vertices.size >= 2) {
-                                ProfileSession.finishAlignment(vertices)
-                                message = "الایمنت به پروفیل برگشت داده شد"
-                                onBack()
-                            } else message = "حداقل یک خط معتبر انتخاب کن"
+                            ProfileSession.finishAlignment(profileDraftVertices)
+                            message = "الایمنت به پروفیل برگشت داده شد"
+                            onBack()
                         }) { Text("تأیید الایمنت", fontSize = 11.sp) }
                     }
                 }
