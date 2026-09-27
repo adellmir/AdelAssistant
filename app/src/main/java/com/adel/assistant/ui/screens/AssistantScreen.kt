@@ -71,6 +71,7 @@ fun AssistantScreen(
     }
 
     fun startNewChat() {
+        AssistantAgent.resetSession()
         activeChat = AssistantChatStore.create(context)
         messages = listOf(
             ChatLine(
@@ -84,20 +85,24 @@ fun AssistantScreen(
     }
 
     fun clearCurrentChat() {
+        AssistantAgent.resetSession()
         AssistantChatStore.clearMessages(context, activeChat.id)
         messages = listOf(
             ChatLine(false, "گفتگو پاک شد. دوباره بپرس — مثلاً «۵۰ متر شفت ۱».")
         )
+        selectedFileName = null
         scrollToEnd()
     }
 
     fun deleteCurrentChat() {
+        AssistantAgent.resetSession()
         val id = activeChat.id
         AssistantChatStore.delete(context, id)
         activeChat = AssistantChatStore.ensureDefault(context)
         messages = loadMessages(context, activeChat.id).ifEmpty {
             listOf(ChatLine(false, "گفتگو حذف شد. می‌توانی از نو شروع کنی."))
         }
+        selectedFileName = null
         scrollToEnd()
     }
 

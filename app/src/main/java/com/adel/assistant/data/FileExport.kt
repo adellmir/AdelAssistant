@@ -117,6 +117,14 @@ object FileExport {
 
     private fun normalizeName(fileName: String, mimeType: String): String {
         var n = fileName.trim()
+        n = buildString(n.length) {
+            n.forEach { ch ->
+                val invalid = ch.code < 32 || ch == '/' || ch == '\\' ||
+                    ch == ':' || ch == '*' || ch == '?' || ch == '"' ||
+                    ch == '<' || ch == '>' || ch == '|'
+                append(if (invalid) '_' else ch)
+            }
+        }.trim().ifBlank { "export" }
         n = n.replace(Regex("""\.csv\.txt$""", RegexOption.IGNORE_CASE), ".csv")
         n = n.replace(Regex("""\.txt\.csv$""", RegexOption.IGNORE_CASE), ".csv")
         if (mimeType.contains("csv", true) || n.lowercase().endsWith(".csv")) {
@@ -125,7 +133,12 @@ object FileExport {
         if (mimeType.contains("dxf", true) || n.lowercase().endsWith(".dxf")) {
             if (!n.lowercase().endsWith(".dxf")) n = "$n.dxf"
         }
-        return n
+        if (n.length <= 180) return n
+        val dot = n.lastIndexOf('.')
+        val extension = if (dot > 0 && dot < n.lastIndex) n.substring(dot) else ""
+        val stem = if (extension.isEmpty()) n else n.substring(0, dot)
+        val maxStem = (180 - extension.length).coerceAtLeast(1)
+        return stem.take(maxStem) + extension.take(179)
     }
 
     private fun resolveMime(fileName: String, mimeType: String): String {

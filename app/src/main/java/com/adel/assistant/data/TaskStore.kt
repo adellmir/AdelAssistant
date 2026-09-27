@@ -12,7 +12,10 @@ data class TaskItem(
 )
 
 object TaskStore {
+    private val SAFE_NAME = Regex("^[A-Za-z0-9_-]+$")
+
     private fun file(context: Context, name: String): File {
+        require(SAFE_NAME.matches(name)) { "Invalid task store name" }
         val dir = File(context.filesDir, "data")
         if (!dir.exists()) dir.mkdirs()
         return File(dir, "$name.csv")
@@ -21,16 +24,25 @@ object TaskStore {
     fun load(context: Context, name: String): MutableList<TaskItem> {
         val f = file(context, name)
         if (!f.exists()) return mutableListOf()
-        return f.readLines().filter { it.isNotBlank() }.mapNotNull { line ->
+        val lines = f.readLines().filter { it.isNotBlank() }
+        var needsMigration = false
+        val migrationBase = f.lastModified().takeIf { it > 0L } ?: System.currentTimeMillis()
+        val tasks = lines.mapIndexedNotNull { index, line ->
             val parts = line.split(",", limit = 5)
-            if (parts.size < 2) null else TaskItem(
-                title = parts[0].replace("،", ","),
-                completed = parts[1].trim().equals("true", true) || parts[1].trim() == "1",
-                createdAt = parts.getOrNull(2)?.toLongOrNull() ?: System.currentTimeMillis(),
-                dueDate = parts.getOrNull(3)?.trim()?.ifBlank { null },
-                dueTime = parts.getOrNull(4)?.trim()?.ifBlank { null }
-            )
+            if (parts.size < 2) null else {
+                val parsedCreatedAt = parts.getOrNull(2)?.toLongOrNull()
+                if (parsedCreatedAt == null) needsMigration = true
+                TaskItem(
+                    title = parts[0].replace("،", ","),
+                    completed = parts[1].trim().equals("true", true) || parts[1].trim() == "1",
+                    createdAt = parsedCreatedAt ?: (migrationBase + index),
+                    dueDate = parts.getOrNull(3)?.trim()?.ifBlank { null },
+                    dueTime = parts.getOrNull(4)?.trim()?.ifBlank { null }
+                )
+            }
         }.toMutableList()
+        if (needsMigration) save(context, name, tasks)
+        return tasks
     }
 
     fun save(context: Context, name: String, tasks: List<TaskItem>) {

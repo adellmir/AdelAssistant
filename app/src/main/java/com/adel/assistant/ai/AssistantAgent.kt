@@ -42,7 +42,7 @@ object AssistantAgent {
         val type: PendingType,
         val title: String = "",
         val store: String? = null,
-        val index: Int = -1,
+        val taskCreatedAt: Long = 0L,
         val actionId: String? = null,
         val extra: String = "",
         val choices: List<AgentChoice> = emptyList()
@@ -63,19 +63,26 @@ object AssistantAgent {
         selectedFileName = null
     }
 
+    /** پاک‌سازی وضعیت موقت تأیید/انتخاب هنگام شروع یا پاک‌کردن یک گفتگو. */
+    fun resetSession() {
+        pending = null
+        selectedFileName = null
+    }
+
     fun handle(context: Context, userMessage: String): AgentReply {
-        val msg = normalize(userMessage)
+        val rawMessage = userMessage.trim()
+        val msg = normalize(rawMessage)
         if (msg.isBlank()) return AgentReply("پیامت را بنویس. مثلاً «۵۰ متر شفت ۱» یا «آمار تونل» یا «برو گزارش روزانه».")
 
         resolvePending(context, msg)?.let { return it }
         if (isHelp(msg)) return AgentReply(helpText())
 
         // اولویت ۱: پرسش‌های مکانی/کیلومتراژ/شفت روی پایگاه نقاط تونل
-        surveyLocationIntent(context, msg)?.let { return it }
+        surveyLocationIntent(context, msg, rawMessage)?.let { return it }
 
         fileIntent(msg)?.let { return it }
         databaseIntent(context, msg)?.let { return it }
-        actionIntent(context, msg)?.let { return it }
+        actionIntent(context, msg, rawMessage)?.let { return it }
 
         if (hasNavigationVerb(msg)) {
             navIntent(msg)?.let { return it }
@@ -103,18 +110,19 @@ object AssistantAgent {
      * درک عبارات نقشه‌برداری:
      * «۵۰ متر شفت ۱»، «شفت ۲ سمت ۳، ۳۰ متر»، «کیلومتر ۱۲۳.۴»، «نقطه AH1»، «مسیریاب شفت ۱»
      */
-    private fun surveyLocationIntent(context: Context, msg: String): AgentReply? {
-        val raw = msg
+    private fun surveyLocationIntent(context: Context, msg: String, rawMessage: String): AgentReply? {
+        val raw = rawMessage
         val wantsMaps = hasAny(msg, listOf("مسیریاب", "مسیر یاب", "گوگل مپ", "google map", "navigation", "ناوبری", "ببر من"))
         val wantsCoord = hasAny(msg, listOf("مختصات", "موقعیت", "کجا", "بده", "پیدا", "نقطه", "کیلومتر", "کیلومتراژ", "متر", "شفت", "دهانه", "محور"))
-            || Regex("""\d+([\./]\d+)?\s*(متر|m|km|کیلومتر)""").containsMatchIn(msg)
-            || Regex("""شفت\s*\d+|ش\s*\d+|sh\s*\d+|ah\s*\d+""", RegexOption.IGNORE_CASE).containsMatchIn(msg)
+            || Regex("""[0-9۰-۹٠-٩]+(?:[./٫][0-9۰-۹٠-٩]+)?\s*(?:متر|m\b|km|کیلومتر)""", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+            || Regex("""شفت\s*[0-9۰-۹٠-٩]+|ش\s*[0-9۰-۹٠-٩]+|sh\s*[0-9۰-۹٠-٩]+|ah\s*[0-9۰-۹٠-٩]+""", RegexOption.IGNORE_CASE).containsMatchIn(raw)
 
         if (!wantsCoord && !wantsMaps) return null
 
         // ۱) اشاره مستقیم به شماره نقطه (AH1، 1234، …)
-        Regex("""(?:نقطه|point)\s*([A-Za-zآ-ی]{0,4}\d{1,6}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-            .find(raw)?.groupValues?.getOrNull(1)?.let { pn ->
+        Regex("""(?:نقطه|point)\s*([A-Za-zآ-ی]{0,4}[0-9۰-۹٠-٩]{1,6}(?:[.٫][0-9۰-۹٠-٩]+)?)""", RegexOption.IGNORE_CASE)
+            .find(raw)?.groupValues?.getOrNull(1)?.let { rawPointNo ->
+                val pn = rawPointNo.toEnglishDigits().replace('٫', '.')
                 val p = TunnelReportStore.findByPointNo(context, pn)
                     ?: TunnelReportStore.allPoints(context).firstOrNull {
                         it.pointNo.equals(pn, true) || it.pointNo.equals(pn.uppercase(), true)
@@ -123,22 +131,22 @@ object AssistantAgent {
             }
 
         // ۲) کیلومتر مطلق: «کیلومتر ۱۲۳.۴۵» یا «km 123.45»
-        Regex("""(?:کیلومتر(?:اژ)?|km)\s*([0-9]+(?:[./][0-9]+)?)""", RegexOption.IGNORE_CASE)
-            .find(msg)?.groupValues?.getOrNull(1)?.let { kmStr ->
-                val km = kmStr.replace('/', '.').toEnglishDigits().toDoubleOrNull() ?: return@let
+        Regex("""(?:کیلومتر(?:اژ)?|km)\s*([0-9۰-۹٠-٩]+(?:[./٫][0-9۰-۹٠-٩]+)?)""", RegexOption.IGNORE_CASE)
+            .find(raw)?.groupValues?.getOrNull(1)?.let { kmStr ->
+                val km = kmStr.toEnglishDigits().replace('/', '.').replace('٫', '.').toDoubleOrNull() ?: return@let
                 val p = TunnelReportStore.findByKm(context, km)
                 if (p != null) return formatPointReply(p, wantsMaps, "کیلومتراژ ${"%.3f".format(km)}", targetKm = km, context = context)
                 return AgentReply(TunnelReportStore.kmContext(context, km).toText())
             }
 
         // ۳) شفت + متراژ: «۵۰ متر شفت ۱» / «شفت ۱ پنجاه متر» / «از شفت ۲ به سمت ۳ ، ۲۰ متر»
-        val shaftMatch = Regex("""(?:شفت|sh|ش)\s*([0-9۰-۹]{1,2})""", RegexOption.IGNORE_CASE).find(msg)
-        val metersMatch = Regex("""([0-9۰-۹]+(?:[./][0-9۰-۹]+)?)\s*(?:متر|m)""", RegexOption.IGNORE_CASE).find(msg)
-        val sideMatch = Regex("""(?:سمت|به سمت|جهت)\s*([0-9۰-۹]+|start|end|آغاز|پایان)""", RegexOption.IGNORE_CASE).find(msg)
+        val shaftMatch = Regex("""(?:شفت|sh|ش)\s*([0-9۰-۹٠-٩]{1,2})""", RegexOption.IGNORE_CASE).find(raw)
+        val metersMatch = Regex("""([0-9۰-۹٠-٩]+(?:[./٫][0-9۰-۹٠-٩]+)?)\s*(?:متر|m\b)""", RegexOption.IGNORE_CASE).find(raw)
+        val sideMatch = Regex("""(?:سمت|به سمت|جهت)\s*([0-9۰-۹٠-٩]+|start|end|آغاز|پایان)""", RegexOption.IGNORE_CASE).find(raw)
 
         if (shaftMatch != null) {
             val shaft = shaftMatch.groupValues[1].toEnglishDigits()
-            val meters = metersMatch?.groupValues?.get(1)?.replace('/', '.')?.toEnglishDigits()?.toDoubleOrNull() ?: 0.0
+            val meters = metersMatch?.groupValues?.get(1)?.toEnglishDigits()?.replace('/', '.')?.replace('٫', '.')?.toDoubleOrNull() ?: 0.0
             var side = sideMatch?.groupValues?.get(1)?.toEnglishDigits()?.lowercase() ?: "start"
             if (side == "آغاز") side = "start"
             if (side == "پایان") side = "end"
@@ -262,7 +270,7 @@ object AssistantAgent {
         return q.replace(Regex("\\s+"), " ").trim().trim(':', '-', '،', ' ')
     }
 
-    private fun actionIntent(context: Context, msg: String): AgentReply? {
+    private fun actionIntent(context: Context, msg: String, rawMessage: String): AgentReply? {
         // حافظه: عملیات کم‌خطر و بدون تأیید جداگانه انجام می‌شود.
         if (hasAny(msg, listOf("یادت باشه", "به خاطر بسپار", "ذخیره کن در حافظه", "به حافظه اضافه کن"))) {
             val text = msg.replace(Regex("(?i)یادت باشه|به خاطر بسپار|ذخیره کن در حافظه|به حافظه اضافه کن"), " ")
@@ -274,29 +282,29 @@ object AssistantAgent {
 
         if (hasAny(msg, listOf("تسویه پروژه", "پروژه را تسویه", "تسویه کن"))) {
             if (!permissionAllows(context, "finance_write")) return AgentReply("دسترسی عملیات مالی بسته است.")
-            val p = findProject(context, msg) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن؛ مثلاً «پروژه ردیف 12 را تسویه کن». ")
-            pending = Pending(PendingType.ACTION_CONFIRM, title = "تسویه پروژه «${p.name}»", store = p.row, actionId = AssistantActionTools.SETTLE_PROJECT)
+            val p = findProject(context, rawMessage) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن؛ مثلاً «پروژه ردیف 12 را تسویه کن». ")
+            pending = Pending(PendingType.ACTION_CONFIRM, title = "تسویه پروژه «${p.name}»", store = p.row, actionId = AssistantActionTools.SETTLE_PROJECT, extra = p.name)
             return AgentReply("⚠️ پروژه «${p.name}» تسویه شود؟", choices = confirmChoices())
         }
 
         if (hasAny(msg, listOf("برگردان تسویه", "لغو تسویه", "تسویه را برگرد"))) {
             if (!permissionAllows(context, "finance_write")) return AgentReply("دسترسی عملیات مالی بسته است.")
-            val p = findProject(context, msg) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن.")
-            pending = Pending(PendingType.ACTION_CONFIRM, title = "برگرداندن تسویه «${p.name}»", store = p.row, actionId = AssistantActionTools.UNSETTLE_PROJECT)
+            val p = findProject(context, rawMessage) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن.")
+            pending = Pending(PendingType.ACTION_CONFIRM, title = "برگرداندن تسویه «${p.name}»", store = p.row, actionId = AssistantActionTools.UNSETTLE_PROJECT, extra = p.name)
             return AgentReply("⚠️ تسویه پروژه «${p.name}» برگردانده شود؟", choices = confirmChoices())
         }
 
         if (hasAny(msg, listOf("حذف پروژه", "پروژه را حذف", "پاک کردن پروژه"))) {
             if (!permissionAllows(context, "delete")) return AgentReply("دسترسی حذف داده‌ها بسته است.")
-            val p = findProject(context, msg) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن.")
-            pending = Pending(PendingType.ACTION_CONFIRM, title = "حذف پروژه «${p.name}»", store = p.row, actionId = AssistantActionTools.DELETE_PROJECT)
+            val p = findProject(context, rawMessage) ?: return AgentReply("نام یا شماره ردیف پروژه را مشخص کن.")
+            pending = Pending(PendingType.ACTION_CONFIRM, title = "حذف پروژه «${p.name}»", store = p.row, actionId = AssistantActionTools.DELETE_PROJECT, extra = p.name)
             return AgentReply("⚠️ این عملیات دائمی است. پروژه «${p.name}» حذف شود؟", choices = confirmChoices())
         }
 
         if (hasAny(msg, listOf("ثبت دریافت تونل", "دریافت تونل", "مبلغ دریافت تونل"))) {
             if (!permissionAllows(context, "finance_write")) return AgentReply("دسترسی عملیات مالی بسته است.")
-            val amount = extractAmount(msg) ?: return AgentReply("مبلغ دریافت را مشخص کن؛ مثلاً «ثبت دریافت تونل 5000000». ")
-            val date = extractDate(msg)
+            val amount = extractAmount(rawMessage) ?: return AgentReply("مبلغ دریافت را مشخص کن؛ مثلاً «ثبت دریافت تونل 5000000». ")
+            val date = extractDate(rawMessage)
             pending = Pending(
                 PendingType.ACTION_CONFIRM,
                 title = "ثبت دریافت تونل ${"%.0f".format(amount)}",
@@ -314,7 +322,7 @@ object AssistantAgent {
         AssistantPermissionStore.get(context, key) != AssistantPermission.FORBIDDEN
 
     private fun findProject(context: Context, msg: String): com.adel.assistant.data.ProjectEntry? {
-        val digits = Regex("\\d+").find(msg)?.value
+        val digits = Regex("[0-9۰-۹٠-٩]+").find(msg)?.value?.toEnglishDigits()
         if (digits != null) {
             ProjectStore.all(context).firstOrNull { it.row == digits }?.let { return it }
         }
@@ -325,14 +333,16 @@ object AssistantAgent {
     }
 
     private fun extractAmount(msg: String): Double? {
-        val raw = Regex("(?<![A-Za-z])(?:[0-9۰-۹][0-9۰-۹,،.]*)(?![A-Za-z])").findAll(msg)
+        val raw = Regex("(?<![A-Za-z])(?:[0-9۰-۹٠-٩][0-9۰-۹٠-٩,،.]*)(?![A-Za-z])").findAll(msg)
             .map { it.value.replace(",", "").replace("،", "").replace(".", "") }
-            .mapNotNull { it.replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9').toDoubleOrNull() }
+            .mapNotNull { it.toEnglishDigits().toDoubleOrNull() }
             .firstOrNull { it > 0 }
         return raw
     }
 
-    private fun extractDate(msg: String): String? = Regex("\\d{2,4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}").find(msg)?.value
+    private fun extractDate(msg: String): String? =
+        Regex("""[0-9۰-۹٠-٩]{2,4}[/\-][0-9۰-۹٠-٩]{1,2}[/\-][0-9۰-۹٠-٩]{1,2}""")
+            .find(msg)?.value?.toEnglishDigits()
 
     private fun resolvePending(context: Context, msg: String): AgentReply? {
         val p = pending ?: return null
@@ -368,8 +378,11 @@ object AssistantAgent {
             PendingType.TASK_DELETE_CONFIRM -> {
                 if (isConfirm(msg)) {
                     val all = TaskStore.load(context, p.store!!)
-                    if (p.index in all.indices) {
-                        val removed = all.removeAt(p.index)
+                    val index = all.indexOfFirst {
+                        it.createdAt == p.taskCreatedAt && it.title == p.title
+                    }
+                    if (index >= 0) {
+                        val removed = all.removeAt(index)
                         TaskStore.save(context, p.store, all)
                         pending = null
                         return AgentReply("تسک «${removed.title}» حذف شد 🗑️")
@@ -402,6 +415,18 @@ object AssistantAgent {
                 }
                 if (!isConfirm(msg)) {
                     return AgentReply("برای اجرای «${p.title}» تأیید یا لغو کن.", choices = listOf(AgentChoice("تأیید", "بله"), AgentChoice("لغو", "لغو")))
+                }
+                val projectAction = p.actionId in setOf(
+                    AssistantActionTools.SETTLE_PROJECT,
+                    AssistantActionTools.UNSETTLE_PROJECT,
+                    AssistantActionTools.DELETE_PROJECT
+                )
+                if (projectAction) {
+                    val sameProject = ProjectStore.all(context).any { it.row == p.store && it.name == p.extra }
+                    if (!sameProject) {
+                        pending = null
+                        return AgentReply("پروژه از زمان درخواست تغییر کرده یا دیگر وجود ندارد؛ عملیات اجرا نشد. درخواست را دوباره صادر کن.")
+                    }
                 }
                 val result = when (p.actionId) {
                     AssistantActionTools.SETTLE_PROJECT -> AssistantActionTools.settleProject(context, p.store.orEmpty())
@@ -594,7 +619,12 @@ object AssistantAgent {
                 val all = TaskStore.load(context,s)
                 val i = all.indexOfFirst { it.title.contains(title, true) }
                 if (i >= 0) {
-                    pending = Pending(PendingType.TASK_DELETE_CONFIRM, all[i].title, s, i)
+                    pending = Pending(
+                        type = PendingType.TASK_DELETE_CONFIRM,
+                        title = all[i].title,
+                        store = s,
+                        taskCreatedAt = all[i].createdAt
+                    )
                     return AgentReply("⚠️ تسک «${all[i].title}» حذف شود؟ بله / لغو")
                 }
             }

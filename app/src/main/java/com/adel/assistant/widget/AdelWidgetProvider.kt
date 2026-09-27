@@ -26,26 +26,9 @@ class AdelWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        when (intent.action) {
-            ACTION_COMPLETE_TASK -> {
-                val store = intent.getStringExtra(EXTRA_STORE) ?: return
-                val title = intent.getStringExtra(EXTRA_TITLE) ?: return
-                val created = intent.getLongExtra(EXTRA_CREATED, 0L)
-                val all = TaskStore.load(context, store).map {
-                    if (it.title == title && it.createdAt == created) it.copy(completed = true) else it
-                }
-                TaskStore.save(context, store, all)
-                refreshAll(context)
-            }
-            ACTION_REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE -> refreshAll(context)
-        }
-    }
 
     companion object {
         const val ACTION_COMPLETE_TASK = "com.adel.assistant.widget.COMPLETE_TASK"
-        const val ACTION_REFRESH = "com.adel.assistant.widget.REFRESH"
         const val EXTRA_STORE = "store"
         const val EXTRA_TITLE = "title"
         const val EXTRA_CREATED = "created"
@@ -121,7 +104,7 @@ class AdelWidgetProvider : AppWidgetProvider() {
             task: TaskItem,
             requestCode: Int
         ): PendingIntent {
-            val intent = Intent(context, AdelWidgetProvider::class.java).apply {
+            val intent = Intent(context, AdelWidgetActionReceiver::class.java).apply {
                 action = ACTION_COMPLETE_TASK
                 putExtra(EXTRA_STORE, store)
                 putExtra(EXTRA_TITLE, task.title)
