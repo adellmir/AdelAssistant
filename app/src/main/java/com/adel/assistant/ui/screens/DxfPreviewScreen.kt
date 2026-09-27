@@ -80,7 +80,7 @@ private data class ViewerDrawing(
 )
 
 @Composable
-fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = null) {
+fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = null, onOpenTopography: () -> Unit = {}) {
     val context = LocalContext.current
     var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
     var nextDrawingId by remember { mutableStateOf(1) }
@@ -1571,6 +1571,7 @@ if (zoomWindowMode) {
                                 when (menuGroup) {
                                     0 -> { // فایل
                                         GlassIcon(Icons.Filled.FolderOpen, "ورود") { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }
+                                        GlassIcon(Icons.Filled.Terrain, "توپوگرافی") { onOpenTopography(); closeMenus() }
                                         GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
                                         GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
                                         GlassIcon(Icons.Filled.Save, "ذخیره") { showSaveDxfDialog = true; closeMenus() }

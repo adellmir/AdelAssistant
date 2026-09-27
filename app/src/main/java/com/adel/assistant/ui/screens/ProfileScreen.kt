@@ -37,15 +37,11 @@ import kotlin.math.*
 @Composable
 fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit) {
     val context = LocalContext.current
-    var surfaces by remember { mutableStateOf(ProfileSession.surfaces) }
-    LaunchedEffect(Unit) {
-        // Restore data entered before opening the map/alignment screen.
-        if (ProfileSession.surfaces.isNotEmpty()) surfaces = ProfileSession.surfaces
-    }
-    var intervalText by remember { mutableStateOf(ProfileSession.intervalText) }
-    var startText by remember { mutableStateOf(ProfileSession.startText) }
-    var horizontalScaleText by remember { mutableStateOf(ProfileSession.horizontalScaleText) }
-    var verticalScaleText by remember { mutableStateOf(ProfileSession.verticalScaleText) }
+    val surfaces = ProfileSession.surfaces
+    var intervalText by remember { mutableStateOf("10") }
+    var startText by remember { mutableStateOf("0") }
+    var horizontalScaleText by remember { mutableStateOf("1000") }
+    var verticalScaleText by remember { mutableStateOf("100") }
     var result by remember { mutableStateOf<ProfileResult2?>(null) }
     var alignment by remember { mutableStateOf<List<AlignmentVertex>>(emptyList()) }
     var showScaleDialog by remember { mutableStateOf(false) }
@@ -68,8 +64,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             } catch (_: Exception) { }
         }
         if (loaded.isNotEmpty()) {
-            surfaces = surfaces + loaded
-            ProfileSession.setSurfaces(surfaces)
+            ProfileSession.updateSurfaces(surfaces + loaded)
             message = "${loaded.size} سطح وارد شد"
         } else message = "سطح معتبر پیدا نشد"
     }
@@ -132,15 +127,13 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                             Icon(Icons.Filled.Layers, null, tint = color)
                             Spacer(Modifier.width(6.dp))
                             Text("${s.name} — ${s.points.size} نقطه", color = TextPrimary, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { surfaces = surfaces.filterIndexed { idx, _ -> idx != i }
-                                ProfileSession.setSurfaces(surfaces)
-                            }) { Icon(Icons.Filled.Delete, "حذف") }
+                            IconButton(onClick = { ProfileSession.updateSurfaces(surfaces.filterIndexed { idx, _ -> idx != i }) }) { Icon(Icons.Filled.Delete, "حذف") }
                         }
                     }
                     if (surfaces.isEmpty()) Text("هنوز سطحی وارد نشده است.", color = TextSecondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(intervalText, { intervalText = it; ProfileSession.setInterval(it); recalc() }, label = { Text("فاصله ایستگاه (m)") }, singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(startText, { startText = it; ProfileSession.setStart(it); recalc() }, label = { Text("کیلومتر شروع") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(intervalText, { intervalText = it; recalc() }, label = { Text("فاصله ایستگاه (m)") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(startText, { startText = it; recalc() }, label = { Text("کیلومتر شروع") }, singleLine = true, modifier = Modifier.weight(1f))
                     }
                     Text("مقیاس ترسیم: طولی 1:${hScale.toInt()}  |  عرضی 1:${vScale.toInt()}  |  ضریب ترسیم عرضی = ${"%.2f".format(scale.verticalExaggeration)}", color = TextSecondary, fontSize = 12.sp)
                 }
@@ -210,8 +203,8 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             title = { Text("مقیاس پروفیل") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(horizontalScaleText, { horizontalScaleText = it; ProfileSession.setHorizontalScale(it) }, label = { Text("مقیاس طولی 1:") }, singleLine = true)
-                    OutlinedTextField(verticalScaleText, { verticalScaleText = it; ProfileSession.setVerticalScale(it) }, label = { Text("مقیاس عرضی 1:") }, singleLine = true)
+                    OutlinedTextField(horizontalScaleText, { horizontalScaleText = it }, label = { Text("مقیاس طولی 1:") }, singleLine = true)
+                    OutlinedTextField(verticalScaleText, { verticalScaleText = it }, label = { Text("مقیاس عرضی 1:") }, singleLine = true)
                     val hh = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 1000.0
                     val vv = verticalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
                     Text("ضریب ترسیم پروفیل (بزرگنمایی عمودی): ${"%.2f".format(hh / vv)}", fontWeight = FontWeight.Bold)

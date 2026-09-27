@@ -5,25 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 object ProfileSession {
-    // Profile data must survive leaving ProfileScreen for the map/alignment screen.
-    // The screen itself may be removed from the Composition, so remember{} is not enough.
     var surfaces by mutableStateOf<List<ProfileSurfaceSlot>>(emptyList())
         private set
-    var intervalText by mutableStateOf("10")
-        private set
-    var startText by mutableStateOf("0")
-        private set
-    var horizontalScaleText by mutableStateOf("1000")
-        private set
-    var verticalScaleText by mutableStateOf("100")
-        private set
-
-    fun setSurfaces(value: List<ProfileSurfaceSlot>) { surfaces = value }
-    fun setInterval(value: String) { intervalText = value }
-    fun setStart(value: String) { startText = value }
-    fun setHorizontalScale(value: String) { horizontalScaleText = value }
-    fun setVerticalScale(value: String) { verticalScaleText = value }
-
     var alignmentRequest by mutableStateOf(false)
         private set
     var alignmentResult by mutableStateOf<List<AlignmentVertex>>(emptyList())
@@ -34,6 +17,9 @@ object ProfileSession {
         private set
     var alignmentMapModel by mutableStateOf<DxfModel?>(null)
         private set
+
+    fun updateSurfaces(value: List<ProfileSurfaceSlot>) { surfaces = value }
+    fun clearSurfaces() { surfaces = emptyList() }
 
     fun beginAlignment(surfaceSlots: List<ProfileSurfaceSlot>) {
         alignmentRequest = true

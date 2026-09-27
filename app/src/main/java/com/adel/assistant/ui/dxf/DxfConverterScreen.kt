@@ -39,7 +39,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 @Composable
-fun DxfConverterScreen(onBack: () -> Unit) {
+fun DxfConverterScreen(onBack: () -> Unit, onOpenTopography: () -> Unit = {}) {
     val context = LocalContext.current
 
     var stage by remember { mutableStateOf(0) } // 0=pick, 1=categorize, 2=result
@@ -163,6 +163,16 @@ fun DxfConverterScreen(onBack: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary)
                     ) {
                         Text("انتخاب فایل")
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = onOpenTopography,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Default.Terrain, null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ترسیم توپوگرافی")
                     }
                     if (statusMessage != null) {
                         Spacer(modifier = Modifier.height(16.dp))
