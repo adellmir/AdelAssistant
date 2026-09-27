@@ -168,122 +168,81 @@ private fun ProfileMap(
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
 
-    // وقتی محدوده نقاط تغییر کرد، نمایش دوباره از حالت fit شروع شود.
-    LaunchedEffect(bounds[0], bounds[1], bounds[2], bounds[3]) {
-        zoom = 1f
-        pan = Offset.Zero
-    }
-
-    Box(modifier = modifier) {
-        Canvas(
-            Modifier
-                .fillMaxSize()
-                .pointerInput(bounds, points, drawing) {
-                    detectTransformGestures { centroid, panChange, zoomChange, _ ->
-                        val oldZoom = zoom
-                        val newZoom = (oldZoom * zoomChange).coerceIn(1f, 25f)
-                        val factor = newZoom / oldZoom
-                        // زوم حول محل انگشت‌ها؛ پن هم همزمان روی همان کادر انجام می‌شود.
-                        pan = centroid + (pan - centroid) * factor + panChange
-                        zoom = newZoom
-                    }
-                }
-                .pointerInput(bounds, drawing, zoom, pan) {
-                    if (drawing) detectTapGestures { p ->
-                        val w = size.width.toDouble()
-                        val h = size.height.toDouble()
-                        val pad = 28.0
-                        val minX = bounds[0]
-                        val minY = bounds[1]
-                        val dx = max(bounds[2] - minX, 1e-9)
-                        val dy = max(bounds[3] - minY, 1e-9)
-                        val baseScale = min((w - 2 * pad) / dx, (h - 2 * pad) / dy)
-                        val scale = baseScale * zoom
-                        val baseOx = (w - dx * baseScale) / 2.0
-                        val baseOy = (h - dy * baseScale) / 2.0
-                        val sx = (p.x - pan.x - baseOx) / scale
-                        val sy = (p.y - pan.y - baseOy) / scale
-                        onTap(minX + sx, bounds[3] - sy)
-                    }
-                }
-        ) {
-            drawRect(SurfaceColor)
-
-            val w = size.width.toDouble()
-            val h = size.height.toDouble()
-            val pad = 28.0
-            val minX = bounds[0]
-            val minY = bounds[1]
-            val dx = max(bounds[2] - minX, 1e-9)
-            val dy = max(bounds[3] - minY, 1e-9)
-            val baseScale = min((w - 2 * pad) / dx, (h - 2 * pad) / dy)
-            val scale = baseScale * zoom
-            val baseOx = (w - dx * baseScale) / 2.0
-            val baseOy = (h - dy * baseScale) / 2.0
-
-            fun sx(x: Double): Float = (baseOx + (x - minX) * scale + pan.x).toFloat()
-            fun sy(y: Double): Float = (baseOy + (bounds[3] - y) * scale + pan.y).toFloat()
-
-            // قاب داخلی نقشه
-            drawRect(
-                Color.LightGray,
-                topLeft = Offset.Zero,
-                size = androidx.compose.ui.geometry.Size(size.width, size.height),
-                style = Stroke(1.5f)
-            )
-
-            // نقاط سطح: همیشه به صورت واضح و مستقل از رنگ پس‌زمینه رسم می‌شوند.
-            points.forEach { p ->
-                val pos = Offset(sx(p.x), sy(p.y))
-                if (pos.x >= -14f && pos.x <= size.width + 14f && pos.y >= -14f && pos.y <= size.height + 14f) {
-                    drawCircle(ToolPrimary, 6.5f, pos)
-                    drawCircle(Color.White, 2.5f, pos)
-                    drawLine(ToolPrimary, Offset(pos.x - 9f, pos.y), Offset(pos.x + 9f, pos.y), 1.5f)
-                    drawLine(ToolPrimary, Offset(pos.x, pos.y - 9f), Offset(pos.x, pos.y + 9f), 1.5f)
-                }
+    Canvas(
+        modifier.pointerInput(bounds, points, drawing) {
+            detectTransformGestures { centroid, panChange, zoomChange, _ ->
+                val oldZoom = zoom
+                val newZoom = (oldZoom * zoomChange).coerceIn(1f, 20f)
+                // Zoom around the fingers instead of around the center of the box.
+                val factor = newZoom / oldZoom
+                pan = centroid + (pan - centroid) * factor + panChange
+                zoom = newZoom
             }
-
-            if (alignment.size >= 2) {
-                val path = Path()
-                alignment.forEachIndexed { i, p ->
-                    if (i == 0) path.moveTo(sx(p.x), sy(p.y)) else path.lineTo(sx(p.x), sy(p.y))
-                }
-                drawPath(path, color = colorForProfileMap(), style = Stroke(width = 5f))
+        }.pointerInput(bounds, points, drawing, zoom, pan) {
+            if (drawing) detectTapGestures { p ->
+                val w = size.width.toDouble()
+                val h = size.height.toDouble()
+                val pad = 24.0
+                val minX = bounds[0]
+                val minY = bounds[1]
+                val dx = max(bounds[2] - minX, 1e-9)
+                val dy = max(bounds[3] - minY, 1e-9)
+                val baseScale = min((w - 2 * pad) / dx, (h - 2 * pad) / dy)
+                val scale = baseScale * zoom
+                val baseOx = (w - dx * baseScale) / 2.0
+                val baseOy = (h - dy * baseScale) / 2.0
+                val sx = (p.x - pan.x - baseOx) / scale
+                val sy = (p.y - pan.y - baseOy) / scale
+                onTap(minX + sx, bounds[3] - sy)
             }
-            alignment.forEachIndexed { i, p ->
-                val pos = Offset(sx(p.x), sy(p.y))
-                drawCircle(ToolPrimary, 8f, pos)
-                if (i == 0) drawCircle(Color.White, 3f, pos)
+        }
+    ) {
+        drawRect(SurfaceColor)
+        val w = size.width.toDouble()
+        val h = size.height.toDouble()
+        val pad = 24.0
+        val minX = bounds[0]
+        val minY = bounds[1]
+        val dx = max(bounds[2] - minX, 1e-9)
+        val dy = max(bounds[3] - minY, 1e-9)
+        val baseScale = min((w - 2 * pad) / dx, (h - 2 * pad) / dy)
+        val scale = baseScale * zoom
+        val baseOx = (w - dx * baseScale) / 2.0
+        val baseOy = (h - dy * baseScale) / 2.0
+        fun sx(x: Double): Float = (baseOx + (x - minX) * scale + pan.x).toFloat()
+        fun sy(y: Double): Float = (baseOy + (bounds[3] - y) * scale + pan.y).toFloat()
+
+        drawRect(
+            Color.LightGray,
+            topLeft = Offset(0f, 0f),
+            size = androidx.compose.ui.geometry.Size(size.width, size.height),
+            style = Stroke(1f)
+        )
+
+        // نقاط واردشده از فایل‌های سطح را همیشه داخل کادر نشان بده.
+        points.forEachIndexed { index, p ->
+            val pos = Offset(sx(p.x), sy(p.y))
+            if (pos.x >= -12f && pos.x <= size.width + 12f && pos.y >= -12f && pos.y <= size.height + 12f) {
+                drawCircle(Color.DarkGray, 4.5f, pos)
+                if (zoom >= 2.5f) {
+                    drawCircle(Color.White, 2f, pos)
+                }
             }
         }
 
-        // کنترل‌های زوم داخل خود کادر نقشه
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            SmallFloatingActionButton(
-                onClick = { zoom = (zoom * 1.5f).coerceAtMost(25f) },
-                containerColor = SurfaceColor,
-                contentColor = TextPrimary
-            ) { Text("+", fontSize = 20.sp) }
-            SmallFloatingActionButton(
-                onClick = { zoom = (zoom / 1.5f).coerceAtLeast(1f) },
-                containerColor = SurfaceColor,
-                contentColor = TextPrimary
-            ) { Text("−", fontSize = 20.sp) }
-            SmallFloatingActionButton(
-                onClick = { zoom = 1f; pan = Offset.Zero },
-                containerColor = SurfaceColor,
-                contentColor = TextPrimary
-            ) { Icon(Icons.Default.Refresh, "نمایش کامل") }
+        if (alignment.size >= 2) {
+            val path = Path()
+            alignment.forEachIndexed { i, p ->
+                if (i == 0) path.moveTo(sx(p.x), sy(p.y)) else path.lineTo(sx(p.x), sy(p.y))
+            }
+            drawPath(path, color = ToolPrimary, style = Stroke(width = 5f))
+        }
+        alignment.forEachIndexed { i, p ->
+            drawCircle(ToolPrimary, 8f, Offset(sx(p.x), sy(p.y)))
+            if (i == 0) drawCircle(Color.White, 3f, Offset(sx(p.x), sy(p.y)))
         }
     }
 }
-
-private fun colorForProfileMap(): Color = ToolPrimary
 
 @Composable
 private fun ProfileChart(r: ProfileResult2, surfaces: List<ProfileSurface>, color: Color) {

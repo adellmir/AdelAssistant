@@ -85,8 +85,7 @@ object AppMenu {
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
                 MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
-                MenuItem("پایش", Icons.Filled.Timeline, Routes.TOOL_MONITORING),
-                MenuItem("شاقولی", Icons.Filled.VerticalAlignCenter, Routes.TOOL_PLUMB),
+                MenuItem("پروفیل طولی", Icons.Filled.ShowChart, Routes.TOOL_PROFILE),
                 MenuItem("نامه‌نگاری", Icons.Filled.Mail, Routes.TOOL_LETTER),
                 MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))
