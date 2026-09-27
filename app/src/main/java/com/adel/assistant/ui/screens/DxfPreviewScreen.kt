@@ -1210,7 +1210,7 @@ if (zoomWindowMode) {
                         prev = p
                         drawContext.canvas.nativeCanvas.drawText(
                             "${idx + 1}", p.x + 9f, p.y - 9f,
-                            android.graphics.Paint().apply { color = android.graphics.Color.WHITE; textSize = 24f; isAntiAlias = true }
+                            android.graphics.Paint().apply { setColor(android.graphics.Color.WHITE); textSize = 24f; isAntiAlias = true }
                         )
                     }
                 }

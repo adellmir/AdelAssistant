@@ -38,7 +38,9 @@ object AppMenu {
         tabs = listOf(
             MenuTab("تونل", listOf(
                 MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
+                MenuItem("کیلومتاژ", Icons.Filled.Route, Routes.SURVEY_TUNNEL_CHAINAGE),
                 MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
+                MenuItem("نقشه تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
                 MenuItem("ثبت وقایع تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
                 MenuItem("پیشرفت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
@@ -65,6 +67,7 @@ object AppMenu {
             )),
             MenuTab("پروژه‌ها", listOf(
                 MenuItem("صدور فاکتور", Icons.Filled.ReceiptLong, Routes.FIN_PROJECT_INVOICE),
+                MenuItem("ثبت دریافتی", Icons.Filled.Payments, Routes.FIN_PROJECT_RECEIPT),
                 MenuItem("مطالبات کلی", Icons.Filled.AccountBalance, Routes.FIN_PROJECT_RECEIVABLES),
                 MenuItem("وضعیت", Icons.Filled.Insights, Routes.FIN_PROJECT_STATUS)
             ))
@@ -88,6 +91,7 @@ object AppMenu {
                 MenuItem("درون‌یابی", Icons.Filled.Functions, Routes.TOOL_INTERPOLATE),
                 MenuItem("مساحت و محیط", Icons.Filled.SquareFoot, Routes.TOOL_AREA),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
+                MenuItem("تراز / تبدیل مختصات", Icons.Filled.Timeline, Routes.TOOL_ALIGN),
                 MenuItem("نامه‌نگاری", Icons.Filled.Mail, Routes.TOOL_LETTER),
                 MenuItem("پشتیبان پایگاه", Icons.Filled.Storage, Routes.TOOL_BACKUP)
             ))
