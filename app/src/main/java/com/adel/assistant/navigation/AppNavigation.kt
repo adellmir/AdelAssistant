@@ -43,6 +43,7 @@ import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.VolumeScreen
 import com.adel.assistant.ui.screens.TopographyScreen
+import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
 import com.adel.assistant.ui.theme.FinancePrimary
 import com.adel.assistant.ui.theme.ToolPrimary
@@ -205,8 +206,16 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         composable(Routes.TOOL_DXF) {
             DxfConverterScreen(onBack = { navController.popBackStack() }, onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) })
         }
-        composable(Routes.TOOL_DXF_PREVIEW) {
-            DxfPreviewScreen(color = ToolPrimary, onBack = { navController.popBackStack() }, onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) })
+        composable(
+            route = Routes.TOOL_DXF_PREVIEW + "?profileMode={profileMode}",
+            arguments = listOf(navArgument("profileMode") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) { backStackEntry ->
+            DxfPreviewScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                profileMode = backStackEntry.arguments?.getString("profileMode"),
+                onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) }
+            )
         }
         composable(Routes.TOOL_TOTAL_STATION) {
             TotalStationDumpScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
@@ -228,6 +237,15 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         }
         composable(Routes.TOOL_TOPOGRAPHY) {
             TopographyScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_PROFILE) {
+            ProfileScreen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onOpenMap = { mode ->
+                    navController.navigate(Routes.TOOL_DXF_PREVIEW + "?profileMode=" + mode)
+                }
+            )
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

@@ -26,6 +26,7 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     val context = LocalContext.current
