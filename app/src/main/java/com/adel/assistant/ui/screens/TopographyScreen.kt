@@ -58,7 +58,7 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             val parsed = if (tp.size >= 3) tp else parsedAll
             if (parsed.size >= 3) {
                 points = parsed
-                TopographySession.setPoints(parsed)
+                TopographySession.updatePoints(parsed)
                 zoom = 1f; pan = Offset.Zero
                 showInterval = true
                 rebuild()

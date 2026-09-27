@@ -8,6 +8,6 @@ object TopographySession {
     var points by mutableStateOf<List<VolPoint>>(emptyList())
         private set
 
-    fun setPoints(value: List<VolPoint>) { points = value }
+    fun updatePoints(value: List<VolPoint>) { points = value }
     fun clear() { points = emptyList() }
 }
