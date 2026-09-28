@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      upload_apk:
+        description: "آپلود APK برای دانلود"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -28,6 +34,7 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_apk == true
         uses: actions/upload-artifact@v7
         with:
           name: app-debug-apk
