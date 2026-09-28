@@ -103,6 +103,67 @@ object VolumeEngine {
         return out to removed
     }
 
+    /** سقف نقاط برای TIN تا از O(n²) و کرش جلوگیری شود */
+    const val MAX_TIN_POINTS = 2000
+    /** سقف سلول‌های شبکه برای نقشه Cut/Fill */
+    const val MAX_GRID_CELLS = 25000
+
+    /**
+     * نازک‌سازی هوشمند: رأس‌های convex hull حفظ می‌شوند؛
+     * بقیه با شبکه‌بندی یکنواخت نمونه‌برداری می‌شوند.
+     */
+    fun thinForTin(points: List<VolPoint>, maxPoints: Int = MAX_TIN_POINTS): Pair<List<VolPoint>, Int> {
+        if (points.size <= maxPoints) return points to 0
+        val hull = convexHull(points)
+        val hullKeys = hull.map { String.format(java.util.Locale.US, "%.3f,%.3f", it.x, it.y) }.toHashSet()
+        val b = bounds(points)
+        val dx = (b[2] - b[0]).coerceAtLeast(1e-6)
+        val dy = (b[3] - b[1]).coerceAtLeast(1e-6)
+        // تعداد سلول ≈ maxPoints
+        val side = kotlin.math.ceil(kotlin.math.sqrt(maxPoints.toDouble())).toInt().coerceAtLeast(2)
+        val cellW = dx / side
+        val cellH = dy / side
+        data class Acc(var best: VolPoint, var bestD: Double)
+        val cells = HashMap<Long, Acc>(maxPoints * 2)
+        for (p in points) {
+            val key = String.format(java.util.Locale.US, "%.3f,%.3f", p.x, p.y)
+            if (key in hullKeys) continue
+            val ix = ((p.x - b[0]) / cellW).toInt().coerceIn(0, side - 1)
+            val iy = ((p.y - b[1]) / cellH).toInt().coerceIn(0, side - 1)
+            val id = ix.toLong() * 100000L + iy
+            val cx = b[0] + (ix + 0.5) * cellW
+            val cy = b[1] + (iy + 0.5) * cellH
+            val d = (p.x - cx) * (p.x - cx) + (p.y - cy) * (p.y - cy)
+            val cur = cells[id]
+            if (cur == null || d < cur.bestD) cells[id] = Acc(p, d)
+        }
+        val out = LinkedHashMap<String, VolPoint>()
+        hull.forEach { out[String.format(java.util.Locale.US, "%.3f,%.3f", it.x, it.y)] = it }
+        cells.values.forEach { acc ->
+            val k = String.format(java.util.Locale.US, "%.3f,%.3f", acc.best.x, acc.best.y)
+            out.putIfAbsent(k, acc.best)
+        }
+        // اگر هنوز زیاد است، تصادفی‌وار کم کن (با حفظ hull)
+        var list = out.values.toList()
+        if (list.size > maxPoints) {
+            val keepHull = hull.toSet()
+            val rest = list.filter { it !in keepHull }.shuffled(java.util.Random(42))
+            list = hull + rest.take((maxPoints - hull.size).coerceAtLeast(0))
+        }
+        return list to (points.size - list.size)
+    }
+
+    /** اندازه شبکه را طوری تنظیم می‌کند که تعداد سلول از سقف رد نشود */
+    fun adaptiveGridSize(minX: Double, minY: Double, maxX: Double, maxY: Double, preferred: Double, maxCells: Int = MAX_GRID_CELLS): Double {
+        val gs0 = preferred.coerceAtLeast(0.05)
+        val w = (maxX - minX).coerceAtLeast(gs0)
+        val h = (maxY - minY).coerceAtLeast(gs0)
+        val cells = (w / gs0) * (h / gs0)
+        if (cells <= maxCells) return gs0
+        val scale = kotlin.math.sqrt(cells / maxCells)
+        return (gs0 * scale).coerceAtLeast(gs0)
+    }
+
     fun bounds(points: List<VolPoint>): DoubleArray {
         var minX = Double.POSITIVE_INFINITY
         var minY = Double.POSITIVE_INFINITY
@@ -156,15 +217,43 @@ object VolumeEngine {
 
     fun interpolateIdw(x: Double, y: Double, pts: List<VolPoint>, k: Int = 6, power: Double = 2.0): Double? {
         if (pts.isEmpty()) return null
-        val nearest = pts.map { p ->
+        // برای ابرنقطه بزرگ: فقط همسایه‌های نزدیک با حلقهٔ شعاعی، بدون sort روی همه
+        if (pts.size <= 80) {
+            val nearest = pts.map { p ->
+                val d2 = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
+                p to d2
+            }.sortedBy { it.second }.take(k)
+            val exact = nearest.firstOrNull { it.second < 1e-16 }
+            if (exact != null) return exact.first.z
+            var num = 0.0; var den = 0.0
+            for ((p, d2) in nearest) {
+                val d = sqrt(d2).coerceAtLeast(1e-9)
+                val w = 1.0 / Math.pow(d, power)
+                num += w * p.z; den += w
+            }
+            return if (den > 0) num / den else null
+        }
+        // top-k خطی O(n) بدون sortedBy کامل
+        val bestP = arrayOfNulls<VolPoint>(k)
+        val bestD = DoubleArray(k) { Double.POSITIVE_INFINITY }
+        for (p in pts) {
             val d2 = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
-            p to d2
-        }.sortedBy { it.second }.take(k)
-        val exact = nearest.firstOrNull { it.second < 1e-16 }
-        if (exact != null) return exact.first.z
+            if (d2 < 1e-16) return p.z
+            // جایگذاری در top-k
+            var j = k - 1
+            if (d2 >= bestD[j]) continue
+            while (j > 0 && d2 < bestD[j - 1]) {
+                bestD[j] = bestD[j - 1]
+                bestP[j] = bestP[j - 1]
+                j--
+            }
+            bestD[j] = d2
+            bestP[j] = p
+        }
         var num = 0.0; var den = 0.0
-        for ((p, d2) in nearest) {
-            val d = sqrt(d2).coerceAtLeast(1e-9)
+        for (i in 0 until k) {
+            val p = bestP[i] ?: break
+            val d = sqrt(bestD[i]).coerceAtLeast(1e-9)
             val w = 1.0 / Math.pow(d, power)
             num += w * p.z; den += w
         }
@@ -190,19 +279,27 @@ object VolumeEngine {
             warnings.add("هر سطح حداقل ۳ نقطه نیاز دارد")
             return VolumeResult("Grid", ex.size, de.size, existingName, designName, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, gridSize, warnings)
         }
-        val all = ex + de
+        val (exT, thEx) = thinForTin(ex, MAX_TIN_POINTS)
+        val (deT, thDe) = thinForTin(de, MAX_TIN_POINTS)
+        if (thEx > 0) warnings.add("نمونه‌برداری $thEx نقطه از «$existingName»")
+        if (thDe > 0) warnings.add("نمونه‌برداری $thDe نقطه از «$designName»")
+        val all = exT + deT
         val b = bounds(all)
         val hull = boundary ?: convexHull(all)
-        val gs = gridSize.coerceAtLeast(0.1)
+        val gs = adaptiveGridSize(b[0], b[1], b[2], b[3], gridSize.coerceAtLeast(0.1))
+        val ex = exT
+        val de = deT
         var cut = 0.0; var fill = 0.0; var area = 0.0; var sumDz = 0.0
         var minDz = Double.POSITIVE_INFINITY; var maxDz = Double.NEGATIVE_INFINITY; var n = 0
         val cellArea = gs * gs
         var x = b[0]
-        while (x < b[2] - 1e-9) {
+        var cellGuard = 0
+        while (x < b[2] - 1e-9 && cellGuard < MAX_GRID_CELLS) {
             var y = b[1]
-            while (y < b[3] - 1e-9) {
+            while (y < b[3] - 1e-9 && cellGuard < MAX_GRID_CELLS) {
                 val cx = x + gs / 2.0; val cy = y + gs / 2.0
                 if (pointInPolygon(cx, cy, hull)) {
+                    cellGuard++
                     val ze = interpolateIdw(cx, cy, ex) ?: continue
                     val zd = interpolateIdw(cx, cy, de) ?: continue
                     val dz = ze - zd
@@ -315,21 +412,29 @@ object VolumeEngine {
         }
         val cells = mutableListOf<CutFillCell>()
         if (existing.size >= 3 && design.size >= 3) {
-            val trisDe = buildTin(dedupe(design).first)
-            val ex = dedupe(existing).first
-            val de = dedupe(design).first
-            val gs = sampleGrid.coerceAtLeast(0.2)
+            val (ex0, _) = dedupe(existing)
+            val (de0, _) = dedupe(design)
+            val (ex, _) = thinForTin(ex0, MAX_TIN_POINTS)
+            val (de, _) = thinForTin(de0, MAX_TIN_POINTS)
+            val trisDe = buildTin(de)
             val bb = bounds(hull)
+            val gs = adaptiveGridSize(bb[0], bb[1], bb[2], bb[3], sampleGrid.coerceAtLeast(0.2))
             var x = bb[0]
-            while (x < bb[2] - 1e-9) {
+            var cellGuard = 0
+            while (x < bb[2] - 1e-9 && cellGuard < MAX_GRID_CELLS) {
                 var y = bb[1]
-                while (y < bb[3] - 1e-9) {
+                while (y < bb[3] - 1e-9 && cellGuard < MAX_GRID_CELLS) {
                     val cx = x + gs / 2.0; val cy = y + gs / 2.0
                     if (pointInPolygon(cx, cy, hull)) {
-                        val ze = interpolateIdw(cx, cy, ex) ?: continue
-                        val zd = tinZAt(cx, cy, de, trisDe) ?: interpolateIdw(cx, cy, de) ?: continue
-                        val dz = ze - zd
-                        if (kotlin.math.abs(dz) > 1e-6) cells.add(CutFillCell(cx, cy, gs, dz))
+                        cellGuard++
+                        val ze = interpolateIdw(cx, cy, ex)
+                        if (ze != null) {
+                            val zd = tinZAt(cx, cy, de, trisDe) ?: interpolateIdw(cx, cy, de)
+                            if (zd != null) {
+                                val dz = ze - zd
+                                if (kotlin.math.abs(dz) > 1e-6) cells.add(CutFillCell(cx, cy, gs, dz))
+                            }
+                        }
                     }
                     y += gs
                 }
@@ -438,13 +543,14 @@ object VolumeEngine {
 
     fun buildTin(points: List<VolPoint>): List<VolTriangle> {
         if (points.size < 3) return emptyList()
-        val n = points.size
-        val b = bounds(points)
+        val (work, _) = if (points.size > MAX_TIN_POINTS) thinForTin(points, MAX_TIN_POINTS) else points to 0
+        val n = work.size
+        val b = bounds(work)
         val dx = (b[2] - b[0]).coerceAtLeast(1.0)
         val dy = (b[3] - b[1]).coerceAtLeast(1.0)
         val dmax = max(dx, dy) * 10.0
         val midX = (b[0] + b[2]) / 2.0; val midY = (b[1] + b[3]) / 2.0
-        val pts = points + listOf(
+        val pts = work + listOf(
             VolPoint("_st0", midX - 2 * dmax, midY - dmax, 0.0),
             VolPoint("_st1", midX, midY + 2 * dmax, 0.0),
             VolPoint("_st2", midX + 2 * dmax, midY - dmax, 0.0)
@@ -772,10 +878,14 @@ object VolumeEngine {
         breaklineStep: Double = 1.0
     ): VolumeResult {
         val warnings = mutableListOf<String>()
-        val (ex, remEx) = dedupe(existing)
-        val (de, remDe) = dedupe(design)
+        val (ex0, remEx) = dedupe(existing)
+        val (de0, remDe) = dedupe(design)
         if (remEx > 0) warnings.add("$remEx نقطه تکراری «$existingName» ادغام شد")
         if (remDe > 0) warnings.add("$remDe نقطه تکراری «$designName» ادغام شد")
+        val (ex, thEx) = thinForTin(ex0, MAX_TIN_POINTS)
+        val (de, thDe) = thinForTin(de0, MAX_TIN_POINTS)
+        if (thEx > 0) warnings.add("برای پایداری، $thEx نقطه از «$existingName» نمونه‌برداری شد (سقف $MAX_TIN_POINTS)")
+        if (thDe > 0) warnings.add("برای پایداری، $thDe نقطه از «$designName» نمونه‌برداری شد (سقف $MAX_TIN_POINTS)")
         if (ex.size < 3 || de.size < 3) {
             warnings.add("برای TIN حداقل ۳ نقطه در هر سطح لازم است")
             return VolumeResult("TIN", ex.size, de.size, existingName, designName, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, null, warnings)

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -42,6 +43,9 @@ import com.adel.assistant.data.CutFillCell
 import com.adel.assistant.data.VolumeAnalysis
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PointConverter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.VolPoint
 import com.adel.assistant.data.VolumeEngine
@@ -95,6 +99,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var showProfileDialog by remember { mutableStateOf(false) }
     var contours by remember { mutableStateOf<List<ContourSet>>(emptyList()) }
     var message by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var boundaryPoints by remember { mutableStateOf<List<VolPoint>>(emptyList()) }
@@ -345,43 +350,55 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 pairs.add(picked[0] to picked[1])
             }
         }
+        if (busy) return
         busy = true
-        try {
-            val analyses = pairs.map { (a, b) ->
-                runOnePair(a.second, b.second, a.first, b.first)
-            }
-            pairResults = analyses
-            selectedPairIndex = 0
-            val first = analyses.first()
-            result = first.result
-            cutFillCells = first.cells
-            boundaryUsed = first.boundaryUsed
-            val names = analyses.flatMap { listOf(it.result.existingName, it.result.designName) }.distinct()
-            contours = names.mapNotNull { name ->
-                val s = surfaces.firstOrNull { it.name == name || it.name.ifBlank { null } == name }
-                    ?: surfaces.getOrNull(names.indexOf(name))
-                val pts = s?.points ?: return@mapNotNull null
-                VolumeEngine.buildContours(name, pts, iv)
-            }.ifEmpty {
-                pairs.flatMap { (a, b) ->
-                    listOf(
-                        VolumeEngine.buildContours(
-                            a.second.name.ifBlank { "S${a.first}" }, a.second.points, iv
-                        ),
-                        VolumeEngine.buildContours(
-                            b.second.name.ifBlank { "S${b.first}" }, b.second.points, iv
-                        )
-                    )
+        message = "در حال محاسبه… (نقاط زیاد ممکن است چند ثانیه طول بکشد)"
+        val pairsSnap = pairs.toList()
+        val surfacesSnap = surfaces.toList()
+        scope.launch {
+            try {
+                val (analyses, contourList) = withContext(Dispatchers.Default) {
+                    val analyses = pairsSnap.map { (a, b) ->
+                        runOnePair(a.second, b.second, a.first, b.first)
+                    }
+                    val names = analyses.flatMap { listOf(it.result.existingName, it.result.designName) }.distinct()
+                    val contourList = names.mapNotNull { name ->
+                        val s = surfacesSnap.firstOrNull { it.name == name || it.name.ifBlank { null } == name }
+                            ?: surfacesSnap.getOrNull(names.indexOf(name))
+                        val pts = s?.points ?: return@mapNotNull null
+                        VolumeEngine.buildContours(name, pts, iv)
+                    }.ifEmpty {
+                        pairsSnap.flatMap { (a, b) ->
+                            listOf(
+                                VolumeEngine.buildContours(
+                                    a.second.name.ifBlank { "S${a.first}" }, a.second.points, iv
+                                ),
+                                VolumeEngine.buildContours(
+                                    b.second.name.ifBlank { "S${b.first}" }, b.second.points, iv
+                                )
+                            )
+                        }
+                    }
+                    analyses to contourList
                 }
+                pairResults = analyses
+                selectedPairIndex = 0
+                val first = analyses.first()
+                result = first.result
+                cutFillCells = first.cells
+                boundaryUsed = first.boundaryUsed
+                contours = contourList
+                val warn = first.result.warnings.take(2).joinToString(" | ")
+                message = if (analyses.size == 1)
+                    "تحلیل انجام شد — ${first.cells.size} سلول" + (if (warn.isNotBlank()) " | $warn" else "")
+                else
+                    "زنجیره: ${analyses.size} جفت تحلیل شد" + (if (warn.isNotBlank()) " | $warn" else "")
+            } catch (e: Exception) {
+                message = "خطا: ${e.message}"
+            } finally {
+                busy = false
             }
-            message = if (analyses.size == 1)
-                "تحلیل انجام شد — ${first.cells.size} سلول"
-            else
-                "زنجیره: ${analyses.size} جفت تحلیل شد"
-        } catch (e: Exception) {
-            message = "خطا: ${e.message}"
         }
-        busy = false
     }
 
     fun selectPair(index: Int) {
