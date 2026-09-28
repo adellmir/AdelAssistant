@@ -2,6 +2,7 @@ package com.adel.assistant.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -66,6 +67,10 @@ fun Map2Screen(
 
     LaunchedEffect(Unit) {
         Map2Session.load(context)
+    }
+    BackHandler {
+        Map2Session.save(context)
+        onBack()
     }
     // همگام‌سازی الایمنت از نمایش نقشه / پروفیل
     LaunchedEffect(ProfileSession.alignmentResult) {
@@ -139,7 +144,10 @@ fun Map2Screen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "بازگشت") }
+                IconButton(onClick = {
+                    Map2Session.save(context)
+                    onBack()
+                }) { Icon(Icons.Filled.ArrowBack, "بازگشت") }
             },
             actions = {
                 IconButton(onClick = { Map2Session.save(context) }) {

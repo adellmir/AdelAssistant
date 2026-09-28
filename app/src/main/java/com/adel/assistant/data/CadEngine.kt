@@ -13,11 +13,71 @@ enum class CadTool {
     DrawCircle,
     DrawArc,
     DrawText,
+    DrawGrid,
     Move,
     Copy,
     Rotate,
     Scale
 }
+
+/**
+ * ساخت خطوط و متون گرید روی لایه GRID.
+ * محورها موازی X/Y و روی مختصات رُند (مضرب فاصله).
+ * متن مختصات در دو سر هر خط.
+ */
+object GridBuilder {
+    fun build(
+        xA: Double, yA: Double, xB: Double, yB: Double,
+        step: Double, textHeight: Double,
+        layer: String = "GRID", color: Int = 8
+    ): Pair<List<DxfLine>, List<DxfText>> {
+        val st = step.coerceAtLeast(1e-6)
+        val minX = minOf(xA, xB)
+        val maxX = maxOf(xA, xB)
+        val minY = minOf(yA, yB)
+        val maxY = maxOf(yA, yB)
+        // رُند کردن محدوده به مضرب step
+        fun ceilStep(v: Double) = kotlin.math.ceil(v / st - 1e-12) * st
+        fun floorStep(v: Double) = kotlin.math.floor(v / st + 1e-12) * st
+        val x0 = ceilStep(minX)
+        val x1 = floorStep(maxX)
+        val y0 = ceilStep(minY)
+        val y1 = floorStep(maxY)
+        val lines = mutableListOf<DxfLine>()
+        val texts = mutableListOf<DxfText>()
+        fun fmt(v: Double): String {
+            val r = kotlin.math.round(v * 1000.0) / 1000.0
+            return if (kotlin.math.abs(r - r.toLong()) < 1e-9) r.toLong().toString()
+            else String.format(java.util.Locale.US, "%.3f", r)
+        }
+        // خطوط عمودی (ثابت X) — برچسب X در پایین و بالا
+        if (x0 <= x1) {
+            var x = x0
+            var guard = 0
+            while (x <= x1 + 1e-9 && guard < 5000) {
+                lines.add(DxfLine(x, minY, x, maxY, layer, color))
+                texts.add(DxfText(x, minY - textHeight * 1.2, textHeight, fmt(x), layer, color))
+                texts.add(DxfText(x, maxY + textHeight * 0.4, textHeight, fmt(x), layer, color))
+                x += st
+                guard++
+            }
+        }
+        // خطوط افقی (ثابت Y) — برچسب Y در چپ و راست
+        if (y0 <= y1) {
+            var y = y0
+            var guard = 0
+            while (y <= y1 + 1e-9 && guard < 5000) {
+                lines.add(DxfLine(minX, y, maxX, y, layer, color))
+                texts.add(DxfText(minX - textHeight * 0.2, y, textHeight, fmt(y), layer, color))
+                texts.add(DxfText(maxX + textHeight * 0.4, y, textHeight, fmt(y), layer, color))
+                y += st
+                guard++
+            }
+        }
+        return lines to texts
+    }
+}
+
 
 data class OsnapFlags(
     val end: Boolean = true,

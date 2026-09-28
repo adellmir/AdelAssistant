@@ -43,7 +43,21 @@ data class DxfModel(
     }
 
     fun toDxfText(): String = buildString {
+        val layerNames = linkedSetOf<String>()
+        layers.keys.forEach { layerNames.add(it) }
+        lines.forEach { layerNames.add(it.layer) }
+        circles.forEach { layerNames.add(it.layer) }
+        texts.forEach { layerNames.add(it.layer) }
+        if (layerNames.isEmpty()) layerNames.add("0")
         append("0\nSECTION\n2\nHEADER\n0\nENDSEC\n")
+        append("0\nSECTION\n2\nTABLES\n")
+        append("0\nTABLE\n2\nLAYER\n70\n${layerNames.size}\n")
+        layerNames.forEach { name ->
+            val info = layers[name]
+            val col = info?.color ?: 7
+            append("0\nLAYER\n2\n$name\n70\n0\n62\n$col\n6\nCONTINUOUS\n")
+        }
+        append("0\nENDTAB\n0\nENDSEC\n")
         append("0\nSECTION\n2\nENTITIES\n")
         lines.forEach { l ->
             append("0\nLINE\n8\n${l.layer}\n10\n${l.x1}\n20\n${l.y1}\n11\n${l.x2}\n21\n${l.y2}\n")

@@ -15,6 +15,7 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -122,6 +123,14 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
     var showCadPanel by remember { mutableStateOf(false) }
     var showSaveDxfDialog by remember { mutableStateOf(false) }
     var saveDxfName by remember { mutableStateOf("map_edit") }
+    var openedDxfName by remember { mutableStateOf<String?>(null) }
+    var docDirty by remember { mutableStateOf(false) }
+    var showExitSaveDialog by remember { mutableStateOf(false) }
+    var gridCornerBr by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var gridCornerTl by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var showGridParamsDialog by remember { mutableStateOf(false) }
+    var gridStepText by remember { mutableStateOf("10") }
+    var gridTextHeight by remember { mutableStateOf("1") }
     var cadTool by remember { mutableStateOf(CadTool.None) }
     var orthoOn by remember { mutableStateOf(false) }
     var gridOn by remember { mutableStateOf(false) }
@@ -277,6 +286,10 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
                 if (!model.isEmpty) {
                     drawings = drawings + ViewerDrawing(nextDrawingId, name, model)
                     nextDrawingId++
+                    if (openedDxfName == null) {
+                        openedDxfName = name
+                        saveDxfName = name.removeSuffix(".dxf").removeSuffix(".DXF")
+                    }
                     fitTrigger++
                     message = "از خروجی: $name بارگذاری شد"
                 } else {
@@ -308,6 +321,11 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
             if (added.isEmpty()) message = "موجودیتی قابل نمایش پیدا نشد"
             else {
                 drawings = drawings + added
+                if (openedDxfName == null && added.isNotEmpty()) {
+                    openedDxfName = added.first().name
+                    saveDxfName = added.first().name.removeSuffix(".dxf").removeSuffix(".DXF")
+                }
+                docDirty = false
                 nextDrawingId += added.size
                 measureA = null; measureB = null; distanceMsg = null
                 fitTrigger++
@@ -504,11 +522,52 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
         redoStack = redoStack.dropLast(1)
         message = "Redo"
     }
+
+    fun buildCombinedDxf(): String =
+        drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+
+    fun saveCombined(nameIn: String): Boolean {
+        val name = nameIn.trim().ifBlank { "map_edit" }.let {
+            if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
+        }
+        val body = buildCombinedDxf()
+        val uri = FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+        if (uri != null) {
+            docDirty = false
+            openedDxfName = name
+            saveDxfName = name.removeSuffix(".dxf").removeSuffix(".DXF")
+            message = "ذخیره شد: $name"
+            return true
+        }
+        message = "خطا در ذخیره DXF"
+        return false
+    }
+
+    fun requestExit() {
+        if (docDirty) showExitSaveDialog = true else onBack()
+    }
+
+    BackHandler { requestExit() }
+
     fun ensureCadDrawing(): Int {
         val existing = drawings.find { it.name == "_CAD" }
-        if (existing != null) return existing.id
+        if (existing != null) {
+            // لایه GRID را در مدل موجود تضمین کن
+            val m = existing.model
+            if (!m.layers.containsKey("GRID")) {
+                drawings = drawings.map {
+                    if (it.id == existing.id) it.copy(
+                        model = m.copy(layers = (m.layers.toMutableMap().apply {
+                            put("GRID", com.adel.assistant.data.DxfLayerInfo("GRID", 8, true))
+                        }))
+                    ) else it
+                }
+            }
+            return existing.id
+        }
         val empty = DxfModel(emptyList(), emptyList(), emptyList(), linkedMapOf(
-            "CAD" to com.adel.assistant.data.DxfLayerInfo("CAD", 1, true)
+            "CAD" to com.adel.assistant.data.DxfLayerInfo("CAD", 1, true),
+            "GRID" to com.adel.assistant.data.DxfLayerInfo("GRID", 8, true)
         ), 0.0, 0.0, 1.0, 1.0)
         val id = nextDrawingId
         drawings = drawings + ViewerDrawing(id, "_CAD", empty)
@@ -517,6 +576,7 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
     }
     fun mutateCad(block: (DxfModel) -> DxfModel) {
         pushUndo()
+        docDirty = true
         val id = ensureCadDrawing()
         drawings = drawings.map {
             if (it.id == id) {
@@ -632,6 +692,24 @@ fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = nu
                     draftPts = emptyList()
                     message = "قوس تقریبی (دو پاره)"
                 } else message = "نقطه ${draftPts.size} از ۳ قوس"
+            }
+            CadTool.DrawGrid -> {
+                when {
+                    gridCornerBr == null -> {
+                        gridCornerBr = p
+                        message = "گوشه راست‌پایین ثبت شد — حالا گوشه چپ‌بالا را لمس کن"
+                    }
+                    gridCornerTl == null -> {
+                        gridCornerTl = p
+                        showGridParamsDialog = true
+                        message = "محدوده گرید مشخص شد — فاصله و اندازه متن را وارد کن"
+                    }
+                    else -> {
+                        gridCornerBr = p
+                        gridCornerTl = null
+                        message = "گوشه راست‌پایین جدید — سپس چپ‌بالا"
+                    }
+                }
             }
             CadTool.DrawText -> {
                 draftPts = listOf(p)
@@ -1582,7 +1660,7 @@ if (zoomWindowMode) {
                                             zoomWindowMode = true; zoomWindowFirst = null
                                             message = "زوم پنجره: دو گوشه"; closeMenus()
                                         }
-                                        GlassIcon(Icons.Filled.GridOn, "گرید", if (gridOn) Color(0xFF81C995) else Color.White) {
+                                        GlassIcon(Icons.Filled.Apps, "گرید", if (gridOn) Color(0xFF81C995) else Color.White) {
                                             gridOn = !gridOn; message = if (gridOn) "گرید روشن" else "گرید خاموش"; closeMenus()
                                         }
                                         GlassIcon(Icons.Filled.MyLocation, "موقعیت") {
@@ -1625,6 +1703,12 @@ if (zoomWindowMode) {
                                         }
                                         GlassIcon(Icons.Filled.Title, "متن") {
                                             cadTool = CadTool.DrawText; draftPts = emptyList(); measureMode = false; closeMenus(); message = "متن"
+                                        }
+                                        GlassIcon(Icons.Filled.Apps, "گرید") {
+                                            cadTool = CadTool.DrawGrid
+                                            gridCornerBr = null; gridCornerTl = null
+                                            draftPts = emptyList(); measureMode = false; closeMenus()
+                                            message = "گرید: اول گوشه راست‌پایین محدوده را لمس کن"
                                         }
                                     }
                                     4 -> { // ویرایش
@@ -1905,7 +1989,7 @@ if (zoomWindowMode) {
             }
         }
 
-        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
+        IconButton(onClick = { requestExit() }, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
             Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
         }
     }
@@ -2242,7 +2326,110 @@ if (zoomWindowMode) {
     }
 
 
-    if (showSaveDxfDialog) {
+    
+    if (showGridParamsDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showGridParamsDialog = false
+                gridCornerBr = null; gridCornerTl = null
+                cadTool = CadTool.None
+            },
+            title = { Text("پارامتر گرید") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("محورها موازی X/Y و روی مختصات رُند (مضرب فاصله) رسم می‌شوند. لایه: GRID", fontSize = 12.sp)
+                    OutlinedTextField(
+                        gridStepText, { gridStepText = it },
+                        label = { Text("فاصله خطوط گرید (متر)") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        gridTextHeight, { gridTextHeight = it },
+                        label = { Text("اندازه متن مختصات") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val br = gridCornerBr; val tl = gridCornerTl
+                    val step = gridStepText.replace(',', '.').toDoubleOrNull() ?: 10.0
+                    val th = gridTextHeight.replace(',', '.').toDoubleOrNull() ?: 1.0
+                    if (br == null || tl == null) {
+                        message = "گوشه‌ها ناقص است"
+                    } else if (step <= 0 || th <= 0) {
+                        message = "فاصله و اندازه متن باید مثبت باشند"
+                    } else {
+                        val (glines, gtexts) = GridBuilder.build(br.first, br.second, tl.first, tl.second, step, th)
+                        mutateCad { m ->
+                            val layers = m.layers.toMutableMap()
+                            layers.putIfAbsent("GRID", com.adel.assistant.data.DxfLayerInfo("GRID", 8, true))
+                            m.copy(
+                                lines = m.lines + glines,
+                                texts = m.texts + gtexts,
+                                layers = layers
+                            )
+                        }
+                        message = "گرید: ${glines.size} خط، ${gtexts.size} متن روی لایه GRID"
+                        cadTool = CadTool.None
+                    }
+                    showGridParamsDialog = false
+                    gridCornerBr = null; gridCornerTl = null
+                }) { Text("اعمال گرید") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showGridParamsDialog = false
+                    gridCornerBr = null; gridCornerTl = null
+                    cadTool = CadTool.None
+                }) { Text("لغو") }
+            }
+        )
+    }
+
+    if (showExitSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitSaveDialog = false },
+            title = { Text("ذخیره تغییرات؟") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ترسیم ذخیره نشده است. مانند اتوکد:", fontSize = 13.sp)
+                    if (openedDxfName != null) {
+                        Text("فایل بازشده: $openedDxfName", fontSize = 12.sp, color = Color.Gray)
+                    } else {
+                        Text("فایل قبلی وجود ندارد — نام جدید لازم است.", fontSize = 12.sp, color = Color.Gray)
+                    }
+                }
+            },
+            confirmButton = {
+                Column {
+                    if (openedDxfName != null) {
+                        TextButton(onClick = {
+                            if (saveCombined(openedDxfName!!)) {
+                                showExitSaveDialog = false
+                                onBack()
+                            }
+                        }) { Text("ذخیره روی همان فایل") }
+                    }
+                    TextButton(onClick = {
+                        showExitSaveDialog = false
+                        showSaveDxfDialog = true
+                        // پس از ذخیره دستی کاربر باید دوباره خارج شود؛ فلگ خروج بعد از save
+                    }) { Text("ذخیره با نام جدید…") }
+                    TextButton(onClick = {
+                        showExitSaveDialog = false
+                        docDirty = false
+                        onBack()
+                    }) { Text("بدون ذخیره خارج شو", color = Color(0xFFC62828)) }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitSaveDialog = false }) { Text("انصراف") }
+            }
+        )
+    }
+
+if (showSaveDxfDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDxfDialog = false },
             title = { Text("ذخیره DXF") },
@@ -2261,9 +2448,7 @@ if (zoomWindowMode) {
                             val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
                                 if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
                             }
-                            val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
-                            FileExport.exportTextToDocuments(context, name, body, "application/dxf")
-                            message = "ذخیره شد: $name"
+                            saveCombined(name)
                         } catch (e: Exception) {
                             message = "خطا ذخیره: ${e.message}"
                         }
@@ -2274,10 +2459,10 @@ if (zoomWindowMode) {
                             val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
                                 if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
                             }
-                            val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
-                            FileExport.exportTextToDocuments(context, name, body, "application/dxf")
-                            PendingMapOpen.setDxf(body, name)
-                            message = "ذخیره و آماده نمایش: $name"
+                            if (saveCombined(name)) {
+                                PendingMapOpen.setDxf(buildCombinedDxf(), name)
+                                message = "ذخیره و آماده نمایش: $name"
+                            }
                         } catch (e: Exception) {
                             message = "خطا: ${e.message}"
                         }
@@ -2297,7 +2482,7 @@ if (zoomWindowMode) {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ترسیم", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن").forEach { (tool, label) ->
+                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن", CadTool.DrawGrid to "گرید").forEach { (tool, label) ->
                             FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = label }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
