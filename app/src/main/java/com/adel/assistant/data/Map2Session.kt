@@ -89,7 +89,7 @@ object Map2Session {
     fun pointsByCode(code: String): List<Map2Point> {
         val c = code.trim().lowercase()
         if (c.isBlank()) return points
-        return points.filter { it.code.trim().lowercase().let { cd -> cd == c || cd.startsWith("$c ") || cd.startsWith("$c-") || cd.startsWith("$c_") || codeBase(cd) == c } }
+        return points.filter { it.code.trim().lowercase().let { cd -> cd == c || cd.startsWith("${c} ") || cd.startsWith("${c}-") || cd.startsWith("${c}_") || codeBase(cd) == c } }
     }
 
     fun groups(): List<String> =

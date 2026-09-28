@@ -195,8 +195,8 @@ fun Map2Screen(
                     onOpenMap = { onOpenMap(null) }
                 )
                 Map2Tab.DIMS -> Map2DimsTab(color, numKb, selectedIds, onOpenVolume)
-                Map2Tab.THREED -> Map2ThreeDTab(color, numKb, onOpenMap, onOpenTopography, onOpenProfile)
-                Map2Tab.DRAW -> Map2DrawTab(color, filterCode, onOpenDxf, onOpenMap)
+                Map2Tab.THREED -> Map2ThreeDTab(color, numKb, onOpenMap, onOpenTopography, onOpenProfile, onOpenVolume)
+                Map2Tab.DRAW -> Map2DrawTab(color, filterCode, onOpenDxf, { onOpenMap(null) })
                 Map2Tab.ALIGN -> Map2AlignTab(color, onOpenAlign)
             }
         }
@@ -545,7 +545,8 @@ private fun Map2ThreeDTab(
     numKb: KeyboardOptions,
     onOpenMap: (String?) -> Unit,
     onOpenTopography: () -> Unit,
-    onOpenProfile: () -> Unit
+    onOpenProfile: () -> Unit,
+    onOpenVolume: () -> Unit
 ) {
     var code by remember { mutableStateOf("tp") }
     var interval by remember { mutableStateOf(Map2Session.topoInterval.toString()) }
