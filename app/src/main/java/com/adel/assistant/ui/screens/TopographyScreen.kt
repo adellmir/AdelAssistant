@@ -62,7 +62,8 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 zoom = 1f; pan = Offset.Zero
                 showInterval = true
                 rebuild()
-            } else message = "حداقل ۳ نقطه معتبر لازم است."
+                message = if (tp.size >= 3) "${tp.size} نقطه با کد tp" else "${parsed.size} نقطه خوانده شد"
+            } else message = "حداقل ۳ نقطه معتبر لازم است (خوانده‌شده: ${parsedAll.size}). جداکننده فاصله یا ویرگول؛ اعشار با . یا ,"
         } catch (e: Exception) { message = "خطا در خواندن فایل: ${e.message}" }
     }
 

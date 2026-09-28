@@ -404,33 +404,11 @@ object MonitoringAnalyzer {
     /** parse simple N,X,Y,Z or X,Y,Z,N lines */
     fun parsePointsFile(text: String, fileName: String = ""): List<MonPoint> {
         val datOrder = fileName.lowercase().endsWith(".dat")
-        val out = mutableListOf<MonPoint>()
-        text.lineSequence().forEach { raw ->
-            val line = raw.trim()
-            if (line.isEmpty() || line.startsWith("#") || line.startsWith("*")) return@forEach
-            val parts = line.split(',', '\t', ';', ' ').map { it.trim() }.filter { it.isNotEmpty() }
-            if (parts.size < 3) return@forEach
-            fun d(s: String) = s.replace(',', '.').toDoubleOrNull()
-            // name first: dat = N Y X Z | else N X Y Z
-            if (parts.size >= 4 && d(parts[1]) != null && d(parts[2]) != null && d(parts[3]) != null) {
-                val name = parts[0]
-                if (d(parts[0]) == null || name.any { it.isLetter() }) {
-                    val x = if (datOrder) d(parts[2])!! else d(parts[1])!!
-                    val y = if (datOrder) d(parts[1])!! else d(parts[2])!!
-                    val z = d(parts[3])!!
-                    out.add(MonPoint(name, x, y, z))
-                    return@forEach
-                }
-            }
-            // without name: dat = Y X Z | else X Y Z
-            if (d(parts[0]) != null && d(parts[1]) != null && d(parts[2]) != null) {
-                val name = parts.getOrNull(3)?.takeIf { d(it) == null } ?: "P${out.size + 1}"
-                val x = if (datOrder) d(parts[1])!! else d(parts[0])!!
-                val y = if (datOrder) d(parts[0])!! else d(parts[1])!!
-                val z = d(parts[2])!!
-                out.add(MonPoint(name, x, y, z))
-            }
-        }
-        return out
+        var auto = 1
+        return text.lineSequence().mapNotNull { raw ->
+            val sp = PointConverter.parseSurveyLine(raw, datOrder) ?: return@mapNotNull null
+            val name = if (sp.id.isBlank() || sp.id == "P") "P${auto++}" else sp.id
+            MonPoint(name, sp.x, sp.y, sp.z)
+        }.toList()
     }
 }

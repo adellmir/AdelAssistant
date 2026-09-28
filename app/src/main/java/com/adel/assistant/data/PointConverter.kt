@@ -10,6 +10,7 @@ object PointConverter {
         "idx" -> parseIdx(text)
         "dxf" -> parseDxf(text)
         "kml" -> KmlParser.parseKmlText(text).points
+        // DAT نقشه‌برداری: N Y X Z D
         "dat" -> parseDelimited(text, datOrder = true)
         else -> parseDelimited(text, datOrder = false)
     }
@@ -28,7 +29,6 @@ object PointConverter {
     fun write(points: List<SurveyPoint>, extension: String): String = when (extension.lowercase()) {
         "csv" -> points.joinToString("\n", "ID,X,Y,Z,CODE\n") { p -> "${p.id},${f(p.x)},${f(p.y)},${f(p.z)},${p.code}" }
         "txt" -> points.joinToString("\n") { p -> listOf(p.id, f(p.x), f(p.y), f(p.z), p.code).joinToString("\t") }
-        // DAT نقشه‌برداری: N Y X Z D  (nyxzd)
         "dat" -> points.joinToString("\n") { p -> listOf(p.id, f(p.y), f(p.x), f(p.z), p.code).joinToString("\t") }
         "dxf" -> dxf(points)
         "gsi" -> gsi(points)
@@ -38,23 +38,143 @@ object PointConverter {
     }
 
     /**
-     * @param datOrder اگر true باشد ترتیب فایل N Y X Z D است (پسوند .dat)
-     *                 و به مختصات داخلی N X Y Z D تبدیل می‌شود.
+     * ارقام فارسی/عربی → انگلیسی
      */
-    private fun parseDelimited(text: String, datOrder: Boolean = false): List<SurveyPoint> = text.lineSequence().mapNotNull { line ->
-        val s = line.trim()
-        if (s.isBlank() || s.startsWith("#") || s.lowercase().contains("id,x,y,z") || s.lowercase().contains("id,y,x,z")) return@mapNotNull null
-        val a = s.split(Regex("[,;\\t ]+")).filter { it.isNotBlank() }
-        if (a.size < 4) return@mapNotNull null
-        val c1 = a.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        val c2 = a.getOrNull(2)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        val z = a.getOrNull(3)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        // dat: N Y X Z D  →  داخلی x=Easting=c2, y=Northing=c1
-        // else: N X Y Z D → داخلی x=c1, y=c2
-        val x = if (datOrder) c2 else c1
-        val y = if (datOrder) c1 else c2
-        SurveyPoint(a[0].trim('"'), x, y, z, a.drop(4).joinToString(" "))
-    }.toList()
+    fun normalizeDigits(s: String): String {
+        val fa = "۰۱۲۳۴۵۶۷۸۹"
+        val ar = "٠١٢٣٤٥٦٧٨٩"
+        val sb = StringBuilder(s.length)
+        for (ch in s) {
+            val fi = fa.indexOf(ch)
+            val ai = ar.indexOf(ch)
+            when {
+                fi >= 0 -> sb.append(fi)
+                ai >= 0 -> sb.append(ai)
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString()
+    }
+
+    fun parseNumberToken(s: String): Double? =
+        s.trim().trim('"').replace(',', '.').toDoubleOrNull()
+
+    /**
+     * تجزیه یک خط نقطه.
+     * جداکننده بین فیلدها: فاصله، تب، ; یا ,
+     * اعشار داخل عدد: نقطه یا ویرگول (مثلاً 512345,67)
+     * ترتیب عادی: N X Y Z [کد…]
+     * datOrder=true: N Y X Z [کد…] → داخلی X=Easting ، Y=Northing
+     */
+    fun parseSurveyLine(raw: String, datOrder: Boolean = false): SurveyPoint? {
+        var line = normalizeDigits(raw.trim()).removePrefix("\uFEFF")
+        if (line.isBlank()) return null
+        if (line.startsWith("#") || line.startsWith("//") || line.startsWith("*")) return null
+        val low = line.lowercase()
+        if (low.startsWith("id") && (low.contains("x") || low.contains("east") || low.contains("north"))) return null
+        if (low.contains("pointno") || low.contains("header") || low == "end") return null
+
+        // ۱) اولویت با جداکنندهٔ فاصله/تب/سمیکالن تا ویرگولِ اعشار حفظ شود
+        var tokens = line.split(Regex("""[\t ;]+""")).map { it.trim().trim(',') }.filter { it.isNotEmpty() }
+
+        // ۲) اگر فیلد کافی نبود، ویرگول را جداکننده بگیر
+        if (tokens.size < 3) {
+            tokens = line.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        }
+
+        // ۳) هنوز کم است → استخراج همهٔ اعداد با regex
+        if (tokens.size < 3) {
+            val numRe = Regex("""[+-]?\d+(?:[.,]\d+)?""")
+            val nums = numRe.findAll(line).mapNotNull { parseNumberToken(it.value) }.toList()
+            if (nums.size < 3) return null
+            val firstNum = numRe.find(line)
+            val idPart = if (firstNum != null && firstNum.range.first > 0) {
+                line.substring(0, firstNum.range.first).trim().trim(',', ' ', '\t')
+            } else ""
+            val hasId = idPart.isNotBlank() && parseNumberToken(idPart) == null
+            return if (hasId && nums.size >= 3) {
+                val x = if (datOrder) nums[1] else nums[0]
+                val y = if (datOrder) nums[0] else nums[1]
+                val z = nums[2]
+                SurveyPoint(idPart.trim('"'), x, y, z, "")
+            } else if (nums.size >= 3) {
+                // ممکن است عدد اول شماره نقطه باشد
+                val x = if (datOrder) nums[1] else nums[0]
+                val y = if (datOrder) nums[0] else nums[1]
+                val z = nums.getOrNull(2) ?: 0.0
+                // اگر ۴ عدد و اول شبیه شماره نقطهٔ کوچک
+                if (nums.size >= 4 && kotlin.math.abs(nums[0]) < 1e7 && kotlin.math.abs(nums[1]) > 1e4) {
+                    val xx = if (datOrder) nums[2] else nums[1]
+                    val yy = if (datOrder) nums[1] else nums[2]
+                    val zz = nums[3]
+                    SurveyPoint(nums[0].toLong().toString(), xx, yy, zz, "")
+                } else {
+                    SurveyPoint("P", x, y, z, "")
+                }
+            } else null
+        }
+
+        fun num(i: Int) = tokens.getOrNull(i)?.let { parseNumberToken(it) }
+
+        // N X Y Z [code] یا N Y X Z [code]
+        if (tokens.size >= 4 && num(1) != null && num(2) != null && num(3) != null) {
+            val id = tokens[0].trim('"')
+            val c1 = num(1)!!
+            val c2 = num(2)!!
+            val z = num(3)!!
+            val x = if (datOrder) c2 else c1
+            val y = if (datOrder) c1 else c2
+            val code = tokens.drop(4).joinToString(" ").trim()
+            return SurveyPoint(id, x, y, z, code)
+        }
+
+        // بدون نام: X Y Z یا Y X Z
+        if (tokens.size >= 3 && num(0) != null && num(1) != null && num(2) != null) {
+            // اگر ۴ مقدار عددی و اول کوچک → احتمالاً شماره نقطه
+            if (tokens.size >= 4 && num(3) != null &&
+                kotlin.math.abs(num(0)!!) < 1e7 && kotlin.math.abs(num(1)!!) > 1e4
+            ) {
+                val id = tokens[0]
+                val c1 = num(1)!!
+                val c2 = num(2)!!
+                val z = num(3)!!
+                val x = if (datOrder) c2 else c1
+                val y = if (datOrder) c1 else c2
+                val code = tokens.drop(4).joinToString(" ").trim()
+                return SurveyPoint(id, x, y, z, code)
+            }
+            val c0 = num(0)!!
+            val c1 = num(1)!!
+            val c2 = num(2)!!
+            val x = if (datOrder) c1 else c0
+            val y = if (datOrder) c0 else c1
+            val z = c2
+            val code = tokens.drop(3).filter { parseNumberToken(it) == null }.joinToString(" ")
+            return SurveyPoint("P", x, y, z, code)
+        }
+
+        // نام + X Y (بدون Z)
+        if (tokens.size >= 3 && num(1) != null && num(2) != null && num(0) == null) {
+            val c1 = num(1)!!
+            val c2 = num(2)!!
+            val x = if (datOrder) c2 else c1
+            val y = if (datOrder) c1 else c2
+            return SurveyPoint(tokens[0].trim('"'), x, y, 0.0, tokens.drop(3).joinToString(" "))
+        }
+
+        return null
+    }
+
+    private fun parseDelimited(text: String, datOrder: Boolean = false): List<SurveyPoint> {
+        var autoId = 1
+        return text.lineSequence().mapNotNull { raw ->
+            val p = parseSurveyLine(raw, datOrder) ?: return@mapNotNull null
+            if (p.id.isBlank() || p.id == "P") {
+                SurveyPoint((autoId++).toString(), p.x, p.y, p.z, p.code)
+            } else p
+        }.toList()
+    }
+
 
     private fun parseIdx(text: String): List<SurveyPoint> {
         val r = Regex("^\\s*\\d+\\s*,\\s*\\\"([^\\\"]+)\\\"\\s*,\\s*\\\"([^\\\"]*)\\\"\\s*,\\s*([-+0-9.]+)\\s*,\\s*([-+0-9.]+)\\s*,\\s*([-+0-9.]+)")

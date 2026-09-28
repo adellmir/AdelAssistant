@@ -69,10 +69,13 @@ private fun AlignCoordinateTab(color: Color) {
 
     fun loadText(text: String, fileName: String = ""): List<GsiPoint> {
         val lower = fileName.lowercase()
-        // فایل .dat نقشه‌برداری: N Y X Z D
         if (lower.endsWith(".dat")) {
             val b = GsiParser.parseDat(text)
             if (b.isNotEmpty()) return b
+        }
+        if (lower.endsWith(".gsi")) {
+            val g = GsiParser.parse(text)
+            if (g.isNotEmpty()) return g
         }
         val a = GsiParser.parseTxt(text)
         if (a.isNotEmpty()) return a
@@ -84,9 +87,8 @@ private fun AlignCoordinateTab(color: Color) {
     val picker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val name = uri.lastPathSegment.orEmpty()
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
-            val pts = loadText(text, name)
+            val pts = loadText(text, uri.lastPathSegment.orEmpty())
             if (loadTarget == "control") {
                 controlPts = pts
                 status = "کنترل: ${pts.size} نقطه"
@@ -94,7 +96,7 @@ private fun AlignCoordinateTab(color: Color) {
                 surveyPts = pts
                 status = "برداشت: ${pts.size} نقطه"
             }
-            if (pts.isEmpty()) status = "نقطه‌ای از فایل خوانده نشد — فرمت N,X,Y,Z یا DAT(N,Y,X,Z)"
+            if (pts.isEmpty()) status = "نقطه‌ای از فایل خوانده نشد — فرمت N,X,Y,Z یا X,Y,Z"
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
         }
