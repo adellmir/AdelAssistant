@@ -237,9 +237,32 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                                             minute = editMinute.ifBlank { p.minute },
                                             calendarEventId = editEventId
                                         )
-                                        ProjectStore.save(context, updated)
+                                        val y = updated.year.toIntOrNullFa() ?: year
+                                        val m = updated.month.toIntOrNullFa() ?: month
+                                        val d = updated.day.toIntOrNullFa() ?: (selectedDay ?: 1)
+                                        val hh = updated.hour.toIntOrNullFa() ?: 9
+                                        val mm = updated.minute.toIntOrNullFa() ?: 0
+                                        val desc = buildString {
+                                            append("کارفرما: ${updated.employer}\n")
+                                            if (updated.phone.isNotBlank()) append("تلفن: ${updated.phone}\n")
+                                            if (updated.description.isNotBlank()) append(updated.description)
+                                            append("\nمبلغ: ${formatEn("%.0f", updated.amount)}")
+                                        }
+                                        val newEid = com.adel.assistant.data.CalendarHelper.updateProjectEvent(
+                                            context = context,
+                                            eventId = updated.calendarEventId.toLongOrNull(),
+                                            title = "پروژه: ${updated.name}",
+                                            description = desc,
+                                            yearJalali = y,
+                                            monthJalali = m,
+                                            dayJalali = d,
+                                            hour = hh,
+                                            minute = mm
+                                        )
+                                        val finalEntry = if (newEid != null) updated.copy(calendarEventId = newEid.toString()) else updated
+                                        ProjectStore.save(context, finalEntry)
                                         editingRow = null
-                                        statusMsg = "ویرایش ثبت شد"
+                                        statusMsg = if (newEid != null) "ویرایش ثبت شد (+ تقویم)" else "ویرایش ثبت شد (تقویم به‌روز نشد)"
                                         selectDay(selectedDay!!)
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = color),

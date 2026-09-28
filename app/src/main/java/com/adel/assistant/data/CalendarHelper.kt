@@ -72,7 +72,6 @@ object CalendarHelper {
         }
     }
 
-    private 
     /**
      * حذف رویداد از تقویم دستگاه (و در صورت همگام‌سازی، از Google Calendar).
      */
@@ -123,7 +122,57 @@ object CalendarHelper {
         }
     }
 
-fun primaryCalendarId(context: Context): Long? {
+
+    /**
+     * به‌روزرسانی رویداد موجود (تاریخ/ساعت/عنوان/توضیح).
+     * اگر eventId نامعتبر باشد، رویداد جدید درج می‌کند و id جدید برمی‌گرداند.
+     */
+    fun updateProjectEvent(
+        context: Context,
+        eventId: Long?,
+        title: String,
+        description: String,
+        yearJalali: Int,
+        monthJalali: Int,
+        dayJalali: Int,
+        hour: Int,
+        minute: Int,
+        durationMinutes: Int = 60
+    ): Long? {
+        return try {
+            val (gy, gm, gd) = jalaliToGregorian(yearJalali, monthJalali, dayJalali)
+            val start = Calendar.getInstance().apply {
+                set(Calendar.YEAR, gy)
+                set(Calendar.MONTH, gm - 1)
+                set(Calendar.DAY_OF_MONTH, gd)
+                set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+                set(Calendar.MINUTE, minute.coerceIn(0, 59))
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val end = start.clone() as Calendar
+            end.add(Calendar.MINUTE, durationMinutes)
+            val values = ContentValues().apply {
+                put(CalendarContract.Events.DTSTART, start.timeInMillis)
+                put(CalendarContract.Events.DTEND, end.timeInMillis)
+                put(CalendarContract.Events.TITLE, title)
+                put(CalendarContract.Events.DESCRIPTION, description)
+                put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            }
+            if (eventId != null && eventId > 0) {
+                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+                val n = context.contentResolver.update(uri, values, null, null)
+                if (n > 0) return eventId
+            }
+            // درج جدید
+            insertProjectEvent(context, title, description, yearJalali, monthJalali, dayJalali, hour, minute, durationMinutes)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun primaryCalendarId(context: Context): Long? {
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.IS_PRIMARY,
