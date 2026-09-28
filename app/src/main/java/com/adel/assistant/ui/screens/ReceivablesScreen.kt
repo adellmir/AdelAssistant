@@ -20,17 +20,53 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
+import com.adel.assistant.data.tomanToProjectInput
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
+
+private data class EmployerGroup(
+    val employer: String,
+    val phone: String,
+    val projects: List<ProjectEntry>,
+    val totalWork: Double,
+    val totalReceived: Double,
+    val totalRemain: Double
+)
+
+/** مبلغ به میلیون تومان برای متن پیامک */
+private fun formatMillionToman(toman: Double): String {
+    val m = tomanToProjectInput(toman)
+    return if (kotlin.math.abs(m - m.toLong().toDouble()) < 1e-6) {
+        formatMoney(m, 0)
+    } else {
+        formatMoney(m, 2)
+    }
+}
+
+private fun smsBodyForClaims(totalRemainToman: Double): String {
+    val amount = formatMillionToman(totalRemainToman)
+    return "با سلام جهت پرداخت هزینه نقشه‌برداری به‌مبلغ $amount م تومان. ممنون می‌شوم پس از پرداخت اطلاع‌رسانی بفرمایید.\n" +
+        "کارت: 5859831142797561\n" +
+        "شبا: 430180000000242375213376"
+}
+
+private fun projectDateLabel(p: ProjectEntry): String {
+    val d = p.day.ifBlank { "—" }
+    val m = p.month.ifBlank { "—" }
+    val y = p.year.ifBlank { "—" }
+    return "$y/$m/$d"
+}
 
 @Composable
 fun ReceivablesScreen(
@@ -42,6 +78,7 @@ fun ReceivablesScreen(
     var name by remember { mutableStateOf("") }
     var employer by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) } // 0 مانده 1 پرداخت‌شده
+    var reportMode by remember { mutableStateOf(false) }
     var all by remember { mutableStateOf(ProjectStore.all(context)) }
     var editing by remember { mutableStateOf<ProjectEntry?>(null) }
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -50,27 +87,56 @@ fun ReceivablesScreen(
         all = ProjectStore.all(context)
     }
 
-    val filtered = all.filter { p ->
+    // فیلتر پایه روی نام پروژه / کارفرما
+    val baseFiltered = all.filter { p ->
         if (p.name.isBlank() || p.name == "پروژه") return@filter false
         val okName = name.isBlank() || p.name.contains(name, true)
         val okEmp = employer.isBlank() || p.employer.contains(employer, true)
-        val isPaid = p.remaining <= 1e-9 || (p.amount > 0 && p.settled >= p.amount - 1e-9)
-        val okTab = if (tab == 0) !isPaid else isPaid
-        okName && okEmp && okTab
-    }.sortedByDescending { it.dateSortKey }
+        okName && okEmp
+    }
 
-    val totalWork = filtered.sumOf { it.amount }
-    val totalReceived = filtered.sumOf { it.settled }
-    val totalRemain = filtered.sumOf { it.remaining.coerceAtLeast(0.0) }
+    // در حالت عادی: فقط مانده یا فقط پرداخت‌شده؛ در گزارش: همه (با فیلتر نام)
+    val listForView = if (reportMode) {
+        baseFiltered
+    } else {
+        baseFiltered.filter { p ->
+            val isPaid = ProjectStore.isFullySettled(p)
+            if (tab == 0) !isPaid else isPaid
+        }
+    }
 
-    Column(modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
+    val totalWork = listForView.sumOf { it.amount }
+    val totalReceived = listForView.sumOf { it.settled }
+    val totalRemain = listForView.sumOf { it.remaining.coerceAtLeast(0.0) }
+
+    // گروه‌بندی بر اساس کارفرما — پروژه‌ها جدید→قدیم؛ کارفرماها بر اساس جدیدترین پروژه
+    val groups: List<EmployerGroup> = listForView
+        .groupBy { it.employer.trim().ifBlank { "بدون کارفرما" } }
+        .map { (emp, rows) ->
+            val sorted = rows.sortedByDescending { it.dateSortKey }
+            EmployerGroup(
+                employer = emp,
+                phone = sorted.firstOrNull { it.phone.isNotBlank() }?.phone.orEmpty(),
+                projects = sorted,
+                totalWork = rows.sumOf { it.amount },
+                totalReceived = rows.sumOf { it.settled },
+                totalRemain = rows.sumOf { it.remaining.coerceAtLeast(0.0) }
+            )
+        }
+        .sortedByDescending { it.projects.firstOrNull()?.dateSortKey.orEmpty() }
+
+    Column(modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 16.dp)) {
         ScreenTopBar(title = "مطالبات کلی", color = color, onBack = onBack)
 
+        // سربرگ‌ها
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
             listOf("مانده", "پرداخت‌شده‌ها").forEachIndexed { i, label ->
-                val selected = tab == i
+                val selected = !reportMode && tab == i
                 Surface(
-                    modifier = Modifier.weight(1f).clickable { tab = i },
+                    modifier = Modifier.weight(1f).clickable {
+                        tab = i
+                        reportMode = false
+                    },
                     shape = RoundedCornerShape(10.dp),
                     color = if (selected) color.copy(alpha = 0.18f) else Color.Transparent
                 ) {
@@ -82,89 +148,119 @@ fun ReceivablesScreen(
                     )
                 }
             }
-        }
-
-        Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("کارکرد: ${formatMoney(totalWork)}", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                Text("دریافتی: ${formatMoney(totalReceived)}", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                if (tab == 0) {
-                    Text("مانده: ${formatMoney(totalRemain)}", style = MaterialTheme.typography.titleSmall, color = color)
+            if (reportMode) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    color = color.copy(alpha = 0.22f)
+                ) {
+                    Text(
+                        "گزارش",
+                        modifier = Modifier.padding(vertical = 10.dp).fillMaxWidth(),
+                        color = color,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-            Button(onClick = { refresh() }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.weight(1f)) { Text("جستجو") }
-            OutlinedButton(onClick = { name = ""; employer = ""; refresh() }, modifier = Modifier.weight(1f)) { Text("رفرش") }
+
+        // کادر محاسبات در یک خط
+        Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("کارکرد: ${formatMoney(totalWork)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                Text("دریافتی: ${formatMoney(totalReceived)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                Text(
+                    "مانده: ${formatMoney(totalRemain)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = color,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
-        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(filtered, key = { it.row }) { p ->
-                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("${p.name} — ${p.employer}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-                            Text(
-                                "مبلغ: ${formatMoney(p.amount)} | دریافتی: ${formatMoney(p.settled)} | مانده: ${formatMoney(p.remaining)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("نام پروژه") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = employer,
+                onValueChange = { employer = it },
+                label = { Text("کارفرما") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+        }
+
+        // جستجو / رفرش / گزارش
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
+        ) {
+            Button(
+                onClick = { refresh() },
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                modifier = Modifier.weight(1f)
+            ) { Text("جستجو") }
+            OutlinedButton(
+                onClick = { name = ""; employer = ""; refresh() },
+                modifier = Modifier.weight(1f)
+            ) { Text("رفرش") }
+            OutlinedButton(
+                onClick = {
+                    reportMode = true
+                    refresh()
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("گزارش") }
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            items(groups, key = { it.employer }) { g ->
+                EmployerClaimsCard(
+                    group = g,
+                    color = color,
+                    reportMode = reportMode,
+                    remainingTab = tab == 0 && !reportMode,
+                    onCall = {
+                        if (g.phone.isNotBlank()) {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${g.phone}")))
                         }
-                        if (p.phone.isNotBlank()) {
-                            IconButton(onClick = {
-                                context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phone}")))
-                            }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
-                            }
-                            IconButton(onClick = {
-                                val msg = "سلام، مانده مطالبه پروژه «${p.name}» برابر ${formatMoney(p.remaining)} می‌باشد. با سپاس"
-                                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("smsto:${p.phone}")
-                                    putExtra("sms_body", msg)
-                                }
-                                try {
-                                    context.startActivity(intent)
-                                } catch (_: Exception) {}
-                            }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Filled.Sms, contentDescription = "پیامک", tint = color)
-                            }
+                    },
+                    onSms = {
+                        if (g.phone.isBlank()) return@EmployerClaimsCard
+                        val remain = if (reportMode) g.totalRemain else g.totalRemain
+                        if (remain <= 1e-9 && reportMode) return@EmployerClaimsCard
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("smsto:${g.phone}")
+                            putExtra("sms_body", smsBodyForClaims(remain.coerceAtLeast(0.0)))
                         }
-                        IconButton(onClick = { onInvoice(p) }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
                         }
-                        IconButton(onClick = { editing = p }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
-                        }
-                        if (tab == 0) {
-                            // تیک = علامت پرداخت‌شده
-                            Checkbox(
-                                checked = false,
-                                onCheckedChange = { checked ->
-                                    if (checked) {
-                                        ProjectStore.markSettled(context, p.row)
-                                        refresh()
-                                    }
-                                }
-                            )
-                        } else {
-                            // تیک برداشته شود = برگشت به مانده (لغو پرداخت‌شده)
-                            Checkbox(
-                                checked = true,
-                                onCheckedChange = { checked ->
-                                    if (!checked) {
-                                        ProjectStore.markUnsettled(context, p.row)
-                                        refresh()
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
+                    },
+                    onToggleSettle = { p, settle ->
+                        if (settle) ProjectStore.markSettled(context, p.row)
+                        else ProjectStore.markUnsettled(context, p.row)
+                        refresh()
+                    },
+                    onEdit = { editing = it },
+                    onInvoice = onInvoice
+                )
             }
         }
     }
@@ -212,5 +308,106 @@ fun ReceivablesScreen(
             },
             dismissButton = { TextButton(onClick = { editing = null }) { Text("انصراف") } }
         )
+    }
+}
+
+@Composable
+private fun EmployerClaimsCard(
+    group: EmployerGroup,
+    color: Color,
+    reportMode: Boolean,
+    remainingTab: Boolean,
+    onCall: () -> Unit,
+    onSms: () -> Unit,
+    onToggleSettle: (ProjectEntry, Boolean) -> Unit,
+    onEdit: (ProjectEntry) -> Unit,
+    onInvoice: (ProjectEntry) -> Unit
+) {
+    val showSms = if (reportMode) group.totalRemain > 1e-9 else true
+    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // سربرگ کارفرما
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        group.employer,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (reportMode) {
+                        Text(
+                            "کارکرد: ${formatMoney(group.totalWork)}  |  مطالبات: ${formatMoney(group.totalRemain)}  |  مانده: ${formatMoney(group.totalRemain)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    } else if (remainingTab) {
+                        Text(
+                            "جمع مطالبات: ${formatMoney(group.totalRemain)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = color,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    } else {
+                        Text(
+                            "جمع دریافتی: ${formatMoney(group.totalReceived)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = color,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                if (group.phone.isNotBlank()) {
+                    IconButton(onClick = onCall, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
+                    }
+                    if (showSms) {
+                        IconButton(onClick = onSms, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Sms, contentDescription = "پیامک", tint = color)
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = TextSecondary.copy(alpha = 0.25f))
+
+            // لیست پروژه‌ها — جدیدترین اول
+            group.projects.forEach { p ->
+                val settled = ProjectStore.isFullySettled(p)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                        Text(
+                            "${projectDateLabel(p)}  |  ${formatMoney(if (remainingTab) p.remaining.coerceAtLeast(0.0) else p.amount)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    IconButton(onClick = { onInvoice(p) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.ReceiptLong, contentDescription = "فاکتور", tint = color)
+                    }
+                    IconButton(onClick = { onEdit(p) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = color)
+                    }
+                    // مانده: خالی (تیک = تسویه) | گزارش/پرداخت‌شده: پر اگر تسویه شده
+                    Checkbox(
+                        checked = if (remainingTab) false else settled,
+                        onCheckedChange = { checked ->
+                            if (remainingTab) {
+                                if (checked) onToggleSettle(p, true)
+                            } else {
+                                onToggleSettle(p, checked)
+                            }
+                        },
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
     }
 }
