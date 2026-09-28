@@ -287,8 +287,6 @@ object VolumeEngine {
         val b = bounds(all)
         val hull = boundary ?: convexHull(all)
         val gs = adaptiveGridSize(b[0], b[1], b[2], b[3], gridSize.coerceAtLeast(0.1))
-        val ex = exT
-        val de = deT
         var cut = 0.0; var fill = 0.0; var area = 0.0; var sumDz = 0.0
         var minDz = Double.POSITIVE_INFINITY; var maxDz = Double.NEGATIVE_INFINITY; var n = 0
         val cellArea = gs * gs
@@ -300,8 +298,8 @@ object VolumeEngine {
                 val cx = x + gs / 2.0; val cy = y + gs / 2.0
                 if (pointInPolygon(cx, cy, hull)) {
                     cellGuard++
-                    val ze = interpolateIdw(cx, cy, ex) ?: continue
-                    val zd = interpolateIdw(cx, cy, de) ?: continue
+                    val ze = interpolateIdw(cx, cy, exT) ?: continue
+                    val zd = interpolateIdw(cx, cy, deT) ?: continue
                     val dz = ze - zd
                     if (dz > 0) cut += cellArea * dz else if (dz < 0) fill += cellArea * abs(dz)
                     area += cellArea; sumDz += dz
@@ -316,7 +314,7 @@ object VolumeEngine {
         if (n in 1..20) warnings.add("تعداد سلول کم — Grid Size را کوچک‌تر کنید")
         val cutAdj = cut * cutFactor; val fillAdj = fill * fillFactor
         return VolumeResult(
-            "Grid", ex.size, de.size, existingName, designName,
+            "Grid", exT.size, deT.size, existingName, designName,
             cutAdj, fillAdj, cutAdj - fillAdj, area,
             if (n > 0) minDz else 0.0, if (n > 0) maxDz else 0.0,
             if (n > 0) sumDz / n else 0.0, n, gs, warnings
