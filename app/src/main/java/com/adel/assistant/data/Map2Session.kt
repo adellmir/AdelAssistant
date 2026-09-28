@@ -61,7 +61,7 @@ object Map2Session {
         lastVolume = null
     }
 
-    fun setPoints(list: List<Map2Point>) {
+    fun replacePoints(list: List<Map2Point>) {
         points = list
         clearResults()
     }
