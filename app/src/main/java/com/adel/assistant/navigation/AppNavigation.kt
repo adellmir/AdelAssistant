@@ -208,14 +208,11 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
             Map2Screen(
                 color = ToolPrimary,
                 onBack = { navController.popBackStack() },
-                onOpenMap = { mode ->
-                    if (mode.isNullOrBlank()) navController.navigate(Routes.TOOL_DXF_PREVIEW)
-                    else navController.navigate(Routes.TOOL_DXF_PREVIEW + "?profileMode=" + mode)
-                },
-                onOpenVolume = { navController.navigate(Routes.TOOL_VOLUME) },
                 onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) },
                 onOpenProfile = { navController.navigate(Routes.TOOL_PROFILE) },
+                onOpenVolume = { navController.navigate(Routes.TOOL_VOLUME) },
                 onOpenAlign = { navController.navigate(Routes.TOOL_ALIGN) },
+                onOpenArea = { navController.navigate(Routes.TOOL_AREA) },
                 onOpenDxf = { navController.navigate(Routes.TOOL_DXF) }
             )
         }
