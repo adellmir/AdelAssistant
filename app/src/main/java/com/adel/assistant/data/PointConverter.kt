@@ -10,7 +10,8 @@ object PointConverter {
         "idx" -> parseIdx(text)
         "dxf" -> parseDxf(text)
         "kml" -> KmlParser.parseKmlText(text).points
-        else -> parseDelimited(text)
+        "dat" -> parseDelimited(text, datOrder = true)
+        else -> parseDelimited(text, datOrder = false)
     }
 
     /** خواندن از بایت (برای KMZ که باینری/زیپ است) */
@@ -26,7 +27,9 @@ object PointConverter {
 
     fun write(points: List<SurveyPoint>, extension: String): String = when (extension.lowercase()) {
         "csv" -> points.joinToString("\n", "ID,X,Y,Z,CODE\n") { p -> "${p.id},${f(p.x)},${f(p.y)},${f(p.z)},${p.code}" }
-        "txt", "dat" -> points.joinToString("\n") { p -> listOf(p.id, f(p.x), f(p.y), f(p.z), p.code).joinToString("\t") }
+        "txt" -> points.joinToString("\n") { p -> listOf(p.id, f(p.x), f(p.y), f(p.z), p.code).joinToString("\t") }
+        // DAT نقشه‌برداری: N Y X Z D  (nyxzd)
+        "dat" -> points.joinToString("\n") { p -> listOf(p.id, f(p.y), f(p.x), f(p.z), p.code).joinToString("\t") }
         "dxf" -> dxf(points)
         "gsi" -> gsi(points)
         "idx" -> idx(points)
@@ -34,14 +37,22 @@ object PointConverter {
         else -> throw IllegalArgumentException("فرمت خروجی پشتیبانی نمی‌شود")
     }
 
-    private fun parseDelimited(text: String): List<SurveyPoint> = text.lineSequence().mapNotNull { line ->
+    /**
+     * @param datOrder اگر true باشد ترتیب فایل N Y X Z D است (پسوند .dat)
+     *                 و به مختصات داخلی N X Y Z D تبدیل می‌شود.
+     */
+    private fun parseDelimited(text: String, datOrder: Boolean = false): List<SurveyPoint> = text.lineSequence().mapNotNull { line ->
         val s = line.trim()
-        if (s.isBlank() || s.startsWith("#") || s.lowercase().contains("id,x,y,z")) return@mapNotNull null
+        if (s.isBlank() || s.startsWith("#") || s.lowercase().contains("id,x,y,z") || s.lowercase().contains("id,y,x,z")) return@mapNotNull null
         val a = s.split(Regex("[,;\\t ]+")).filter { it.isNotBlank() }
         if (a.size < 4) return@mapNotNull null
-        val x = a.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
-        val y = a.getOrNull(2)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
+        val c1 = a.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
+        val c2 = a.getOrNull(2)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
         val z = a.getOrNull(3)?.replace(',', '.')?.toDoubleOrNull() ?: return@mapNotNull null
+        // dat: N Y X Z D  →  داخلی x=Easting=c2, y=Northing=c1
+        // else: N X Y Z D → داخلی x=c1, y=c2
+        val x = if (datOrder) c2 else c1
+        val y = if (datOrder) c1 else c2
         SurveyPoint(a[0].trim('"'), x, y, z, a.drop(4).joinToString(" "))
     }.toList()
 

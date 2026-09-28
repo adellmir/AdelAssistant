@@ -57,7 +57,13 @@ object ProfileEngine {
 
     fun stations(vertices: List<AlignmentVertex>, step: Double, startChainage: Double = 0.0): List<AlignmentStation> {
         if (vertices.size < 2) return emptyList()
-        val cleanStep = step.coerceAtLeast(0.01)
+        val totalLen = polylineLength(vertices)
+        // جلوگیری از کرش/OOM: حداکثر حدود ۲۰۰۰ ایستگاه
+        val maxStations = 2000
+        var cleanStep = step.coerceAtLeast(0.01)
+        if (totalLen / cleanStep > maxStations) {
+            cleanStep = (totalLen / maxStations).coerceAtLeast(0.01)
+        }
         val out = mutableListOf<AlignmentStation>()
         var accumulated = 0.0
         var next = 0.0
@@ -66,7 +72,9 @@ object ProfileEngine {
             val b = vertices[seg + 1]
             val len = hypot(b.x - a.x, b.y - a.y)
             if (len < 1e-9) continue
+            var guard = 0
             while (next <= accumulated + len + 1e-9) {
+                if (++guard > maxStations + 5) break
                 val d = (next - accumulated).coerceIn(0.0, len)
                 val t = d / len
                 out += AlignmentStation(
@@ -82,7 +90,7 @@ object ProfileEngine {
             val b = vertices.last()
             out += AlignmentStation(startChainage + accumulated, b.x, b.y)
         }
-        return out.distinctBy { (it.chainage * 1_000_000.0).toLong() }
+        return out.distinctBy { (it.chainage * 1_000_000.0).toLong() }.take(maxStations + 1)
     }
 
     fun sample(
@@ -162,18 +170,22 @@ object ProfileEngine {
         val zStepMeters = max(0.1, stationStep * 2.0)
 
         var gx = floorTo(result.rows.first().chainage, max(0.01, if (result.rows.size > 1) result.rows[1].chainage - result.rows[0].chainage else 10.0))
-        while (gx <= result.rows.last().chainage + 1e-9) {
+        var gGuard = 0
+        val gxStep = (xStep * h).coerceAtLeast(1e-6)
+        while (gx <= result.rows.last().chainage + 1e-9 && gGuard++ < 500) {
             val xx = gx / h
             lines += DxfLine(xx, y0, xx, y1, gridLayer, 8)
             texts += DxfText(xx, y0 - 2.5 / v, 1.8 / v, stationLabel(gx), labelLayer, 7)
-            gx += xStep * h
+            gx += gxStep
         }
         var gz = zMin
-        while (gz <= zMax + 1e-9) {
+        gGuard = 0
+        val gzStep = zStepMeters.coerceAtLeast(1e-6)
+        while (gz <= zMax + 1e-9 && gGuard++ < 500) {
             val yy = gz / v
             lines += DxfLine(x0, yy, x1, yy, gridLayer, 8)
             texts += DxfText(x0 - 8.0 / h, yy, 1.8 / v, String.format(java.util.Locale.US, "%.2f", gz), labelLayer, 7)
-            gz += zStepMeters
+            gz += gzStep
         }
 
         surfaces.forEachIndexed { surfaceIndex, s ->

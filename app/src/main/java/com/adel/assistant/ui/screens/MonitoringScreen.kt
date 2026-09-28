@@ -334,7 +334,7 @@ private fun NewEpochDialog(color: Color, onDismiss: () -> Unit, onCreated: (MonE
             val text = context.contentResolver.openInputStream(uri)?.use { ins ->
                 BufferedReader(InputStreamReader(ins)).readText()
             } ?: return@rememberLauncherForActivityResult
-            val parsed = MonitoringAnalyzer.parsePointsFile(text)
+            val parsed = MonitoringAnalyzer.parsePointsFile(text, uri.lastPathSegment.orEmpty())
             points = parsed
             msg = "${parsed.size} نقطه خوانده شد"
         } catch (_: Exception) {
@@ -396,7 +396,7 @@ private fun BaseEditor(
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use { BufferedReader(InputStreamReader(it)).readText() } ?: return@rememberLauncherForActivityResult
-            val parsed = MonitoringAnalyzer.parsePointsFile(text).map {
+            val parsed = MonitoringAnalyzer.parsePointsFile(text, uri.lastPathSegment.orEmpty()).map {
                 it.copy(isBm = it.name.startsWith("S", true) || it.name.startsWith("BM", true))
             }.toMutableList()
             points = parsed

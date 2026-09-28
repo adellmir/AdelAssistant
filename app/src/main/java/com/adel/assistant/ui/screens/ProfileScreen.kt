@@ -70,15 +70,22 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
     }
 
     LaunchedEffect(ProfileSession.alignmentResult) {
-        if (ProfileSession.alignmentResult.size >= 2) {
-            val verts = ProfileSession.alignmentResult
+        val verts = ProfileSession.alignmentResult
+        if (verts.size >= 2) {
             alignment = verts
             val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
             val start = startText.replace(',', '.').toDoubleOrNull() ?: 0.0
-            val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
+            // از Snapshot فعلی سطوح استفاده کن (نه کپی کهنه)
+            val slots = ProfileSession.surfaces
+            val ss = slots.mapNotNull { runCatching { ProfileEngine.buildSurface(it.name, it.points) }.getOrNull() }
             if (ss.isNotEmpty()) {
-                result = withContext(Dispatchers.Default) { ProfileEngine.sample(verts, ss, step, start) }
-                message = "الایمنت دریافت شد؛ پروفیل محاسبه شد"
+                result = withContext(Dispatchers.Default) {
+                    runCatching { ProfileEngine.sample(verts, ss, step, start) }.getOrElse {
+                        ProfileResult2(emptyList(), emptyList(), 0.0, 0.0, 0.0, listOf("خطا در محاسبه: ${it.message}"))
+                    }
+                }
+                message = if (result?.rows?.isNotEmpty() == true) "الایمنت دریافت شد؛ پروفیل محاسبه شد"
+                else "الایمنت ثبت شد ولی پروفیل خالی است (نقاط خارج از TIN؟)"
             } else message = "ابتدا حداقل یک سطح وارد کن"
             ProfileSession.clearAlignmentResult()
         }
@@ -86,11 +93,14 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
 
     fun recalc() {
         val verts = alignment
-        if (verts.size >= 2 && surfaces.isNotEmpty()) {
+        val slots = ProfileSession.surfaces
+        if (verts.size >= 2 && slots.isNotEmpty()) {
             val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
             val start = startText.replace(',', '.').toDoubleOrNull() ?: 0.0
-            val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
-            result = ProfileEngine.sample(verts, ss, step, start)
+            val ss = slots.mapNotNull { runCatching { ProfileEngine.buildSurface(it.name, it.points) }.getOrNull() }
+            if (ss.isNotEmpty()) {
+                result = runCatching { ProfileEngine.sample(verts, ss, step, start) }.getOrNull()
+            }
         }
     }
 
@@ -102,7 +112,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
         containerColor = Background,
         topBar = {
             TopAppBar(
-                title = { Text("پروفیل طولی") },
+                title = { Text("ترسیم پروفیل") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "بازگشت") } },
                 actions = {
                     IconButton(onClick = { showScaleDialog = true }) { Icon(Icons.Filled.Straighten, "مقیاس") }
@@ -250,11 +260,14 @@ private fun ProfileChart(
         fun sy(z: Double) = top + ((maxZ - z) / zRange).toFloat() * plotH
         fun tx(p: Offset) = Offset(left + (p.x - left) * zoom + pan.x, top + (p.y - top) * zoom + pan.y)
 
-        // station grid
-        result.rows.forEach { row ->
+        // station grid (حداکثر ~۴۰ برچسب برای جلوگیری از سنگینی)
+        val labelStride = (result.rows.size / 40).coerceAtLeast(1)
+        result.rows.forEachIndexed { idx, row ->
             val x = tx(Offset(sx(row.chainage), top)).x
             drawLine(Color(0x3344FFFFFF), Offset(x, top), Offset(x, top + plotH), 1f)
-            drawText(textMeasurer, ProfileEngine.stationLabel(row.chainage), topLeft = Offset(x - 22f, size.height - 34f), style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp))
+            if (idx % labelStride == 0 || idx == result.rows.lastIndex) {
+                drawText(textMeasurer, ProfileEngine.stationLabel(row.chainage), topLeft = Offset(x - 22f, size.height - 34f), style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp))
+            }
         }
         val stationStep = if (result.rows.size > 1) (result.rows[1].chainage - result.rows[0].chainage).coerceAtLeast(0.01) else 10.0
         val verticalGridStep = stationStep * 2.0
