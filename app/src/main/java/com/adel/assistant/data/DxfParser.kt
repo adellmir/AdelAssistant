@@ -54,7 +54,7 @@ data class DxfModel(
         append("0\nTABLE\n2\nLAYER\n70\n${layerNames.size}\n")
         layerNames.forEach { name ->
             val info = layers[name]
-            val col = info?.color ?: 7
+            val col = info?.colorAci ?: 7
             append("0\nLAYER\n2\n$name\n70\n0\n62\n$col\n6\nCONTINUOUS\n")
         }
         append("0\nENDTAB\n0\nENDSEC\n")
