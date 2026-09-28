@@ -125,10 +125,11 @@ fun ProjectRegisterScreen(
             hour = hour.ifBlank { "9" },
             minute = minute.ifBlank { "0" }
         )
-        ProjectStore.save(context, entry)
-
+        var calEventId = entry.calendarEventId
         var calMsg = ""
         if (addToCalendar && name.isNotBlank()) {
+            // اگر ویرایش و event قبلی هست، حذف و درج مجدد
+            calEventId.toLongOrNull()?.let { CalendarHelper.deleteEvent(context, it) }
             val eventId = CalendarHelper.insertProjectEvent(
                 context = context,
                 title = "پروژه: $name",
@@ -144,9 +145,14 @@ fun ProjectRegisterScreen(
                 hour = hour.toIntOrNullFa() ?: 9,
                 minute = minute.toIntOrNullFa() ?: 0
             )
-            calMsg = if (eventId != null) " + تقویم" else " (تقویم ثبت نشد — مجوز یا تقویم را چک کنید)"
+            if (eventId != null) {
+                calEventId = eventId.toString()
+                calMsg = " + تقویم"
+            } else {
+                calMsg = " (تقویم ثبت نشد — مجوز یا تقویم را چک کنید)"
+            }
         }
-
+        ProjectStore.save(context, entry.copy(calendarEventId = calEventId))
         statusMsg = "ثبت شد$calMsg"
         clearForm()
     }

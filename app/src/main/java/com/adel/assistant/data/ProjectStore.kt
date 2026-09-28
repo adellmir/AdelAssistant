@@ -15,7 +15,9 @@ data class ProjectEntry(
     val description: String,
     val year: String,
     val hour: String = "9",
-    val minute: String = "0"
+    val minute: String = "0",
+    /** شناسه رویداد تقویم دستگاه / Google Calendar */
+    val calendarEventId: String = ""
 ) {
     val dateSortKey: String
         get() = "%s%02d%02d".format(
@@ -45,7 +47,8 @@ object ProjectStore {
                     description = r[9],
                     year = r.getOrElse(10) { "1405" },
                     hour = r.getOrElse(11) { "9" },
-                    minute = r.getOrElse(12) { "0" }
+                    minute = r.getOrElse(12) { "0" },
+                    calendarEventId = r.getOrElse(13) { "" }
                 )
             } catch (e: Exception) {
                 null
@@ -58,7 +61,7 @@ object ProjectStore {
             listOf(
                 it.row, it.day, it.month, it.name,
                 it.amount.toString(), it.settled.toString(), it.remaining.toString(),
-                it.employer, it.phone, it.description, it.year, it.hour, it.minute
+                it.employer, it.phone, it.description, it.year, it.hour, it.minute, it.calendarEventId
             )
         }
         CsvStore.overwriteAll(context, CSV, rows)

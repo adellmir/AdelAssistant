@@ -72,7 +72,58 @@ object CalendarHelper {
         }
     }
 
-    private fun primaryCalendarId(context: Context): Long? {
+    private 
+    /**
+     * حذف رویداد از تقویم دستگاه (و در صورت همگام‌سازی، از Google Calendar).
+     */
+    fun deleteEvent(context: Context, eventId: Long): Boolean {
+        return try {
+            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+            val n = context.contentResolver.delete(uri, null, null)
+            n > 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * حذف با عنوان و روز در صورت نبودن eventId ذخیره‌شده.
+     */
+    fun deleteEventByTitleAndDay(
+        context: Context,
+        title: String,
+        yearJalali: Int,
+        monthJalali: Int,
+        dayJalali: Int
+    ): Boolean {
+        return try {
+            val (gy, gm, gd) = jalaliToGregorian(yearJalali, monthJalali, dayJalali)
+            val start = Calendar.getInstance().apply {
+                set(Calendar.YEAR, gy); set(Calendar.MONTH, gm - 1); set(Calendar.DAY_OF_MONTH, gd)
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
+            }
+            val end = start.clone() as Calendar
+            end.add(Calendar.DAY_OF_MONTH, 1)
+            val projection = arrayOf(CalendarContract.Events._ID, CalendarContract.Events.TITLE)
+            val sel = "(${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} < ?) AND ${CalendarContract.Events.TITLE} = ?"
+            val args = arrayOf(start.timeInMillis.toString(), end.timeInMillis.toString(), title)
+            context.contentResolver.query(
+                CalendarContract.Events.CONTENT_URI, projection, sel, args, null
+            )?.use { c ->
+                var ok = false
+                val idIdx = c.getColumnIndex(CalendarContract.Events._ID)
+                while (c.moveToNext()) {
+                    val id = c.getLong(idIdx)
+                    if (deleteEvent(context, id)) ok = true
+                }
+                ok
+            } ?: false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+fun primaryCalendarId(context: Context): Long? {
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.IS_PRIMARY,
