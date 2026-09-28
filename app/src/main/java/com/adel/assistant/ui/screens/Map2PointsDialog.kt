@@ -51,7 +51,7 @@ fun Map2PointsDialog(
     var stagingRowId by remember { mutableStateOf<String?>(null) }
     var showStaging by remember { mutableStateOf(false) }
     var selectMode by remember { mutableStateOf("none") } // none|all|range
-    var selectedIdx by remember { mutableStateOf(setOf<Int>()) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var rangeA by remember { mutableStateOf("") }
     var rangeB by remember { mutableStateOf("") }
     var sortBy by remember { mutableStateOf("name") }
@@ -85,10 +85,10 @@ fun Map2PointsDialog(
                     code = s.code
                 )
             }
-            selectedIdx = emptySet()
-            selectMode = "none"
+            selectedIds = staging.map { it.id }.toSet()
+            selectMode = "all"
             showStaging = true
-            message = "${staging.size} نقطه — گزینش و ثبت کنید"
+            message = "${staging.size} نقطه خوانده شد — همه انتخاب‌اند؛ ثبت یا بستن لیست را بزن"
         } catch (e: Exception) {
             message = "خطا: ${e.message}"
         }
@@ -151,7 +151,7 @@ fun Map2PointsDialog(
                                         onClick = {
                                             stagingRowId = row.id
                                             staging = row.points
-                                            selectedIdx = emptySet()
+                                            selectedIds = emptySet()
                                             showStaging = true
                                         },
                                         modifier = Modifier.size(32.dp)
@@ -242,7 +242,32 @@ fun Map2PointsDialog(
     if (showStaging) {
         val list = sortedStaging()
         Dialog(
-            onDismissRequest = { showStaging = false },
+            onDismissRequest = {
+                // بستن با سیستم = ثبت انتخاب‌شده‌ها
+                val listNow = when (sortBy) {
+                    "code" -> staging.sortedBy { it.code }
+                    "num" -> staging.sortedWith(compareBy({ it.name.toDoubleOrNull() ?: Double.MAX_VALUE }, { it.name }))
+                    else -> staging.sortedBy { it.name }
+                }
+                val chosen = if (selectedIds.isEmpty()) listNow else listNow.filter { it.id in selectedIds }
+                if (chosen.isNotEmpty()) {
+                    val rid = stagingRowId
+                    if (rid != null && Map2Session.categoryById(rid) != null) {
+                        Map2Session.updateCategory(rid) { c ->
+                            val existingIds = c.points.map { it.id }.toSet()
+                            val merged = c.points + chosen.filter { it.id !in existingIds }
+                            c.copy(points = if (c.points.isEmpty()) chosen else merged)
+                        }
+                    } else {
+                        Map2Session.addCategory(points = chosen)
+                    }
+                    message = "${chosen.size} نقطه ثبت شد"
+                    syncRowsFromSession()
+                }
+                staging = emptyList()
+                selectedIds = emptySet()
+                showStaging = false
+            },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
@@ -259,10 +284,10 @@ fun Map2PointsDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = {
-                            selectMode = "all"; selectedIdx = list.indices.toSet()
+                            selectMode = "all"; selectedIds = list.map { it.id }.toSet()
                         }, contentPadding = PaddingValues(4.dp)) { Text("همه", fontSize = 10.sp) }
                         TextButton(onClick = {
-                            selectMode = "none"; selectedIdx = emptySet()
+                            selectMode = "none"; selectedIds = emptySet()
                         }, contentPadding = PaddingValues(4.dp)) { Text("هیچ", fontSize = 10.sp) }
                         OutlinedTextField(
                             rangeA, { rangeA = it.filter { ch -> ch.isDigit() } },
@@ -281,7 +306,8 @@ fun Map2PointsDialog(
                         TextButton(onClick = {
                             val a = (rangeA.toIntOrNull() ?: 1).coerceAtLeast(1)
                             val b = (rangeB.toIntOrNull() ?: list.size).coerceAtMost(list.size)
-                            selectedIdx = ((a - 1) until b).filter { it in list.indices }.toSet()
+                            val slice = ((a - 1) until b).mapNotNull { list.getOrNull(it)?.id }
+                            selectedIds = slice.toSet()
                             selectMode = "range"
                         }, contentPadding = PaddingValues(4.dp)) { Text("بازه", fontSize = 10.sp) }
                         TextButton(onClick = { sortBy = "num" }, contentPadding = PaddingValues(4.dp)) {
@@ -295,10 +321,9 @@ fun Map2PointsDialog(
                         }
                         TextButton(
                             onClick = {
-                                if (selectedIdx.isNotEmpty()) {
-                                    val removeNames = selectedIdx.mapNotNull { list.getOrNull(it)?.id }.toSet()
-                                    staging = staging.filter { it.id !in removeNames }
-                                    selectedIdx = emptySet()
+                                if (selectedIds.isNotEmpty()) {
+                                    staging = staging.filter { it.id !in selectedIds }
+                                    selectedIds = emptySet()
                                 } else {
                                     staging = emptyList()
                                 }
@@ -307,20 +332,35 @@ fun Map2PointsDialog(
                         ) { Text("پاک", fontSize = 10.sp, color = Color(0xFFE57373)) }
                         TextButton(
                             onClick = {
-                                val chosen = if (selectedIdx.isEmpty()) list
-                                else selectedIdx.mapNotNull { list.getOrNull(it) }
-                                val rid = stagingRowId
-                                if (rid != null) {
-                                    Map2Session.updateCategory(rid) { c ->
-                                        c.copy(points = c.points + chosen)
+                                fun commitStaging() {
+                                    val chosen = if (selectedIds.isEmpty()) list
+                                    else list.filter { it.id in selectedIds }
+                                    if (chosen.isEmpty()) {
+                                        message = "نقطه‌ای برای ثبت نیست"
+                                        return
                                     }
-                                } else {
-                                    Map2Session.addCategory(points = chosen)
+                                    val rid = stagingRowId
+                                    if (rid != null && Map2Session.categoryById(rid) != null) {
+                                        Map2Session.updateCategory(rid) { c ->
+                                            // جایگزینی نقاط این ورود (نه فقط append تکراری)
+                                            val existingIds = c.points.map { it.id }.toSet()
+                                            val merged = c.points + chosen.filter { it.id !in existingIds }
+                                            c.copy(points = if (c.points.isEmpty()) chosen else merged)
+                                        }
+                                    } else {
+                                        val cat = Map2Session.addCategory(
+                                            name = Map2Session.nextPgName(),
+                                            points = chosen
+                                        )
+                                        stagingRowId = cat.id
+                                    }
+                                    staging = emptyList()
+                                    selectedIds = emptySet()
+                                    showStaging = false
+                                    syncRowsFromSession()
+                                    message = "${chosen.size} نقطه به دسته اضافه شد"
                                 }
-                                staging = emptyList()
-                                showStaging = false
-                                syncRowsFromSession()
-                                message = "${chosen.size} نقطه به دسته اضافه شد"
+                                commitStaging()
                             },
                             contentPadding = PaddingValues(4.dp)
                         ) { Text("ثبت", fontSize = 10.sp, color = color) }
@@ -348,21 +388,20 @@ fun Map2PointsDialog(
                         )
                     }
                     LazyColumn(Modifier.weight(1f)) {
-                        items(list.size) { idx ->
-                            val p = list[idx]
-                            val sel = idx in selectedIdx
+                        items(list, key = { it.id }) { p ->
+                            val sel = p.id in selectedIds
                             Row(
                                 Modifier
                                     .fillMaxWidth()
                                     .background(if (sel) color.copy(alpha = 0.2f) else Color.Transparent)
                                     .clickable {
-                                        selectedIdx = if (sel) selectedIdx - idx else selectedIdx + idx
+                                        selectedIds = if (sel) selectedIds - p.id else selectedIds + p.id
                                     }
                                     .padding(4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(sel, {
-                                    selectedIdx = if (it) selectedIdx + idx else selectedIdx - idx
+                                    selectedIds = if (it) selectedIds + p.id else selectedIds - p.id
                                 }, colors = CheckboxDefaults.colors(checkedColor = color))
                                 Column {
                                     if (showName) Text(p.name, color = Color.White, fontSize = 12.sp)
@@ -377,7 +416,26 @@ fun Map2PointsDialog(
                             }
                         }
                     }
-                    TextButton(onClick = { showStaging = false }) { Text("بستن لیست") }
+                    TextButton(onClick = {
+                        val chosen = if (selectedIds.isEmpty()) list else list.filter { it.id in selectedIds }
+                        if (chosen.isNotEmpty()) {
+                            val rid = stagingRowId
+                            if (rid != null && Map2Session.categoryById(rid) != null) {
+                                Map2Session.updateCategory(rid) { c ->
+                                    val existingIds = c.points.map { it.id }.toSet()
+                                    val merged = c.points + chosen.filter { it.id !in existingIds }
+                                    c.copy(points = if (c.points.isEmpty()) chosen else merged)
+                                }
+                            } else {
+                                Map2Session.addCategory(points = chosen)
+                            }
+                            message = "${chosen.size} نقطه ثبت شد"
+                            syncRowsFromSession()
+                        }
+                        staging = emptyList()
+                        selectedIds = emptySet()
+                        showStaging = false
+                    }) { Text("بستن لیست (ثبت)") }
                 }
             }
         }
