@@ -40,7 +40,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
     val surfaces = ProfileSession.surfaces
     var intervalText by remember { mutableStateOf("10") }
     var startText by remember { mutableStateOf("0") }
-    var horizontalScaleText by remember { mutableStateOf("1000") }
+    var horizontalScaleText by remember { mutableStateOf("100") }
     var verticalScaleText by remember { mutableStateOf("100") }
     var result by remember { mutableStateOf<ProfileResult2?>(null) }
     var alignment by remember { mutableStateOf<List<AlignmentVertex>>(emptyList()) }
@@ -61,6 +61,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 val pts = PointConverter.readBytes(bytes, uri.lastPathSegment ?: "points.txt")
                     .map { VolPoint(it.id, it.x, it.y, it.z, it.code) }
                 if (pts.size >= 3) loaded += ProfileSurfaceSlot(name, pts)
+                else message = "فایل $name کمتر از ۳ نقطه داشت"
             } catch (_: Exception) { }
         }
         if (loaded.isNotEmpty()) {
@@ -70,22 +71,15 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
     }
 
     LaunchedEffect(ProfileSession.alignmentResult) {
-        val verts = ProfileSession.alignmentResult
-        if (verts.size >= 2) {
+        if (ProfileSession.alignmentResult.size >= 2) {
+            val verts = ProfileSession.alignmentResult
             alignment = verts
             val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
             val start = startText.replace(',', '.').toDoubleOrNull() ?: 0.0
-            // از Snapshot فعلی سطوح استفاده کن (نه کپی کهنه)
-            val slots = ProfileSession.surfaces
-            val ss = slots.mapNotNull { runCatching { ProfileEngine.buildSurface(it.name, it.points) }.getOrNull() }
+            val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
             if (ss.isNotEmpty()) {
-                result = withContext(Dispatchers.Default) {
-                    runCatching { ProfileEngine.sample(verts, ss, step, start) }.getOrElse {
-                        ProfileResult2(emptyList(), emptyList(), 0.0, 0.0, 0.0, listOf("خطا در محاسبه: ${it.message}"))
-                    }
-                }
-                message = if (result?.rows?.isNotEmpty() == true) "الایمنت دریافت شد؛ پروفیل محاسبه شد"
-                else "الایمنت ثبت شد ولی پروفیل خالی است (نقاط خارج از TIN؟)"
+                result = withContext(Dispatchers.Default) { ProfileEngine.sample(verts, ss, step, start) }
+                message = "الایمنت دریافت شد؛ پروفیل محاسبه شد"
             } else message = "ابتدا حداقل یک سطح وارد کن"
             ProfileSession.clearAlignmentResult()
         }
@@ -93,18 +87,15 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
 
     fun recalc() {
         val verts = alignment
-        val slots = ProfileSession.surfaces
-        if (verts.size >= 2 && slots.isNotEmpty()) {
+        if (verts.size >= 2 && surfaces.isNotEmpty()) {
             val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
             val start = startText.replace(',', '.').toDoubleOrNull() ?: 0.0
-            val ss = slots.mapNotNull { runCatching { ProfileEngine.buildSurface(it.name, it.points) }.getOrNull() }
-            if (ss.isNotEmpty()) {
-                result = runCatching { ProfileEngine.sample(verts, ss, step, start) }.getOrNull()
-            }
+            val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
+            result = ProfileEngine.sample(verts, ss, step, start)
         }
     }
 
-    val hScale = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 1000.0
+    val hScale = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
     val vScale = verticalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
     val scale = ProfileScale(hScale, vScale)
 
@@ -112,7 +103,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
         containerColor = Background,
         topBar = {
             TopAppBar(
-                title = { Text("ترسیم پروفیل") },
+                title = { Text("پروفیل طولی") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "بازگشت") } },
                 actions = {
                     IconButton(onClick = { showScaleDialog = true }) { Icon(Icons.Filled.Straighten, "مقیاس") }
@@ -128,7 +119,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("تنظیمات پروفیل", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Button(onClick = { pickSurface.launch(arrayOf("*/*")) }) {
+                        Button(onClick = { pickSurface.launch(arrayOf("*/*")) }) { // چند فایل همزمان
                             Icon(Icons.Filled.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(5.dp)); Text("ورود سطوح")
                         }
                     }
@@ -140,7 +131,8 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                             IconButton(onClick = { ProfileSession.updateSurfaces(surfaces.filterIndexed { idx, _ -> idx != i }) }) { Icon(Icons.Filled.Delete, "حذف") }
                         }
                     }
-                    if (surfaces.isEmpty()) Text("هنوز سطحی وارد نشده است.", color = TextSecondary)
+                    if (surfaces.isEmpty()) Text("هنوز سطحی وارد نشده — می‌توانید چند فایل سطح را همزمان انتخاب کنید.", color = TextSecondary)
+                    else Text("${surfaces.size} سطح فعال", color = TextSecondary, fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(intervalText, { intervalText = it; recalc() }, label = { Text("فاصله ایستگاه (m)") }, singleLine = true, modifier = Modifier.weight(1f))
                         OutlinedTextField(startText, { startText = it; recalc() }, label = { Text("کیلومتر شروع") }, singleLine = true, modifier = Modifier.weight(1f))
@@ -188,7 +180,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                             }, modifier = Modifier.weight(1f)) { Text("خروجی CSV") }
                             Button(onClick = {
                                 val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
-                                val model = ProfileEngine.toDxfModel(r, ss, scale)
+                                val model = ProfileEngine.toDxfModel(r, ss, scale, layerName = "PROFILE", textHeightMeters = 0.4)
                                 ProfileSession.beginPlacement(model.toDxfText(), "profile.dxf")
                                 onOpenMap("placement")
                             }, modifier = Modifier.weight(1f)) {
@@ -215,7 +207,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(horizontalScaleText, { horizontalScaleText = it }, label = { Text("مقیاس طولی 1:") }, singleLine = true)
                     OutlinedTextField(verticalScaleText, { verticalScaleText = it }, label = { Text("مقیاس عرضی 1:") }, singleLine = true)
-                    val hh = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 1000.0
+                    val hh = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
                     val vv = verticalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
                     Text("ضریب ترسیم پروفیل (بزرگنمایی عمودی): ${"%.2f".format(hh / vv)}", fontWeight = FontWeight.Bold)
                 }
@@ -260,14 +252,11 @@ private fun ProfileChart(
         fun sy(z: Double) = top + ((maxZ - z) / zRange).toFloat() * plotH
         fun tx(p: Offset) = Offset(left + (p.x - left) * zoom + pan.x, top + (p.y - top) * zoom + pan.y)
 
-        // station grid (حداکثر ~۴۰ برچسب برای جلوگیری از سنگینی)
-        val labelStride = (result.rows.size / 40).coerceAtLeast(1)
-        result.rows.forEachIndexed { idx, row ->
+        // station grid
+        result.rows.forEach { row ->
             val x = tx(Offset(sx(row.chainage), top)).x
             drawLine(Color(0x3344FFFFFF), Offset(x, top), Offset(x, top + plotH), 1f)
-            if (idx % labelStride == 0 || idx == result.rows.lastIndex) {
-                drawText(textMeasurer, ProfileEngine.stationLabel(row.chainage), topLeft = Offset(x - 22f, size.height - 34f), style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp))
-            }
+            drawText(textMeasurer, ProfileEngine.stationLabel(row.chainage), topLeft = Offset(x - 22f, size.height - 34f), style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp))
         }
         val stationStep = if (result.rows.size > 1) (result.rows[1].chainage - result.rows[0].chainage).coerceAtLeast(0.01) else 10.0
         val verticalGridStep = stationStep * 2.0

@@ -4,13 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * نقشه ۲ = همان فضای «نمایش نقشه» با منوی ساختاریافته
- * (فایل / نقاط / ترسیم / اندازه / ویرایش / سه‌بعدی / نمایش).
+ * نقشه ۲ = فضای نمایش نقشه با منوی ساختاریافته (map2Mode).
+ * در صورت profileMode (alignment / placement) همان جریان پروفیل روی نقشه فعال می‌شود.
  */
 @Composable
 fun Map2Screen(
     color: Color,
     onBack: () -> Unit,
+    profileMode: String? = null,
     onOpenTopography: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
     onOpenVolume: () -> Unit = {},
@@ -21,7 +22,7 @@ fun Map2Screen(
     DxfPreviewScreen(
         color = color,
         onBack = onBack,
-        profileMode = null,
+        profileMode = profileMode,
         onOpenTopography = onOpenTopography,
         map2Mode = true,
         onOpenProfile = onOpenProfile,

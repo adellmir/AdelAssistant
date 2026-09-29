@@ -57,13 +57,7 @@ object ProfileEngine {
 
     fun stations(vertices: List<AlignmentVertex>, step: Double, startChainage: Double = 0.0): List<AlignmentStation> {
         if (vertices.size < 2) return emptyList()
-        val totalLen = polylineLength(vertices)
-        // جلوگیری از کرش/OOM: حداکثر حدود ۲۰۰۰ ایستگاه
-        val maxStations = 2000
-        var cleanStep = step.coerceAtLeast(0.01)
-        if (totalLen / cleanStep > maxStations) {
-            cleanStep = (totalLen / maxStations).coerceAtLeast(0.01)
-        }
+        val cleanStep = step.coerceAtLeast(0.01)
         val out = mutableListOf<AlignmentStation>()
         var accumulated = 0.0
         var next = 0.0
@@ -72,9 +66,7 @@ object ProfileEngine {
             val b = vertices[seg + 1]
             val len = hypot(b.x - a.x, b.y - a.y)
             if (len < 1e-9) continue
-            var guard = 0
             while (next <= accumulated + len + 1e-9) {
-                if (++guard > maxStations + 5) break
                 val d = (next - accumulated).coerceIn(0.0, len)
                 val t = d / len
                 out += AlignmentStation(
@@ -90,7 +82,7 @@ object ProfileEngine {
             val b = vertices.last()
             out += AlignmentStation(startChainage + accumulated, b.x, b.y)
         }
-        return out.distinctBy { (it.chainage * 1_000_000.0).toLong() }.take(maxStations + 1)
+        return out.distinctBy { (it.chainage * 1_000_000.0).toLong() }
     }
 
     fun sample(
@@ -140,23 +132,33 @@ object ProfileEngine {
         }
     }
 
-    /** Creates a complete profile drawing model. Units are scaled according to the requested scales. */
+    /**
+     * مدل کامل ترسیم پروفیل.
+     * @param textHeightMeters ارتفاع متن اعداد (پیش‌فرض ۰٫۴ = ۴۰ سانتی‌متر)
+     * @param layerName نام لایه انگلیسی (پیش‌فرض PROFILE)
+     */
     fun toDxfModel(
         result: ProfileResult2,
         surfaces: List<ProfileSurface>,
         scale: ProfileScale,
-        layerName: String = "پروفیل"
+        layerName: String = "PROFILE",
+        textHeightMeters: Double = 0.4
     ): DxfModel {
         val h = scale.horizontal.coerceAtLeast(1.0)
         val v = scale.vertical.coerceAtLeast(1.0)
+        val th = textHeightMeters.coerceAtLeast(0.05)
         val lines = mutableListOf<DxfLine>()
         val texts = mutableListOf<DxfText>()
         val layers = linkedMapOf<String, DxfLayerInfo>()
         fun layer(name: String, color: Int) { layers.putIfAbsent(name, DxfLayerInfo(name, color)) }
-        val gridLayer = layerName
-        val labelLayer = layerName
+        val gridLayer = "PROFILE_GRID"
+        val axisLayer = "PROFILE_AXIS"
+        val labelLayer = "PROFILE_LABEL"
         val surfaceLayer = layerName
         layer(layerName, 3)
+        layer(gridLayer, 8)
+        layer(axisLayer, 7)
+        layer(labelLayer, 7)
 
         if (result.rows.isEmpty()) return DxfModel(emptyList(), emptyList(), emptyList(), layers, 0.0, 0.0, 1.0, 1.0)
         val x0 = result.rows.first().chainage / h
@@ -165,27 +167,35 @@ object ProfileEngine {
         val zMax = ceilTo(result.maxElevation, 2.0)
         val y0 = zMin / v
         val y1 = zMax / v
-        val stationStep = if (result.rows.size > 1) result.rows[1].chainage - result.rows[0].chainage else 10.0
+        val stationStep = if (result.rows.size > 1) {
+            (result.rows[1].chainage - result.rows[0].chainage).coerceAtLeast(0.01)
+        } else 10.0
         val xStep = max(0.001, stationStep / h)
         val zStepMeters = max(0.1, stationStep * 2.0)
 
-        var gx = floorTo(result.rows.first().chainage, max(0.01, if (result.rows.size > 1) result.rows[1].chainage - result.rows[0].chainage else 10.0))
-        var gGuard = 0
-        val gxStep = (xStep * h).coerceAtLeast(1e-6)
-        while (gx <= result.rows.last().chainage + 1e-9 && gGuard++ < 500) {
+        // محورهای اصلی (ضخیم‌تر از گرید)
+        lines += DxfLine(x0, y0, x1, y0, axisLayer, 7) // محور افقی (ایستگاه)
+        lines += DxfLine(x0, y0, x0, y1, axisLayer, 7) // محور قائم (ارتفاع)
+
+        // گرید عمودی + برچسب ایستگاه
+        var gx = floorTo(result.rows.first().chainage, stationStep)
+        var guard = 0
+        while (gx <= result.rows.last().chainage + 1e-9 && guard < 5000) {
             val xx = gx / h
             lines += DxfLine(xx, y0, xx, y1, gridLayer, 8)
-            texts += DxfText(xx, y0 - 2.5 / v, 1.8 / v, stationLabel(gx), labelLayer, 7)
-            gx += gxStep
+            texts += DxfText(xx, y0 - th * 1.5, th, stationLabel(gx), labelLayer, 7)
+            gx += stationStep
+            guard++
         }
+        // گرید افقی + برچسب ارتفاع
         var gz = zMin
-        gGuard = 0
-        val gzStep = zStepMeters.coerceAtLeast(1e-6)
-        while (gz <= zMax + 1e-9 && gGuard++ < 500) {
+        guard = 0
+        while (gz <= zMax + 1e-9 && guard < 5000) {
             val yy = gz / v
             lines += DxfLine(x0, yy, x1, yy, gridLayer, 8)
-            texts += DxfText(x0 - 8.0 / h, yy, 1.8 / v, String.format(java.util.Locale.US, "%.2f", gz), labelLayer, 7)
-            gz += gzStep
+            texts += DxfText(x0 - th * 3.0, yy, th, String.format(java.util.Locale.US, "%.2f", gz), labelLayer, 7)
+            gz += zStepMeters
+            guard++
         }
 
         surfaces.forEachIndexed { surfaceIndex, s ->
@@ -198,12 +208,20 @@ object ProfileEngine {
                 previous = p
             }
             val lastZ = result.rows.asReversed().firstNotNullOfOrNull { it.elevations[s.name] }
-            if (lastZ != null) texts += DxfText(x1, lastZ / v + 3.0 / v, 2.0 / v, s.name, labelLayer, color)
+            if (lastZ != null) texts += DxfText(x1, lastZ / v + th * 1.2, th, s.name, labelLayer, color)
         }
-        texts += DxfText(x0, y1 + 4.0 / v, 2.2 / v, "پروفیل طولی", labelLayer, 7)
-        texts += DxfText(x0, y1 + 1.0 / v, 1.6 / v, "H=1:${h.toInt()}  V=1:${v.toInt()}  VE=${String.format(java.util.Locale.US, "%.2f", scale.verticalExaggeration)}", labelLayer, 7)
-        val model = DxfModel(lines, emptyList(), texts, layers, min(x0, x1), y0, max(x0, x1), y1 + 8.0 / v)
-        return model.recalculatedBounds()
+        texts += DxfText(x0, y1 + th * 3.0, th * 1.2, "PROFILE", labelLayer, 7)
+        texts += DxfText(
+            x0, y1 + th * 1.2, th,
+            "H=1:${h.toInt()}  V=1:${v.toInt()}  VE=${String.format(java.util.Locale.US, "%.2f", scale.verticalExaggeration)}",
+            labelLayer, 7
+        )
+        val model = DxfModel(lines, emptyList(), texts, layers, min(x0, x1), y0 - th * 4.0, max(x0, x1), y1 + th * 6.0)
+        return try {
+            model.recalculatedBounds()
+        } catch (_: Exception) {
+            model
+        }
     }
 
     private fun floorTo(v: Double, step: Double): Double = kotlin.math.floor(v / step) * step
