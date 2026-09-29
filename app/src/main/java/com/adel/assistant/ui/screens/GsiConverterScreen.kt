@@ -14,6 +14,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,14 +48,20 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     var selectAll by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
     var newestFirst by remember { mutableStateOf(true) }
+    var sortByCode by remember { mutableStateOf(false) }
+    var rangeSelectMode by remember { mutableStateOf(false) }
+    var rangeAnchorId by remember { mutableStateOf<Long?>(null) }
     var editTarget by remember { mutableStateOf<GsiPoint?>(null) }
     var editName by remember { mutableStateOf("") }
     var editE by remember { mutableStateOf("") }
     var editN by remember { mutableStateOf("") }
     var editZ by remember { mutableStateOf("") }
 
-    val displayList = remember(points, newestFirst) {
-        if (newestFirst) points.asReversed() else points
+    val displayList = remember(points, newestFirst, sortByCode) {
+        val base = if (sortByCode) {
+            points.sortedWith(compareBy<GsiPoint>({ it.code }, { it.name }, { it.id }))
+        } else points
+        if (newestFirst) base.asReversed() else base
     }
 
     fun selectedPoints(): List<GsiPoint> {
@@ -156,39 +169,85 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream")) },
-                    colors = ButtonDefaults.buttonColors(containerColor = color)
-                ) { Text("باز کردن") }
-
-                OutlinedButton(
+            // یک ردیف آیکن: باز کردن | ترتیب جدید/قدیم | انتخاب همه | گزینش | بازه | مرتب‌سازی کد
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream")) }
+                ) {
+                    Icon(Icons.Filled.FolderOpen, contentDescription = "باز کردن", tint = color)
+                }
+                IconButton(
                     onClick = { newestFirst = !newestFirst },
                     enabled = points.isNotEmpty()
                 ) {
-                    Text(if (newestFirst) "جدید→قدیم" else "قدیم→جدید")
+                    Icon(
+                        Icons.Filled.SwapVert,
+                        contentDescription = if (newestFirst) "جدید→قدیم" else "قدیم→جدید",
+                        tint = if (points.isNotEmpty()) color else Color.Gray
+                    )
                 }
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
+                IconButton(
                     onClick = {
                         selectAll = true
                         selectedIds = points.map { it.id }.toSet()
+                        rangeAnchorId = null
+                        status = "همه انتخاب شد"
                     },
                     enabled = points.isNotEmpty()
-                ) { Text("انتخاب همه") }
-
-                OutlinedButton(
+                ) {
+                    Icon(Icons.Filled.SelectAll, contentDescription = "انتخاب همه", tint = if (points.isNotEmpty()) color else Color.Gray)
+                }
+                IconButton(
                     onClick = {
                         selectAll = false
                         selectedIds = emptySet()
+                        rangeAnchorId = null
+                        rangeSelectMode = false
+                        status = "گزینش: هیچ‌کدام"
                     },
                     enabled = points.isNotEmpty()
-                ) { Text("گزینش") }
+                ) {
+                    Icon(Icons.Filled.CheckBoxOutlineBlank, contentDescription = "گزینش خالی", tint = if (points.isNotEmpty()) color else Color.Gray)
+                }
+                IconButton(
+                    onClick = {
+                        rangeSelectMode = !rangeSelectMode
+                        rangeAnchorId = null
+                        selectAll = false
+                        status = if (rangeSelectMode) "بازه: دو نقطه ابتدا و انتها را بزن" else "بازه خاموش"
+                    },
+                    enabled = points.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Filled.CheckBox,
+                        contentDescription = "انتخاب بازه‌ای",
+                        tint = if (rangeSelectMode) Color(0xFF81C995) else (if (points.isNotEmpty()) color else Color.Gray)
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        sortByCode = !sortByCode
+                        status = if (sortByCode) "مرتب بر اساس کد" else "مرتب پیش‌فرض"
+                    },
+                    enabled = points.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Filled.SortByAlpha,
+                        contentDescription = "مرتب‌سازی کد",
+                        tint = if (sortByCode) Color(0xFF81C995) else (if (points.isNotEmpty()) color else Color.Gray)
+                    )
+                }
             }
+            Text(
+                "📁 باز کردن  |  ↕ جدید/قدیم  |  ☑ همه  |  ☐ خالی  |  ▣ بازه  |  A کد",
+                color = Color(0xFF8A9280),
+                fontSize = 10.sp,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -231,7 +290,27 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                             checked = checked,
                             onCheckedChange = { on ->
                                 selectAll = false
-                                selectedIds = if (on) selectedIds + p.id else selectedIds - p.id
+                                if (rangeSelectMode) {
+                                    if (rangeAnchorId == null) {
+                                        rangeAnchorId = p.id
+                                        selectedIds = setOf(p.id)
+                                        status = "ابتدای بازه: ${p.name} — نقطه پایان را بزن"
+                                    } else {
+                                        val ids = displayList.map { it.id }
+                                        val i1 = ids.indexOf(rangeAnchorId)
+                                        val i2 = ids.indexOf(p.id)
+                                        if (i1 >= 0 && i2 >= 0) {
+                                            val a = minOf(i1, i2); val b = maxOf(i1, i2)
+                                            selectedIds = ids.subList(a, b + 1).toSet()
+                                            status = "بازه ${b - a + 1} نقطه انتخاب شد"
+                                        } else {
+                                            selectedIds = setOf(p.id)
+                                        }
+                                        rangeAnchorId = null
+                                    }
+                                } else {
+                                    selectedIds = if (on) selectedIds + p.id else selectedIds - p.id
+                                }
                             },
                             colors = CheckboxDefaults.colors(checkedColor = color)
                         )

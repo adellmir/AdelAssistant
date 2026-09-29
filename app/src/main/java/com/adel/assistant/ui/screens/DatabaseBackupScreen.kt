@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.PlumbStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -41,17 +42,39 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
         return try {
             val dir = dataDir()
             val files = dir.listFiles()?.filter { it.isFile } ?: emptyList()
-            if (files.isEmpty()) {
+            val hasPlumb = File(context.filesDir, "plumb_projects.json").exists()
+            if (files.isEmpty() && !hasPlumb) {
                 status = "پایگاهی برای خروجی نیست"
                 return null
             }
             val out = File(context.cacheDir, "AdelAssistant_backup.zip")
             ZipOutputStream(BufferedOutputStream(out.outputStream())).use { zos ->
+                // همه CSV و JSON داخل data/
                 files.forEach { f ->
-                    zos.putNextEntry(ZipEntry(f.name))
+                    zos.putNextEntry(ZipEntry("data/${f.name}"))
                     f.inputStream().use { it.copyTo(zos) }
                     zos.closeEntry()
                 }
+                // شاقولی: JSON پروژه + CSV خروجی
+                val plumbJson = File(context.filesDir, "plumb_projects.json")
+                if (plumbJson.exists()) {
+                    zos.putNextEntry(ZipEntry("plumb_projects.json"))
+                    plumbJson.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+                try {
+                    val csv = PlumbStore.exportCsv(context)
+                    zos.putNextEntry(ZipEntry("plumb_projects.csv"))
+                    zos.write(csv.toByteArray(Charsets.UTF_8))
+                    zos.closeEntry()
+                } catch (_: Exception) {}
+                // JSON خام شاقولی از store
+                try {
+                    val json = PlumbStore.exportJson(context)
+                    zos.putNextEntry(ZipEntry("plumb_export.json"))
+                    zos.write(json.toByteArray(Charsets.UTF_8))
+                    zos.closeEntry()
+                } catch (_: Exception) {}
             }
             // کپی به Documents
             val bytes = out.readBytes()
@@ -61,7 +84,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 bytes,
                 "application/zip"
             )
-            status = "خروجی: ${files.size} فایل → Documents/AdelAssistant"
+            status = "خروجی: data + شاقولی (CSV/JSON) → Documents/AdelAssistant"
             out
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
@@ -77,8 +100,16 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 var entry = zis.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
-                        val name = File(entry.name).name
-                        val target = File(dir, name)
+                        val raw = entry.name.replace("\\", "/")
+                        val name = File(raw).name
+                        val target = when {
+                            name == "plumb_projects.json" || name == "plumb_export.json" ->
+                                File(context.filesDir, "plumb_projects.json")
+                            name == "plumb_projects.csv" -> File(dir, name)
+                            raw.startsWith("data/") -> File(dir, name)
+                            else -> File(dir, name)
+                        }
+                        target.parentFile?.mkdirs()
                         target.outputStream().use { zis.copyTo(it) }
                         n++
                     }

@@ -62,13 +62,12 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 zoom = 1f; pan = Offset.Zero
                 showInterval = true
                 rebuild()
-                message = if (tp.size >= 3) "${tp.size} نقطه با کد tp" else "${parsed.size} نقطه خوانده شد"
-            } else message = "حداقل ۳ نقطه معتبر لازم است (خوانده‌شده: ${parsedAll.size}). جداکننده فاصله یا ویرگول؛ اعشار با . یا ,"
+            } else message = "حداقل ۳ نقطه معتبر لازم است."
         } catch (e: Exception) { message = "خطا در خواندن فایل: ${e.message}" }
     }
 
     Scaffold(
-        containerColor = Background,
+        containerColor = Color(0xFF0D1110),
         topBar = {
             TopAppBar(
                 title = { Text("توپوگرافی") },
@@ -137,7 +136,7 @@ private fun TopographyCanvas(
     onTransform: (Float, Offset) -> Unit
 ) {
     if (result == null || result.points.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("فایل نقاط را وارد کنید") }
+        Box(Modifier.fillMaxSize().background(Color(0xFF0D1110)), contentAlignment = Alignment.Center) { Text("فایل نقاط را وارد کنید", color = Color(0xFFB0B8A8)) }
         return
     }
     val pts = result.points
@@ -149,6 +148,8 @@ private fun TopographyCanvas(
             onTransform((zoom * scaleChange).coerceIn(0.2f, 20f), pan + panChange)
         }
     }) {
+        // پس‌زمینه تیره مثل نقشه ۲
+        drawRect(Color(0xFF0D1110))
         val pad = 30f
         val base = min((size.width - 2 * pad) / span, (size.height - 2 * pad) / span)
         val s = base * zoom
@@ -157,15 +158,15 @@ private fun TopographyCanvas(
 
         result.triangles.forEach { t ->
             val a=pts[t.a]; val b=pts[t.b]; val c=pts[t.c]
-            drawLine(Color(0xFFB0BEC5), Offset(mapX(a.x),mapY(a.y)), Offset(mapX(b.x),mapY(b.y)), 1f)
-            drawLine(Color(0xFFB0BEC5), Offset(mapX(b.x),mapY(b.y)), Offset(mapX(c.x),mapY(c.y)), 1f)
-            drawLine(Color(0xFFB0BEC5), Offset(mapX(c.x),mapY(c.y)), Offset(mapX(a.x),mapY(a.y)), 1f)
+            drawLine(Color(0xFF3A4A40), Offset(mapX(a.x),mapY(a.y)), Offset(mapX(b.x),mapY(b.y)), 1f)
+            drawLine(Color(0xFF3A4A40), Offset(mapX(b.x),mapY(b.y)), Offset(mapX(c.x),mapY(c.y)), 1f)
+            drawLine(Color(0xFF3A4A40), Offset(mapX(c.x),mapY(c.y)), Offset(mapX(a.x),mapY(a.y)), 1f)
         }
         result.contours.segments.forEach { q ->
-            drawLine(Color(0xFF1565C0), Offset(mapX(q.x1),mapY(q.y1)), Offset(mapX(q.x2),mapY(q.y2)), 2f)
+            drawLine(Color(0xFF4FC3F7), Offset(mapX(q.x1),mapY(q.y1)), Offset(mapX(q.x2),mapY(q.y2)), 2f)
         }
         pts.forEach { q ->
-            drawCircle(Color(0xFFE53935), 3.5f, Offset(mapX(q.x),mapY(q.y)))
+            drawCircle(Color(0xFF81C995), 3.5f, Offset(mapX(q.x),mapY(q.y)))
         }
     }
 }
