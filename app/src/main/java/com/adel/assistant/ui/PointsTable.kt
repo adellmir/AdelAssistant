@@ -44,6 +44,7 @@ fun PointsSpreadsheet(
     onChange: (GsiPoint) -> Unit,
     onDelete: ((GsiPoint) -> Unit)? = null,
     onMove: ((GsiPoint) -> Unit)? = null,
+    onNavigate: ((GsiPoint) -> Unit)? = null,
     rowBackground: Color = Color(0xFF1E241A),
     headerBackground: Color = Color(0xFF2A3324)
 ) {
@@ -56,6 +57,7 @@ fun PointsSpreadsheet(
     val wD = 70.dp
     val wDel = 36.dp
     val wMove = 36.dp
+    val wNav = 36.dp
 
     Column(modifier) {
         Row(
