@@ -668,17 +668,17 @@ fun DxfPreviewScreen(
                 } else distanceMsg = "رأس ${draftPts.size} — حداقل ۳"
             }
             CadTool.DrawLine -> {
-                if (draftPts.isEmpty()) {
-                    draftPts = listOf(p)
-                    message = "نقطه دوم خط"
-                } else {
-                    val a = draftPts[0]
-                    mutateCad { m ->
-                        m.copy(lines = m.lines + DxfLine(a.first, a.second, p.first, p.second, drawLayer, 1))
+                // ترسیم پیوسته: هر لمس یک رأس جدید؛ پاره از نقطه قبلی تا این نقطه
+                if (draftPts.isNotEmpty()) {
+                    val a = draftPts.last()
+                    if (kotlin.math.hypot(p.first - a.first, p.second - a.second) > 1e-9) {
+                        mutateCad { m ->
+                            m.copy(lines = m.lines + DxfLine(a.first, a.second, p.first, p.second, drawLayer, 1))
+                        }
                     }
-                    draftPts = emptyList()
-                    message = "خط ترسیم شد"
                 }
+                draftPts = draftPts + p
+                message = "خط پیوسته: ${draftPts.size} رأس — ابزار را ببند یا دوباره خط را بزن برای پایان"
             }
             CadTool.DrawPoly -> {
                 if (draftPts.isNotEmpty()) {
@@ -1713,7 +1713,7 @@ if (zoomWindowMode) {
                                     }
                                     3 -> { // ترسیم
                                         GlassIcon(Icons.Filled.TrendingFlat, "خط") {
-                                            cadTool = CadTool.DrawLine; draftPts = emptyList(); measureMode = false; closeMenus(); message = "خط"
+                                            cadTool = CadTool.DrawLine; draftPts = emptyList(); measureMode = false; closeMenus(); message = "خط پیوسته: اولین نقطه را لمس کن"
                                         }
                                         GlassIcon(Icons.Filled.RadioButtonUnchecked, "دایره") {
                                             cadTool = CadTool.DrawCircle; draftPts = emptyList(); measureMode = false; closeMenus(); message = "مرکز دایره"
@@ -2503,7 +2503,7 @@ if (showSaveDxfDialog) {
                     Text("ترسیم", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن", CadTool.DrawGrid to "گرید").forEach { (tool, label) ->
-                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = label }, label = { Text(label, fontSize = 11.sp) })
+                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = if (tool == CadTool.DrawLine) "خط پیوسته: اولین نقطه" else label }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
                     Text("اندازه", fontWeight = FontWeight.Bold)
