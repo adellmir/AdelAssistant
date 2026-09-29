@@ -11,6 +11,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
+import kotlin.math.hypot
 
 data class VolPoint(
     val id: String,
@@ -215,31 +216,43 @@ object VolumeEngine {
         return inside
     }
 
-    fun interpolateIdw(x: Double, y: Double, pts: List<VolPoint>, k: Int = 6, power: Double = 2.0): Double? {
+    /**
+     * IDW با سقف فاصله: اگر نزدیک‌ترین نقطه دورتر از maxDist باشد null (مثل TIN خارج از پوشش).
+     * این کار حجم‌های کاذب ناشی از برون‌یابی را کم می‌کند و به Civil 3D نزدیک‌تر می‌شود.
+     */
+    fun interpolateIdw(
+        x: Double,
+        y: Double,
+        pts: List<VolPoint>,
+        k: Int = 6,
+        power: Double = 2.0,
+        maxDist: Double = Double.POSITIVE_INFINITY
+    ): Double? {
         if (pts.isEmpty()) return null
-        // برای ابرنقطه بزرگ: فقط همسایه‌های نزدیک با حلقهٔ شعاعی، بدون sort روی همه
+        val maxD2 = if (maxDist.isFinite()) maxDist * maxDist else Double.POSITIVE_INFINITY
         if (pts.size <= 80) {
             val nearest = pts.map { p ->
                 val d2 = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
                 p to d2
             }.sortedBy { it.second }.take(k)
+            if (nearest.isEmpty()) return null
+            if (nearest.first().second > maxD2) return null
             val exact = nearest.firstOrNull { it.second < 1e-16 }
             if (exact != null) return exact.first.z
             var num = 0.0; var den = 0.0
             for ((p, d2) in nearest) {
+                if (d2 > maxD2) continue
                 val d = sqrt(d2).coerceAtLeast(1e-9)
                 val w = 1.0 / Math.pow(d, power)
                 num += w * p.z; den += w
             }
             return if (den > 0) num / den else null
         }
-        // top-k خطی O(n) بدون sortedBy کامل
         val bestP = arrayOfNulls<VolPoint>(k)
         val bestD = DoubleArray(k) { Double.POSITIVE_INFINITY }
         for (p in pts) {
             val d2 = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
             if (d2 < 1e-16) return p.z
-            // جایگذاری در top-k
             var j = k - 1
             if (d2 >= bestD[j]) continue
             while (j > 0 && d2 < bestD[j - 1]) {
@@ -250,14 +263,39 @@ object VolumeEngine {
             bestD[j] = d2
             bestP[j] = p
         }
+        if (bestD[0] > maxD2) return null
         var num = 0.0; var den = 0.0
         for (i in 0 until k) {
             val p = bestP[i] ?: break
+            if (bestD[i] > maxD2) break
             val d = sqrt(bestD[i]).coerceAtLeast(1e-9)
             val w = 1.0 / Math.pow(d, power)
             num += w * p.z; den += w
         }
         return if (den > 0) num / den else null
+    }
+
+    /** فاصلهٔ قابل‌اعتماد درونیابی ≈ ۳× میانه فاصله نزدیک‌ترین همسایه (سقف ۱۵–۴۰ m) */
+    fun estimateInterpMaxDist(pts: List<VolPoint>, sample: Int = 80): Double {
+        if (pts.size < 4) return 25.0
+        val step = max(1, pts.size / sample)
+        val dists = mutableListOf<Double>()
+        var i = 0
+        while (i < pts.size && dists.size < sample) {
+            val a = pts[i]
+            var best = Double.POSITIVE_INFINITY
+            for (j in pts.indices) {
+                if (j == i) continue
+                val d = hypot(pts[j].x - a.x, pts[j].y - a.y)
+                if (d < best && d > 1e-6) best = d
+            }
+            if (best.isFinite()) dists.add(best)
+            i += step
+        }
+        if (dists.isEmpty()) return 25.0
+        dists.sort()
+        val median = dists[dists.size / 2]
+        return (median * 3.0).coerceIn(12.0, 40.0)
     }
 
     fun computeGrid(
@@ -283,10 +321,18 @@ object VolumeEngine {
         val (deT, thDe) = thinForTin(de, MAX_TIN_POINTS)
         if (thEx > 0) warnings.add("نمونه‌برداری $thEx نقطه از «$existingName»")
         if (thDe > 0) warnings.add("نمونه‌برداری $thDe نقطه از «$designName»")
-        val all = exT + deT
-        val b = bounds(all)
-        val hull = boundary ?: convexHull(all)
+        val hull = when {
+            boundary != null && boundary.size >= 3 -> boundary
+            else -> convexHull(exT + deT)
+        }
+        // نمونه‌برداری فقط داخل bbox مرز (نه کل ابرنقطه)
+        val b = bounds(hull)
         val gs = adaptiveGridSize(b[0], b[1], b[2], b[3], gridSize.coerceAtLeast(0.1))
+        val trisEx = try { buildTin(exT) } catch (_: Exception) { emptyList() }
+        val trisDe = try { buildTin(deT) } catch (_: Exception) { emptyList() }
+        val maxDEx = estimateInterpMaxDist(exT)
+        val maxDDe = estimateInterpMaxDist(deT)
+        warnings.add("حد درونیابی موجود ${"%.1f".format(maxDEx)} m / طراحی ${"%.1f".format(maxDDe)} m")
         var cut = 0.0; var fill = 0.0; var area = 0.0; var sumDz = 0.0
         var minDz = Double.POSITIVE_INFINITY; var maxDz = Double.NEGATIVE_INFINITY; var n = 0
         val cellArea = gs * gs
@@ -298,8 +344,12 @@ object VolumeEngine {
                 val cx = x + gs / 2.0; val cy = y + gs / 2.0
                 if (pointInPolygon(cx, cy, hull)) {
                     cellGuard++
-                    val ze = interpolateIdw(cx, cy, exT) ?: continue
-                    val zd = interpolateIdw(cx, cy, deT) ?: continue
+                    val ze = (if (trisEx.isNotEmpty()) tinZAt(cx, cy, exT, trisEx) else null)
+                        ?: interpolateIdw(cx, cy, exT, maxDist = maxDEx)
+                        ?: continue
+                    val zd = (if (trisDe.isNotEmpty()) tinZAt(cx, cy, deT, trisDe) else null)
+                        ?: interpolateIdw(cx, cy, deT, maxDist = maxDDe)
+                        ?: continue
                     val dz = ze - zd
                     if (dz > 0) cut += cellArea * dz else if (dz < 0) fill += cellArea * abs(dz)
                     area += cellArea; sumDz += dz
@@ -343,18 +393,21 @@ object VolumeEngine {
             val r = VolumeResult("Grid", ex.size, de.size, existingName, designName, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, gridSize, warnings)
             return VolumeAnalysis(r, emptyList(), boundary ?: emptyList())
         }
-        val all = ex + de
-        val b = bounds(all)
+        val (exT, _) = thinForTin(ex, MAX_TIN_POINTS)
+        val (deT, _) = thinForTin(de, MAX_TIN_POINTS)
         val hull = when {
             boundary != null && boundary.size >= 3 -> boundary
-            else -> convexHull(all)
+            else -> convexHull(exT + deT)
         }
         val gs = gridSize.coerceAtLeast(0.1)
         var cut = 0.0; var fill = 0.0; var area = 0.0; var sumDz = 0.0
         var minDz = Double.POSITIVE_INFINITY; var maxDz = Double.NEGATIVE_INFINITY; var n = 0
         val cellArea = gs * gs
         val cells = mutableListOf<CutFillCell>()
-        // فقط داخل bbox boundary نمونه‌برداری کن
+        val trisEx = try { buildTin(exT) } catch (_: Exception) { emptyList() }
+        val trisDe = try { buildTin(deT) } catch (_: Exception) { emptyList() }
+        val maxDEx = estimateInterpMaxDist(exT)
+        val maxDDe = estimateInterpMaxDist(deT)
         val bb = bounds(hull)
         var x = bb[0]
         while (x < bb[2] - 1e-9) {
@@ -362,8 +415,12 @@ object VolumeEngine {
             while (y < bb[3] - 1e-9) {
                 val cx = x + gs / 2.0; val cy = y + gs / 2.0
                 if (pointInPolygon(cx, cy, hull)) {
-                    val ze = interpolateIdw(cx, cy, ex) ?: continue
-                    val zd = interpolateIdw(cx, cy, de) ?: continue
+                    val ze = (if (trisEx.isNotEmpty()) tinZAt(cx, cy, exT, trisEx) else null)
+                        ?: interpolateIdw(cx, cy, exT, maxDist = maxDEx)
+                        ?: continue
+                    val zd = (if (trisDe.isNotEmpty()) tinZAt(cx, cy, deT, trisDe) else null)
+                        ?: interpolateIdw(cx, cy, deT, maxDist = maxDDe)
+                        ?: continue
                     val dz = ze - zd
                     if (dz > 0) cut += cellArea * dz else if (dz < 0) fill += cellArea * abs(dz)
                     area += cellArea; sumDz += dz
