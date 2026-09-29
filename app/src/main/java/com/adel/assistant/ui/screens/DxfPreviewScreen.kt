@@ -794,18 +794,49 @@ fun DxfPreviewScreen(
     fun textH(): Double = annotTextSize.replace(',', '.').toDoubleOrNull()?.coerceIn(0.01, 50.0) ?: 0.5
 
     fun placeDimension(a: Pair<Double, Double>, b: Pair<Double, Double>) {
-        val d = CadEngine.hypot(b.first - a.first, b.second - a.second)
-        val mx = (a.first + b.first) / 2.0
-        val my = (a.second + b.second) / 2.0
+        // اندازه‌گذاری شبیه اتوکد: خط اندازه موازی، خطوط راهنما، متن در وسط
+        val dx = b.first - a.first
+        val dy = b.second - a.second
+        val d = CadEngine.hypot(dx, dy)
+        if (d < 1e-9) return
         val label = String.format(java.util.Locale.US, "%.3f", d)
         val h = textH()
+        // بردار واحد امتداد و عمود
+        val ux = dx / d; val uy = dy / d
+        val px = -uy; val py = ux
+        val offset = (h * 2.5).coerceAtLeast(0.3) // فاصله خط اندازه از پاره
+        val ext = (h * 0.6).coerceAtLeast(0.08)  // بیرون‌زدگی خطوط راهنما
+        // نقاط روی خط اندازه
+        val a1x = a.first + px * offset; val a1y = a.second + py * offset
+        val b1x = b.first + px * offset; val b1y = b.second + py * offset
+        // انتهای خطوط راهنما کمی بیرون از خط اندازه
+        val a2x = a.first + px * (offset + ext); val a2y = a.second + py * (offset + ext)
+        val b2x = b.first + px * (offset + ext); val b2y = b.second + py * (offset + ext)
+        // علامت‌های انتهایی ساده (تیک ۴۵ درجه)
+        val tick = (h * 0.45).coerceAtLeast(0.05)
+        val tix = (ux + px) * tick * 0.7; val tiy = (uy + py) * tick * 0.7
+        val mx = (a1x + b1x) / 2.0 + px * (h * 0.35)
+        val my = (a1y + b1y) / 2.0 + py * (h * 0.35)
+        val layer = "DIM"
         mutateCad { m ->
+            val layers = m.layers.toMutableMap()
+            layers.putIfAbsent(layer, com.adel.assistant.data.DxfLayerInfo(layer, 1, true))
             m.copy(
-                lines = m.lines + DxfLine(a.first, a.second, b.first, b.second, "DIM", 1),
-                texts = m.texts + DxfText(mx, my + h * 0.3, h, label, "DIM", 1)
+                lines = m.lines + listOf(
+                    // خطوط راهنما از نقطه تا بیرون خط اندازه
+                    DxfLine(a.first, a.second, a2x, a2y, layer, 1),
+                    DxfLine(b.first, b.second, b2x, b2y, layer, 1),
+                    // خط اندازه
+                    DxfLine(a1x, a1y, b1x, b1y, layer, 1),
+                    // تیک‌های انتها
+                    DxfLine(a1x - tix, a1y - tiy, a1x + tix, a1y + tiy, layer, 1),
+                    DxfLine(b1x - tix, b1y - tiy, b1x + tix, b1y + tiy, layer, 1)
+                ),
+                texts = m.texts + DxfText(mx, my, h, label, layer, 1),
+                layers = layers
             )
         }
-        message = "اندازه $label ثبت شد"
+        message = "اندازه $label m (DIM)"
     }
 
     fun placeCoordBeside(wx: Double, wy: Double, no: String) {
@@ -1601,12 +1632,19 @@ if (zoomWindowMode) {
         val glassDark = Color(0xCC1A1F18)
         @Composable
         fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = Color.White, onClick: () -> Unit) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).padding(horizontal = 2.dp)) {
-                IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
-                    Icon(icon, label, tint = tint, modifier = Modifier.size(22.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(40.dp)) {
+                    IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+                        Icon(icon, label, tint = tint, modifier = Modifier.size(18.dp))
+                    }
+                    Text(label, color = tint.copy(alpha = 0.9f), fontSize = 8.sp, maxLines = 1)
                 }
-                Text(label, color = tint.copy(alpha = 0.9f), fontSize = 9.sp, maxLines = 1)
+                Text("|", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp, modifier = Modifier.padding(end = 1.dp))
             }
+        }
+        @Composable
+        fun GlassSep() {
+            // نگه داشته شده برای سازگاری
         }
         fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
         fun exitAllTools() {
@@ -1663,8 +1701,9 @@ if (zoomWindowMode) {
                             modifier = Modifier.padding(end = 6.dp)
                         ) {
                             Row(
-                                Modifier.padding(6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                Modifier.padding(vertical = 4.dp, horizontal = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 when (menuGroup) {
                                     0 -> { // فایل
@@ -2159,11 +2198,34 @@ if (zoomWindowMode) {
                             showPointsDialog = false
                             message = "نقطه ${g.name}: انگشت را دور از نقطه بکش تا جابجا شود؛ سپس تأیید"
                         },
+                        onNavigate = { g ->
+                            val ll = UtmGeo.toLatLon(g.e, g.n, zone)
+                            val lat = ll.first; val lon = ll.second
+                            try {
+                                // مسیریاب نشان
+                                val neshan = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("nshn://navigation?lat=$lat&lon=$lon"))
+                                neshan.setPackage("com.neshan.android")
+                                try {
+                                    context.startActivity(neshan)
+                                } catch (_: Exception) {
+                                    // فالبک geo / مرورگر نشان
+                                    val geo = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("geo:$lat,$lon?q=$lat,$lon"))
+                                    try {
+                                        context.startActivity(geo)
+                                    } catch (_: Exception) {
+                                        val web = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://neshan.org/maps/@$lat,$lon,15z"))
+                                        context.startActivity(web)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                message = "خطا باز کردن مسیریاب: ${e.message}"
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 360.dp)
                     )
-                    Text("سلول = ویرایش عدد  |  ↔ = جابجایی روی نقشه  |  ✕ = حذف", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text("سلول = ویرایش  |  ↔ جابجایی  |  🧭 نشان  |  ✕ حذف", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 }
 
             },

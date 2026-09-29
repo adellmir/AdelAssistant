@@ -72,6 +72,7 @@ fun PointsSpreadsheet(
             HeaderCell("Z", wZ)
             HeaderCell("D", wD)
             if (onMove != null) HeaderCell("↔", wMove)
+            if (onNavigate != null) HeaderCell("🧭", wNav)
             if (onDelete != null) HeaderCell("✕", wDel)
         }
         LazyColumn(
@@ -115,6 +116,17 @@ fun PointsSpreadsheet(
                             modifier = Modifier
                                 .width(wMove)
                                 .clickable { onMove(p) }
+                                .padding(6.dp)
+                        )
+                    }
+                    if (onNavigate != null) {
+                        Text(
+                            "🧭",
+                            color = Color(0xFF64B5F6),
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .width(wNav)
+                                .clickable { onNavigate(p) }
                                 .padding(6.dp)
                         )
                     }
