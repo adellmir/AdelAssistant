@@ -202,9 +202,19 @@ object PointConverter {
             else t.trimStart('0').ifBlank { "0" }
         }
 
-        fun coord(line: String, key: String): Double? {
-            val m = Regex(key + """\.\.00\+([0-9]+)""").find(line) ?: return null
-            return m.groupValues[1].toDouble() / 10000.0
+                fun coord(line: String, key: String): Double? {
+            // فرمت‌های رایج: 81..00+ / 81..10+ / 81..10-
+            val m = Regex(key + """\.\.(\d{2})([+-])([0-9]+)""").find(line) ?: return null
+            val unit = m.groupValues[1]
+            val sign = if (m.groupValues[2] == "-") -1.0 else 1.0
+            val body = m.groupValues[3].toDoubleOrNull() ?: return null
+            // ..10 معمولاً میلی‌متر (÷1000)؛ ..00 اغلب 0.1mm یا متر×10000
+            val meters = when (unit) {
+                "10" -> body / 1000.0
+                "00" -> if (body >= 1e8) body / 1000.0 else body / 10000.0
+                else -> body / 1000.0
+            }
+            return sign * meters
         }
 
         fun wordData(line: String, wi: String): String? {
@@ -243,8 +253,9 @@ object PointConverter {
             val z = coord(line, "83") ?: 0.0
             if (kotlin.math.abs(x) < 1e-9 && kotlin.math.abs(y) < 1e-9) continue
 
+            val code71 = wordData(line, "71")?.takeIf { it.isNotBlank() && it != "0" }
             val code42 = wordData(line, "42")?.takeIf { it.isNotBlank() && it != "0" }
-            val code = code42 ?: currentCode
+            val code = code71 ?: code42 ?: currentCode
             out += SurveyPoint(idRaw, x, y, z, code)
         }
         return out
@@ -319,7 +330,9 @@ object PointConverter {
                 append(serial)
                 append("+")
                 append(name)
-                append(" 71....+0000000000000000")
+                val codeBody = p.code.trim().take(16).padStart(16, '0').ifBlank { "0000000000000000" }
+                append(" 71....+")
+                append(codeBody)
                 append(" 81..10")
                 append(sc(p.x))
                 append(" 82..10")

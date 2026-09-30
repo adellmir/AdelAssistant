@@ -47,6 +47,9 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var selectAll by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
+    var showExportNameDialog by remember { mutableStateOf(false) }
+    var pendingExportKind by remember { mutableStateOf("") }
+    var exportBaseName by remember { mutableStateOf("gsi_export") }
     var newestFirst by remember { mutableStateOf(true) }
     var sortByCode by remember { mutableStateOf(false) }
     var rangeSelectMode by remember { mutableStateOf(false) }
@@ -112,19 +115,27 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             status = "نقطه‌ای انتخاب نشده"
             return
         }
+        pendingExportKind = kind
+        exportBaseName = "export"
+        showExportNameDialog = true
+    }
+
+    fun doExport(kind: String, base: String) {
+        val list = selectedPoints()
+        if (list.isEmpty()) {
+            status = "نقطه‌ای انتخاب نشده"
+            return
+        }
+        val b = base.trim().ifBlank { "export" }.replace(Regex("[\\/:*?\"<>|]"), "_")
         val ok = when (kind) {
-            "txt" -> saveFile("gsi_export.txt", GsiParser.toTxt(list))
-            "gsi" -> saveFile("gsi_export.gsi", GsiParser.toGsi(list))
-            "dat" -> saveFile("gsi_export.dat", GsiParser.toDat(list))
-            "kml" -> saveFile(
-                "gsi_export.kml",
-                GsiParser.toKml(list),
-                "application/vnd.google-earth.kml+xml"
-            )
-            "dxf" -> saveFile("gsi_export.dxf", GsiParser.toDxf(list), "application/dxf")
+            "txt" -> saveFile("$b.txt", GsiParser.toTxt(list))
+            "gsi" -> saveFile("$b.gsi", GsiParser.toGsi(list))
+            "dat" -> saveFile("$b.dat", GsiParser.toDat(list))
+            "kml" -> saveFile("$b.kml", GsiParser.toKml(list), "application/vnd.google-earth.kml+xml")
+            "dxf" -> saveFile("$b.dxf", GsiParser.toDxf(list), "application/dxf")
             else -> false
         }
-        status = if (ok) "ذخیره شد: $kind (${list.size} نقطه)" else "خطا در ذخیره $kind"
+        status = if (ok) "ذخیره شد: $b.$kind (${list.size} نقطه)" else "خطا در ذخیره $kind"
     }
 
     fun applyEdit() {
@@ -392,6 +403,31 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             }
         )
     }
+    if (showExportNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportNameDialog = false },
+            title = { Text("نام فایل خروجی") },
+            text = {
+                OutlinedTextField(
+                    value = exportBaseName,
+                    onValueChange = { exportBaseName = it },
+                    label = { Text("نام بدون پسوند") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportNameDialog = false
+                    doExport(pendingExportKind, exportBaseName)
+                }) { Text("ذخیره") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportNameDialog = false }) { Text("انصراف") }
+            }
+        )
+    }
+
 }
 
 private fun fmt(v: Double): String =

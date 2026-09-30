@@ -72,12 +72,36 @@ object GsiParser {
     }
 
     fun parseTxt(text: String): List<GsiPoint> {
-        var auto = 1
-        return text.lineSequence().mapNotNull { raw ->
-            val sp = PointConverter.parseSurveyLine(raw, datOrder = false) ?: return@mapNotNull null
-            val name = if (sp.id.isBlank() || sp.id == "P") (auto++).toString() else sp.id
-            GsiPoint(name = name, e = sp.x, n = sp.y, z = sp.z, code = sp.code)
-        }.toList()
+        val out = mutableListOf<GsiPoint>()
+        text.lineSequence().forEach { raw ->
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#")) return@forEach
+            val p = line.split(Regex("""[\s,;\t]+""")).filter { it.isNotEmpty() }
+            if (p.size < 3) return@forEach
+            try {
+                when {
+                    p.size >= 4 && p[1].toDoubleOrNull() != null && p[0].toDoubleOrNull() == null -> {
+                        val code = p.drop(4).joinToString(" ").trim()
+                        out.add(GsiPoint(name = p[0], e = p[1].toDouble(), n = p[2].toDouble(), z = p[3].toDouble(), code = code))
+                    }
+                    p.size >= 4 && p[0].toDoubleOrNull() != null -> {
+                        out.add(GsiPoint(name = p[3], e = p[0].toDouble(), n = p[1].toDouble(), z = p[2].toDouble()))
+                    }
+                    p.size == 3 && p[0].toDoubleOrNull() != null -> {
+                        out.add(
+                            GsiPoint(
+                                name = (out.size + 1).toString(),
+                                e = p[0].toDouble(),
+                                n = p[1].toDouble(),
+                                z = p[2].toDouble()
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return out
     }
 
     private fun parseWords(line: String): Map<String, String> {
@@ -113,12 +137,34 @@ object GsiParser {
      * هنگام خواندن Y و X جابه‌جا می‌شوند تا به E,N,Z استاندارد برسند.
      */
     fun parseDat(text: String): List<GsiPoint> {
-        var auto = 1
-        return text.lineSequence().mapNotNull { raw ->
-            val sp = PointConverter.parseSurveyLine(raw, datOrder = true) ?: return@mapNotNull null
-            val name = if (sp.id.isBlank() || sp.id == "P") (auto++).toString() else sp.id
-            GsiPoint(name = name, e = sp.x, n = sp.y, z = sp.z, code = sp.code)
-        }.toList()
+        val out = mutableListOf<GsiPoint>()
+        text.lineSequence().forEach { raw ->
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("*")) return@forEach
+            val parts = line.split(',', '\t', ';', ' ').map { it.trim() }.filter { it.isNotEmpty() }
+            if (parts.size < 3) return@forEach
+            fun d(s: String) = s.replace(',', '.').toDoubleOrNull()
+            // N Y X Z [D]
+            if (parts.size >= 4 && d(parts[1]) != null && d(parts[2]) != null && d(parts[3]) != null) {
+                val name = parts[0]
+                val y = d(parts[1])!!  // northing in file
+                val x = d(parts[2])!!  // easting in file
+                val z = d(parts[3])!!
+                val code = parts.getOrNull(4)?.takeIf { d(it) == null } ?: ""
+                // GsiPoint: e=X, n=Y
+                out.add(GsiPoint(name = name, e = x, n = y, z = z, code = code))
+                return@forEach
+            }
+            // Y X Z without name
+            if (d(parts[0]) != null && d(parts[1]) != null && d(parts[2]) != null) {
+                val y = d(parts[0])!!
+                val x = d(parts[1])!!
+                val z = d(parts[2])!!
+                val name = parts.getOrNull(3)?.takeIf { d(it) == null } ?: "P${out.size + 1}"
+                out.add(GsiPoint(name = name, e = x, n = y, z = z))
+            }
+        }
+        return out
     }
 
     /** خروجی DAT: N Y X Z [D] */

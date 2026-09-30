@@ -55,6 +55,9 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val sppUuid = remember { UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") }
 
+    var showSaveNameDialog by remember { mutableStateOf(false) }
+    var pendingSaveText by remember { mutableStateOf("") }
+    var saveBaseName by remember { mutableStateOf("points") }
     var status by remember { mutableStateOf("دستگاه را جفت (Pair) کن، بعد از لیست انتخاب کن.") }
     var devices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
     var selected by remember { mutableStateOf<BluetoothDevice?>(null) }
@@ -148,26 +151,37 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    fun saveReceived(text: String) {
+    fun saveReceived(text: String, baseName: String) {
         try {
+            val base = baseName.trim().ifBlank { "points" }.replace(Regex("[\\/:*?\"<>|]"), "_")
             // بایگانی خام (زاویه/فاصله) در txt
-            val rawName = "dump_raw_${System.currentTimeMillis()}.txt"
+            val rawName = "${base}_raw.txt"
             FileExport.exportBytesToDocuments(
                 context, rawName, text.toByteArray(Charsets.UTF_8), "text/plain"
             )
             if (points.isNotEmpty()) {
-                // GSI مختصات مطلق به سبک BAHAR برای ورود به دوربین
+                // GSI مختصات مطلق به سبک BAHAR برای ورود به دوربین (با کد)
                 val gsiPts = points.map { pt ->
                     GsiPoint(name = pt.id.ifBlank { "P" }, e = pt.x, n = pt.y, z = pt.z, code = pt.code)
                 }
                 val gsiText = GsiParser.toGsi(gsiPts)
-                val gsiName = "points_${System.currentTimeMillis()}.gsi"
+                val gsiName = "$base.gsi"
                 FileExport.exportBytesToDocuments(
                     context, gsiName, gsiText.toByteArray(Charsets.UTF_8), "text/plain"
                 )
-                status = "ذخیره: gsi/$gsiName + txt/$rawName — ${points.size} نقطه (فرمت دوربین)"
+                // CSV با کد برای خواندن آسان
+                val csv = buildString {
+                    appendLine("N,X,Y,Z,CODE")
+                    points.forEach { pt ->
+                        appendLine("${pt.id},${pt.x},${pt.y},${pt.z},${pt.code}")
+                    }
+                }
+                FileExport.exportBytesToDocuments(
+                    context, "$base.csv", csv.toByteArray(Charsets.UTF_8), "text/csv"
+                )
+                status = "ذخیره: $gsiName + $rawName + $base.csv — ${points.size} نقطه"
             } else {
-                status = "ذخیره خام txt/$rawName — نقطه مختصاتی برای GSI تشخیص داده نشد"
+                status = "ذخیره خام $rawName — نقطه مختصاتی برای GSI تشخیص داده نشد"
             }
         } catch (e: Exception) {
             try {
@@ -234,7 +248,9 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                     withContext(Dispatchers.Main) {
                         if (text.isNotBlank()) {
                             parseReceived(text)
-                            saveReceived(text)
+                            pendingSaveText = text
+                            saveBaseName = "points_${System.currentTimeMillis() / 1000}"
+                            showSaveNameDialog = true
                         } else {
                             status = "اتصالی برقرار شد ولی داده‌ای نیامد. از منوی دوربین ارسال فایل را بزن یا از «از فایل» استفاده کن."
                         }
@@ -263,7 +279,9 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
             val name = uri.lastPathSegment ?: "import.txt"
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
             parseReceived(text)
-            saveReceived(text)
+            pendingSaveText = text
+            saveBaseName = "points_${System.currentTimeMillis() / 1000}"
+            showSaveNameDialog = true
             status = "از فایل وارد شد ($name) — ${points.size} نقطه"
         } catch (e: Exception) {
             status = "خطا در خواندن فایل: ${e.message}"
@@ -391,4 +409,29 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
             ) { Text("قطع") }
         }
     }
+    if (showSaveNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveNameDialog = false },
+            title = { Text("نام فایل خروجی") },
+            text = {
+                OutlinedTextField(
+                    value = saveBaseName,
+                    onValueChange = { saveBaseName = it },
+                    label = { Text("نام بدون پسوند") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSaveNameDialog = false
+                    saveReceived(pendingSaveText, saveBaseName)
+                }) { Text("ذخیره") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveNameDialog = false }) { Text("انصراف") }
+            }
+        )
+    }
+
 }

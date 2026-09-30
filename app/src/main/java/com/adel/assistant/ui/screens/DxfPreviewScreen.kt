@@ -1,4 +1,11 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.data.Map2Session
+import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.Map2PointCategory
+import com.adel.assistant.data.TopographySession
+import com.adel.assistant.data.ProfileSession
+import com.adel.assistant.data.ProfileSurfaceSlot
+import com.adel.assistant.data.DxfLayerInfo
 
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PendingMapOpen
@@ -106,7 +113,8 @@ fun DxfPreviewScreen(
     var showEmptyColorPalette by remember { mutableStateOf(false) }
     var showBaseMapDialog by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    var menuGroup by remember { mutableStateOf<Int?>(null) } // 0..8
+    var menuGroup by remember { mutableStateOf<Int?>(null) } // 0..8 / 10 نقاط / 11 سه‌بعدی
+    var showMap2Points by remember { mutableStateOf(false) }
     var showOsnapPanel by remember { mutableStateOf(false) }
     var showMyLocPanel by remember { mutableStateOf(false) }
     var pathPts by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
@@ -186,6 +194,7 @@ fun DxfPreviewScreen(
     var measureDragTarget by remember { mutableStateOf<String?>(null) } // "A" | "B"
     var distanceMsg by remember { mutableStateOf<String?>(null) }
     var showExportPickedDialog by remember { mutableStateOf(false) }
+    var exportPickedName by remember { mutableStateOf("points") }
     // انتخاب از نقشه برای الاین: rowIndex, side "src"|"dst"
     var mapAlignPick by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
@@ -331,8 +340,28 @@ fun DxfPreviewScreen(
                 val text = bytes.toString(Charsets.UTF_8)
                 val isKml = lower.endsWith(".kml") || lower.endsWith(".kmz") ||
                     (text.trimStart().startsWith("<?xml") && text.contains("<kml", true))
-                val model = if (isKml) KmlParser.toDxfModel(KmlParser.parseBytes(bytes, rawName, zone))
-                            else DxfParser.parse(text)
+                val isPointFile = lower.endsWith(".gsi") || lower.endsWith(".txt") || lower.endsWith(".dat") ||
+                    lower.endsWith(".csv") || lower.endsWith(".idx") ||
+                    text.contains("*11") || text.contains("81..")
+                val model = when {
+                    isKml -> KmlParser.toDxfModel(KmlParser.parseBytes(bytes, rawName, zone))
+                    isPointFile && !lower.endsWith(".dxf") -> {
+                        val ext = when {
+                            lower.endsWith(".gsi") || text.contains("*11") -> "gsi"
+                            lower.endsWith(".dat") -> "dat"
+                            lower.endsWith(".idx") -> "idx"
+                            else -> "txt"
+                        }
+                        val pts = try { PointConverter.read(text, ext) } catch (_: Exception) { emptyList() }
+                        if (pts.isEmpty()) DxfModel(emptyList(), emptyList(), emptyList(), mutableMapOf(), 0.0, 0.0, 1.0, 1.0)
+                        else {
+                            // تبدیل نقاط به DXF ساده (صلیب + متن)
+                            val dxfText = PointConverter.write(pts, "dxf")
+                            DxfParser.parse(dxfText)
+                        }
+                    }
+                    else -> DxfParser.parse(text)
+                }
                 if (!model.isEmpty) {
                     added += ViewerDrawing(nextDrawingId + added.size, rawName, model)
                 }
@@ -626,6 +655,42 @@ fun DxfPreviewScreen(
         selected = null
         showProps = false
         message = "شیء حذف شد — ذخیره را فراموش نکن"
+    }
+
+    fun placeMap2CategoriesOnMap(cats: List<Map2PointCategory>) {
+        pushUndo()
+        docDirty = true
+        val id = ensureCadDrawing()
+        drawings = drawings.map { dr ->
+            if (dr.id != id) return@map dr
+            var m = dr.model
+            val layers = m.layers.toMutableMap()
+            val newLines = m.lines.toMutableList()
+            val newTexts = m.texts.toMutableList()
+            // حذف قبلی لایهٔ این دسته‌ها (ساده‌سازی: فقط اضافه می‌کنیم)
+            cats.filter { it.visible && it.points.isNotEmpty() }.forEach { cat ->
+                layers[cat.name] = DxfLayerInfo(cat.name, 3, true)
+                val h = cat.textSize.coerceAtLeast(0.1)
+                val cross = h * 0.35
+                cat.points.forEach { pt ->
+                    if (cat.showSymbol) {
+                        newLines += DxfLine(pt.x - cross, pt.y, pt.x + cross, pt.y, cat.name, 3)
+                        newLines += DxfLine(pt.x, pt.y - cross, pt.x, pt.y + cross, cat.name, 3)
+                    }
+                    val linesTxt = mutableListOf<String>()
+                    if (cat.showName) linesTxt += pt.name
+                    if (cat.showCode && pt.code.isNotBlank()) linesTxt += pt.code
+                    if (cat.showElev) linesTxt += String.format(java.util.Locale.US, "%.3f", pt.z)
+                    linesTxt.forEachIndexed { i, s ->
+                        newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * i), h, s, cat.name, 7)
+                    }
+                }
+            }
+            m = m.copy(lines = newLines, texts = newTexts, layers = layers)
+            dr.copy(model = m.recalculatedBounds())
+        }
+        fitTrigger++
+        message = "نقاط دسته‌ها روی نقشه ثبت شد"
     }
 
     fun processCadPoint(raw: Pair<Double, Double>) {
@@ -1708,13 +1773,55 @@ if (zoomWindowMode) {
                                 when (menuGroup) {
                                     0 -> { // فایل
                                         GlassIcon(Icons.Filled.FolderOpen, "ورود") { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }
-                                        GlassIcon(Icons.Filled.Terrain, "توپوگرافی") { onOpenTopography(); closeMenus() }
-                                        GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
-                                        GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
                                         GlassIcon(Icons.Filled.Save, "ذخیره") { showSaveDxfDialog = true; closeMenus() }
+                                        if (!map2Mode) {
+                                            GlassIcon(Icons.Filled.Terrain, "توپوگرافی") { onOpenTopography(); closeMenus() }
+                                            GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
+                                            GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
+                                        }
                                     }
-                                    1 -> { // مشاهده
+                                    10 -> { // نقاط (نقشه ۲)
+                                        GlassIcon(Icons.Filled.FolderOpen, "ورود نقاط") {
+                                            showMap2Points = true; closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.MyLocation, "مختصات") {
+                                            pickCoordinateMode = true
+                                            message = "نقطه را روی نقشه لمس کن"
+                                            closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.UploadFile, "خروجی") {
+                                            showExportPickedDialog = true; closeMenus()
+                                        }
+                                    }
+                                    11 -> { // سه‌بعدی (نقشه ۲)
+                                        GlassIcon(Icons.Filled.Terrain, "توپوگرافی") {
+                                            val vols = Map2Session.toVolPoints()
+                                            if (vols.size >= 3) TopographySession.updatePoints(vols)
+                                            onOpenTopography(); closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.ShowChart, "پروفیل") {
+                                            val vols = Map2Session.toVolPoints()
+                                            if (vols.size >= 3) {
+                                                ProfileSession.updateSurfaces(listOf(ProfileSurfaceSlot("سطح", vols)))
+                                            }
+                                            onOpenProfile(); closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.ViewInAr, "احجام") {
+                                            onOpenVolume(); closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.Timeline, "الاین") {
+                                            onOpenAlign(); closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.CropSquare, "مساحت") {
+                                            onOpenArea(); closeMenus()
+                                        }
+                                    }
+                                    1 -> { // نمایش
                                         GlassIcon(Icons.Filled.ZoomOutMap, "فیت") { fitTrigger++; closeMenus() }
+                                        if (map2Mode) {
+                                            GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
+                                            GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
+                                        }
                                         GlassIcon(Icons.Filled.Crop, "پنجره") {
                                             zoomWindowMode = true; zoomWindowFirst = null
                                             message = "زوم پنجره: دو گوشه"; closeMenus()
@@ -1907,7 +2014,15 @@ if (zoomWindowMode) {
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                     ) {
                         Column(Modifier.padding(4.dp)) {
-                            val mainIcons = listOf(
+                                                        val mainIcons = if (map2Mode) listOf(
+                                Triple(Icons.Filled.Folder, 0, "فایل"),
+                                Triple(Icons.Filled.Place, 10, "نقاط"),
+                                Triple(Icons.Filled.Create, 3, "ترسیم"),
+                                Triple(Icons.Filled.Straighten, 2, "اندازه"),
+                                Triple(Icons.Filled.Build, 4, "ویرایش"),
+                                Triple(Icons.Filled.ViewInAr, 11, "سه‌بعدی"),
+                                Triple(Icons.Filled.Map, 1, "نمایش")
+                            ) else listOf(
                                 Triple(Icons.Filled.Folder, 0, "فایل"),
                                 Triple(Icons.Filled.Map, 1, "نمایش"),
                                 Triple(Icons.Filled.Straighten, 2, "اندازه"),
@@ -1917,7 +2032,7 @@ if (zoomWindowMode) {
                                 Triple(Icons.Filled.Undo, 6, "عقب"),
                                 Triple(Icons.Filled.Redo, 7, "جلو"),
                                 Triple(Icons.Filled.MyLocation, 8, "گیر"),
-                                Triple(Icons.Filled.ShowChart, 9, "پروفیل")
+                                Triple(Icons.Filled.Route, 9, "پروفیل")
                             )
                             mainIcons.forEach { (ic, g, label) ->
                                 Column(
@@ -2511,6 +2626,15 @@ if (zoomWindowMode) {
         )
     }
 
+
+    if (showMap2Points) {
+        Map2PointsDialog(
+            color = color,
+            onDismiss = { showMap2Points = false },
+            onCommitToMap = { cats -> placeMap2CategoriesOnMap(cats) }
+        )
+    }
+
 if (showSaveDxfDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDxfDialog = false },
@@ -2703,7 +2827,14 @@ if (showSaveDxfDialog) {
             title = { Text("خروجی مختصات") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${pickedPoints.size} نقطه — فرمت را انتخاب کن")
+                    Text("${pickedPoints.size} نقطه — نام و فرمت را انتخاب کن")
+                    OutlinedTextField(
+                        exportPickedName,
+                        { exportPickedName = it },
+                        label = { Text("نام فایل (بدون پسوند)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     listOf("txt", "gsi", "dxf", "kml").forEach { fmt ->
                         Button(
                             onClick = {
@@ -2730,7 +2861,7 @@ if (showSaveDxfDialog) {
                                         "kml" -> "application/vnd.google-earth.kml+xml"
                                         else -> "text/plain"
                                     }
-                                    val name = "picked_coords.$fmt"
+                                    val name = "${exportPickedName.trim().ifBlank { "points" }}.$fmt"
                                     val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
                                     message = if (ok) "ذخیره شد: Documents/AdelAssistant/…/$name" else "خطا در ذخیره"
                                 } catch (e: Exception) {
