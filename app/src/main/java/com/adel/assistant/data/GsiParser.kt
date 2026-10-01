@@ -17,59 +17,76 @@ data class GsiPoint(
 
 object GsiParser {
 
-    private val wordRegex = Regex("""\*?(\d{2})([^\s+]*)([+-])([0-9A-Za-z.\-]{1,16})""")
+    private val wordRegex = Regex("""\*?(\d{2})([^\s+]*)([+-])([0-9A-Za-z.\-]{1,24})""")
 
     fun parse(text: String): List<GsiPoint> {
         val lines = text
             .replace("\r\n", "\n")
             .replace('\r', '\n')
             .split('\n')
-            .map { it.trimEnd() }
+            .map { it.trim() }
             .filter { it.isNotBlank() }
 
-        val drop = BooleanArray(lines.size)
-        for (i in lines.indices) {
-            val upper = lines[i].uppercase()
-            val isStation = upper.contains("OCUPAR") ||
-                upper.contains("00000RE") ||
-                upper.contains("+00000000000000RE") ||
-                (upper.contains("*41") && (upper.contains("OCUPAR") || upper.contains("00RE")))
-            if (isStation) {
-                drop[i] = true
-                if (i >= 1) drop[i - 1] = true
-                if (i >= 2) drop[i - 2] = true
-            }
-        }
-
         val points = mutableListOf<GsiPoint>()
-        for (i in lines.indices) {
-            if (drop[i]) continue
-            val words = parseWords(lines[i])
+        var currentCode = ""
+
+        for (line in lines) {
+            val upper = line.uppercase()
+            val words = parseWords(line)
+
+            // خطوط *41: کد جاری (OCUPAR/RE نادیده)
+            if (words.containsKey("41") && !words.containsKey("11")) {
+                val c41 = words["41"]?.let { cleanName(it) }.orEmpty()
+                when {
+                    c41.equals("OCUPAR", true) || upper.contains("OCUPAR") -> {
+                        currentCode = ""
+                    }
+                    c41.equals("RE", true) || upper.contains("00RE") ||
+                        Regex("""(^|[^A-Z0-9])RE([^A-Z0-9]|$)""").containsMatchIn(upper) -> {
+                        // ایستگاه — کد را عوض نکن
+                    }
+                    c41.isNotBlank() && c41 != "0" -> {
+                        currentCode = c41
+                    }
+                }
+                continue
+            }
+
             val w11 = words["11"] ?: continue
             val w81 = words["81"] ?: continue
             val w82 = words["82"] ?: continue
-            val w83 = words["83"] ?: continue
+            val w83 = words["83"]
 
             val name = cleanName(w11)
             if (name.isBlank()) continue
             val nameUp = name.uppercase()
             if (nameUp == "OCUPAR" || nameUp == "RE") continue
 
-            val code = words["71"]?.let { cleanName(it) }
-                ?.takeIf { it.isNotBlank() && it != "0" } ?: ""
+            val e = parseCoord(w81)
+            val n = parseCoord(w82)
+            val z = parseCoord(w83 ?: "0")
+            // مختصات صفر = نقطه ساختگی/اشغال — رد
+            if (kotlin.math.abs(e) < 1e-9 && kotlin.math.abs(n) < 1e-9) continue
+
+            val code71 = words["71"]?.let { cleanName(it) }
+                ?.takeIf { it.isNotBlank() && it != "0" }
+            val code42 = words["42"]?.let { cleanName(it) }
+                ?.takeIf { it.isNotBlank() && it != "0" }
+            val code = code71 ?: code42 ?: currentCode
 
             points.add(
                 GsiPoint(
                     name = name,
-                    e = parseCoord(w81),
-                    n = parseCoord(w82),
-                    z = parseCoord(w83),
+                    e = e,
+                    n = n,
+                    z = z,
                     code = code
                 )
             )
         }
         return points
     }
+
 
     fun parseTxt(text: String): List<GsiPoint> {
         val out = mutableListOf<GsiPoint>()
