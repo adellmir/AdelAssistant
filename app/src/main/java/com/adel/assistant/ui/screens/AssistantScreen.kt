@@ -34,6 +34,7 @@ import com.adel.assistant.data.AssistantChatStore
 import com.adel.assistant.data.AssistantMemoryStore
 import com.adel.assistant.data.AssistantPermissionStore
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.PendingAssistantPrompt
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -58,7 +59,9 @@ fun AssistantScreen(
     val listState = rememberLazyListState()
 
     var activeChat by remember { mutableStateOf(AssistantChatStore.ensureDefault(context)) }
-    var input by remember { mutableStateOf("") }
+    var input by remember {
+        mutableStateOf(PendingAssistantPrompt.text.also { PendingAssistantPrompt.text = "" })
+    }
     var onlineMode by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
     var selectedFileName by remember { mutableStateOf<String?>(null) }

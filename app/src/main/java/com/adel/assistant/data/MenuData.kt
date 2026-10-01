@@ -80,7 +80,7 @@ object AppMenu {
         color = ToolPrimary,
         tabs = listOf(
             MenuTab("", listOf(
-                MenuItem("نقشه ۲", Icons.Filled.Layers, Routes.TOOL_MAP2),
+                MenuItem("دستیار", Icons.Filled.SmartToy, Routes.ASSISTANT),
                 MenuItem("ترسیم نقشه", Icons.Filled.Architecture, Routes.TOOL_DXF),
                 MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
                 MenuItem("پروفیل طولی", Icons.Filled.ShowChart, Routes.TOOL_PROFILE),
