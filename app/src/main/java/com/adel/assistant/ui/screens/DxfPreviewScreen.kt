@@ -657,41 +657,89 @@ fun DxfPreviewScreen(
         message = "شیء حذف شد — ذخیره را فراموش نکن"
     }
 
-    fun placeMap2CategoriesOnMap(cats: List<Map2PointCategory>) {
+    fun placeMap2PointDraw(pts: List<Map2Point>, opts: PointDrawOptions) {
+        if (pts.isEmpty()) {
+            message = "نقطه‌ای برای ترسیم نیست"
+            return
+        }
         pushUndo()
         docDirty = true
         val id = ensureCadDrawing()
+        val h = opts.textSize.coerceAtLeast(0.05)
+        val cross = h * 0.35
+        val aci = opts.colorAci
         drawings = drawings.map { dr ->
             if (dr.id != id) return@map dr
             var m = dr.model
             val layers = m.layers.toMutableMap()
+            layers["point"] = DxfLayerInfo("point", aci, true)
+            layers["cod"] = DxfLayerInfo("cod", aci, true)
+            layers["high"] = DxfLayerInfo("high", aci, true)
+            layers["POINTS"] = DxfLayerInfo("POINTS", aci, true)
             val newLines = m.lines.toMutableList()
             val newTexts = m.texts.toMutableList()
-            // حذف قبلی لایهٔ این دسته‌ها (ساده‌سازی: فقط اضافه می‌کنیم)
-            cats.filter { it.visible && it.points.isNotEmpty() }.forEach { cat ->
-                layers[cat.name] = DxfLayerInfo(cat.name, 3, true)
-                val h = cat.textSize.coerceAtLeast(0.1)
-                val cross = h * 0.35
-                cat.points.forEach { pt ->
-                    if (cat.showSymbol) {
-                        newLines += DxfLine(pt.x - cross, pt.y, pt.x + cross, pt.y, cat.name, 3)
-                        newLines += DxfLine(pt.x, pt.y - cross, pt.x, pt.y + cross, cat.name, 3)
-                    }
-                    val linesTxt = mutableListOf<String>()
-                    if (cat.showName) linesTxt += pt.name
-                    if (cat.showCode && pt.code.isNotBlank()) linesTxt += pt.code
-                    if (cat.showElev) linesTxt += String.format(java.util.Locale.US, "%.3f", pt.z)
-                    linesTxt.forEachIndexed { i, s ->
-                        newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * i), h, s, cat.name, 7)
-                    }
+            pts.forEach { pt ->
+                if (opts.showSymbol) {
+                    newLines += DxfLine(pt.x - cross, pt.y, pt.x + cross, pt.y, "POINTS", aci)
+                    newLines += DxfLine(pt.x, pt.y - cross, pt.x, pt.y + cross, "POINTS", aci)
+                }
+                var row = 0
+                if (opts.showName) {
+                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, pt.name, "point", aci)
+                    row++
+                }
+                if (opts.showCode && pt.code.isNotBlank()) {
+                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, pt.code, "cod", aci)
+                    row++
+                }
+                if (opts.showElev) {
+                    val elev = String.format(java.util.Locale.US, "%.3f", pt.z)
+                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, elev, "high", aci)
                 }
             }
             m = m.copy(lines = newLines, texts = newTexts, layers = layers)
             dr.copy(model = m.recalculatedBounds())
         }
         fitTrigger++
-        message = "نقاط دسته‌ها روی نقشه ثبت شد"
+        message = "${pts.size} نقطه ترسیم شد (لایه‌های point/cod/high)"
     }
+
+    fun placeMap2LineDxf(dxfText: String) {
+        try {
+            val model = DxfParser.parse(dxfText)
+            if (model.isEmpty) {
+                message = "ترسیم خطی خالی بود"
+                return
+            }
+            pushUndo()
+            docDirty = true
+            drawings = drawings + ViewerDrawing(nextDrawingId, "line_codes.dxf", model)
+            nextDrawingId++
+            fitTrigger++
+            message = "ترسیم خطی بر اساس کد ثبت شد"
+        } catch (e: Exception) {
+            message = "خطای ترسیم خطی: ${e.message}"
+        }
+    }
+
+    fun placeMap2CategoriesOnMap(cats: List<Map2PointCategory>) {
+        // سازگاری قدیمی: استفاده از تنظیمات دسته
+        val all = cats.filter { it.visible }.flatMap { it.points }
+        if (all.isEmpty()) return
+        val cat = cats.firstOrNull { it.visible }
+        placeMap2PointDraw(
+            all,
+            PointDrawOptions(
+                textSize = cat?.textSize ?: 1.0,
+                colorAci = cat?.textColorAci ?: 7,
+                showSymbol = cat?.showSymbol ?: true,
+                showName = cat?.showName ?: true,
+                showCode = cat?.showCode ?: false,
+                showElev = cat?.showElev ?: false
+            )
+        )
+    }
+
 
     fun processCadPoint(raw: Pair<Double, Double>) {
         val ref = draftPts.lastOrNull()
@@ -2631,7 +2679,14 @@ if (zoomWindowMode) {
         Map2PointsDialog(
             color = color,
             onDismiss = { showMap2Points = false },
-            onCommitToMap = { cats -> placeMap2CategoriesOnMap(cats) }
+            onCommitPointDraw = { pts, opts ->
+                placeMap2PointDraw(pts, opts)
+                showMap2Points = false
+            },
+            onCommitLineDraw = { dxf ->
+                placeMap2LineDxf(dxf)
+                showMap2Points = false
+            }
         )
     }
 

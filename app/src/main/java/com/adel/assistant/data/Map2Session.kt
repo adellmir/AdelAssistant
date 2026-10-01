@@ -34,7 +34,8 @@ data class Map2PointCategory(
     val showName: Boolean = true,
     val showCode: Boolean = false,
     val showElev: Boolean = false,
-    val textSize: Double = 1.0
+    val textSize: Double = 1.0,
+    val textColorAci: Int = 7
 )
 
 /**

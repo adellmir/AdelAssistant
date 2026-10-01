@@ -3,6 +3,7 @@ package com.adel.assistant.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -10,16 +11,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -27,47 +28,52 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.adel.assistant.data.*
+import com.adel.assistant.utils.DxfMapGenerator
+import java.util.Locale
 
 /**
- * پنجره ورود/مدیریت نقاط نقشه ۲:
- * ردیف دسته‌ها + گزینش + نمایش نماد/شماره/کد/ارتفاع.
+ * ورود نقاط نقشه ۲ — تمام‌صفحه
+ * سربرگ ۱: ترسیم نقطه‌ای | سربرگ ۲: ترسیم خطی (بر اساس کد)
  */
 @Composable
 fun Map2PointsDialog(
     color: Color,
     onDismiss: () -> Unit,
-    onCommitToMap: (List<Map2PointCategory>) -> Unit
+    onCommitPointDraw: (List<Map2Point>, PointDrawOptions) -> Unit,
+    onCommitLineDraw: (String) -> Unit
 ) {
     val context = LocalContext.current
-    var rows by remember { mutableStateOf(Map2Session.categories.map { it.copy() }) }
-    LaunchedEffect(Unit) {
-        if (Map2Session.categories.isEmpty()) {
-            Map2Session.addCategory(Map2Session.nextPgName())
-        }
-        rows = Map2Session.categories.map { it.copy() }
-    }
-    // staging points before commit for a row being imported
-    var staging by remember { mutableStateOf<List<Map2Point>>(emptyList()) }
-    var stagingRowId by remember { mutableStateOf<String?>(null) }
-    var showStaging by remember { mutableStateOf(false) }
-    var selectMode by remember { mutableStateOf("none") } // none|all|range
-    var selectedIds by remember { mutableStateOf(setOf<String>()) }
-    var rangeA by remember { mutableStateOf("") }
-    var rangeB by remember { mutableStateOf("") }
-    var sortBy by remember { mutableStateOf("name") }
+    var points by remember { mutableStateOf<List<Map2Point>>(emptyList()) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var tab by remember { mutableStateOf(0) } // 0 نقطه‌ای 1 خطی
+    var message by remember { mutableStateOf("") }
+    var filePicked by remember { mutableStateOf(false) }
+
+    // ترسیم نقطه‌ای
+    var textSize by remember { mutableStateOf("1.0") }
+    var colorIdx by remember { mutableStateOf(7) } // سفید پیش‌فرض در ACI
     var showSymbol by remember { mutableStateOf(true) }
     var showName by remember { mutableStateOf(true) }
-    var showCode by remember { mutableStateOf(false) }
-    var showElev by remember { mutableStateOf(false) }
-    var textSize by remember { mutableStateOf("1") }
-    var message by remember { mutableStateOf("") }
+    var showCode by remember { mutableStateOf(true) }
+    var showElev by remember { mutableStateOf(true) }
 
-    fun syncRowsFromSession() {
-        rows = Map2Session.categories.map { it.copy() }
-    }
+    // گزینش
+    var selectMode by remember { mutableStateOf("all") } // all | none | range
+    var rangeAnchor by remember { mutableStateOf<String?>(null) }
+    var sortBy by remember { mutableStateOf("num") } // num | code
+
+    // ترسیم خطی — تنظیمات کدهای POINT
+    var codeSettings by remember { mutableStateOf<Map<String, CodeSetting>>(emptyMap()) }
+    var lineTextSize by remember { mutableStateOf("1.0") }
+    var lineShowName by remember { mutableStateOf(true) }
+    var lineShowCode by remember { mutableStateOf(true) }
+    var lineShowElev by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        if (uri == null) {
+            if (!filePicked && points.isEmpty()) onDismiss()
+            return@rememberLauncherForActivityResult
+        }
         try {
             val name = uri.lastPathSegment.orEmpty()
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
@@ -77,27 +83,125 @@ fun Map2PointsDialog(
                 return@rememberLauncherForActivityResult
             }
             val base = System.currentTimeMillis()
-            staging = parsed.mapIndexed { i, s ->
+            val mapped = parsed.mapIndexed { i, s ->
                 Map2Point(
-                    id = "s${base}_$i",
+                    id = "p${base}_$i",
                     name = s.id.ifBlank { "P${i + 1}" },
                     x = s.x, y = s.y, z = s.z,
                     code = s.code
                 )
             }
-            selectedIds = staging.map { it.id }.toSet()
+            points = mapped
+            selectedIds = mapped.map { it.id }.toSet()
             selectMode = "all"
-            showStaging = true
-            message = "${staging.size} نقطه خوانده شد — همه انتخاب‌اند؛ ثبت یا بستن لیست را بزن"
+            filePicked = true
+            // تنظیمات کد برای ترسیم خطی
+            val unique = mapped.map { codeBase(it.code) }.filter { it.isNotBlank() }.distinct()
+            codeSettings = unique.associateWith { DefaultCodeRules.createDefaultSetting(it) }
+            message = "${mapped.size} نقطه از $name"
         } catch (e: Exception) {
             message = "خطا: ${e.message}"
         }
     }
 
-    fun sortedStaging(): List<Map2Point> = when (sortBy) {
-        "code" -> staging.sortedBy { it.code }
-        "num" -> staging.sortedWith(compareBy({ it.name.toDoubleOrNull() ?: Double.MAX_VALUE }, { it.name }))
-        else -> staging.sortedBy { it.name }
+    // با باز شدن دیالوگ مستقیم درخواست فایل
+    LaunchedEffect(Unit) {
+        if (!filePicked && points.isEmpty()) {
+            picker.launch(arrayOf("*/*", "text/*", "application/octet-stream", "application/vnd.google-earth.kml+xml"))
+        }
+    }
+
+    fun displayList(): List<Map2Point> {
+        val base = when (sortBy) {
+            "code" -> points.sortedWith(compareBy({ it.code }, { it.name.toDoubleOrNull() ?: Double.MAX_VALUE }, { it.name }))
+            else -> points.sortedWith(compareBy({ it.name.toDoubleOrNull() ?: Double.MAX_VALUE }, { it.name }))
+        }
+        return base
+    }
+
+    fun toggleSelect(id: String) {
+        when (selectMode) {
+            "range" -> {
+                if (rangeAnchor == null) {
+                    rangeAnchor = id
+                    selectedIds = setOf(id)
+                    message = "ابتدای بازه — نقطه پایان را بزن"
+                } else {
+                    val ids = displayList().map { it.id }
+                    val i1 = ids.indexOf(rangeAnchor)
+                    val i2 = ids.indexOf(id)
+                    if (i1 >= 0 && i2 >= 0) {
+                        val a = minOf(i1, i2); val b = maxOf(i1, i2)
+                        selectedIds = ids.subList(a, b + 1).toSet()
+                        message = "${b - a + 1} نقطه در بازه"
+                    }
+                    rangeAnchor = null
+                }
+            }
+            else -> {
+                selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+            }
+        }
+    }
+
+    fun selectedPoints(): List<Map2Point> {
+        val list = displayList()
+        return if (selectedIds.isEmpty()) list else list.filter { it.id in selectedIds }
+    }
+
+    fun commitPointDraw() {
+        val chosen = selectedPoints()
+        if (chosen.isEmpty()) {
+            message = "نقطه‌ای برای ثبت نیست"
+            return
+        }
+        val h = textSize.replace(',', '.').toDoubleOrNull()?.coerceIn(0.05, 50.0) ?: 1.0
+        val opts = PointDrawOptions(
+            textSize = h,
+            colorAci = DxfColors.aci.getOrElse(colorIdx) { 7 },
+            showSymbol = showSymbol,
+            showName = showName,
+            showCode = showCode,
+            showElev = showElev
+        )
+        // ذخیره در نشست
+        val cat = Map2Session.addCategory(
+            name = Map2Session.nextPgName(),
+            points = chosen
+        )
+        Map2Session.updateCategory(cat.id) {
+            it.copy(
+                showSymbol = showSymbol,
+                showName = showName,
+                showCode = showCode,
+                showElev = showElev,
+                textSize = h,
+                textColorAci = opts.colorAci
+            )
+        }
+        onCommitPointDraw(chosen, opts)
+    }
+
+    fun commitLineDraw() {
+        if (points.isEmpty()) {
+            message = "نقطه‌ای نیست"
+            return
+        }
+        val h = lineTextSize.replace(',', '.').toFloatOrNull()?.coerceIn(0.05f, 50f) ?: 1f
+        // اعمال تنظیمات متن روی کدهای POINT
+        val updated = codeSettings.mapValues { (_, s) ->
+            if (s.category == CodeCategory.POINT) {
+                s.copy(
+                    textSize = h,
+                    showNumber = lineShowName,
+                    showCode = lineShowCode,
+                    showZ = lineShowElev
+                )
+            } else s
+        }
+        val survey = points.map { it.toSurvey() }
+        val dxf = DxfMapGenerator.generate(survey, updated)
+        onCommitLineDraw(dxf)
     }
 
     Dialog(
@@ -105,339 +209,345 @@ fun Map2PointsDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = Color(0xFF1E241A),
-            modifier = Modifier
-                .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.92f)
+            color = Color(0xFF12150F),
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(Modifier.padding(10.dp)) {
+            Column(Modifier.fillMaxSize().padding(8.dp)) {
+                // هدر
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("نقاط نقشه ۲", fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Filled.Close, null, tint = Color.White)
-                    }
+                    Text(
+                        "ورود نقاط",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = {
+                        picker.launch(arrayOf("*/*", "text/*", "application/octet-stream"))
+                    }) { Text("فایل دیگر", color = color, fontSize = 12.sp) }
+                    TextButton(onClick = onDismiss) { Text("بستن", color = Color(0xFFE57373), fontSize = 12.sp) }
                 }
                 if (message.isNotBlank()) {
-                    Text(message, color = color, fontSize = 11.sp)
+                    Text(message, color = Color(0xFFB0B8A8), fontSize = 12.sp)
                 }
 
-                // ردیف‌های دسته
-                LazyColumn(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(rows, key = { it.id }) { row ->
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFF2A3324),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                                ) {
-                                    IconButton(
-                                        onClick = {
-                                            stagingRowId = row.id
-                                            picker.launch(arrayOf("*/*"))
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) { Icon(Icons.Filled.FileOpen, "فراخوانی", tint = color, modifier = Modifier.size(18.dp)) }
-
-                                    IconButton(
-                                        onClick = {
-                                            stagingRowId = row.id
-                                            staging = row.points
-                                            selectedIds = emptySet()
-                                            showStaging = true
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) { Icon(Icons.Filled.List, "لیست", tint = Color.White, modifier = Modifier.size(18.dp)) }
-
-                                    IconButton(
-                                        onClick = {
-                                            Map2Session.removeCategory(row.id)
-                                            syncRowsFromSession()
-                                            if (rows.isEmpty()) {
-                                                Map2Session.addCategory()
-                                                syncRowsFromSession()
-                                            }
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) { Icon(Icons.Filled.Delete, "حذف", tint = Color(0xFFE57373), modifier = Modifier.size(18.dp)) }
-
-                                    OutlinedTextField(
-                                        value = row.name,
-                                        onValueChange = { v ->
-                                            Map2Session.updateCategory(row.id) { it.copy(name = v) }
-                                            syncRowsFromSession()
-                                        },
-                                        label = { Text("نام دسته", fontSize = 10.sp) },
-                                        singleLine = true,
-                                        modifier = Modifier.width(100.dp),
-                                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = Color.White)
-                                    )
-                                    Text("${row.points.size}", color = Color.White, fontSize = 12.sp)
-                                    Checkbox(
-                                        checked = row.visible,
-                                        onCheckedChange = {
-                                            Map2Session.updateCategory(row.id) { c -> c.copy(visible = it) }
-                                            syncRowsFromSession()
-                                        },
-                                        colors = CheckboxDefaults.colors(checkedColor = color)
-                                    )
-                                    Text("نمایش", color = Color.White, fontSize = 10.sp)
-                                }
-                            }
-                        }
+                if (points.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("فایل نقاط (txt / gsi / kml / dat) را انتخاب کنید", color = Color(0xFF8A9280))
                     }
-                    item {
-                        TextButton(onClick = {
-                            Map2Session.addCategory()
-                            syncRowsFromSession()
-                        }) {
-                            Icon(Icons.Filled.Add, null, Modifier.size(16.dp))
+                    return@Surface
+                }
+
+                // سربرگ‌ها
+                TabRow(selectedTabIndex = tab, containerColor = Color(0xFF1A1F16)) {
+                    Tab(selected = tab == 0, onClick = { tab = 0 },
+                        text = { Text("ترسیم نقطه‌ای", fontSize = 13.sp) })
+                    Tab(selected = tab == 1, onClick = { tab = 1 },
+                        text = { Text("ترسیم خطی", fontSize = 13.sp) })
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                if (tab == 0) {
+                    // ردیف ۱: سایز | رنگ | چک‌باکس‌ها | ثبت
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = textSize,
+                            onValueChange = { textSize = it },
+                            label = { Text("سایز", fontSize = 10.sp) },
+                            singleLine = true,
+                            modifier = Modifier.width(72.dp),
+                            textStyle = TextStyle(fontSize = 12.sp, color = Color.White),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                        // رنگ
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("رنگ", color = Color(0xFFB0B8A8), fontSize = 11.sp)
                             Spacer(Modifier.width(4.dp))
-                            Text("+ دسته جدید")
-                        }
-                    }
-                }
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                        Text("بستن")
-                    }
-                    Button(
-                        onClick = {
-                            // اعمال تنظیمات نمایش پیش‌فرض روی دسته‌ها
-                            val ts = textSize.replace(',', '.').toDoubleOrNull() ?: 1.0
-                            Map2Session.categories.forEach { c ->
-                                Map2Session.updateCategory(c.id) {
-                                    it.copy(
-                                        showSymbol = showSymbol,
-                                        showName = showName,
-                                        showCode = showCode,
-                                        showElev = showElev,
-                                        textSize = ts
-                                    )
-                                }
-                            }
-                            onCommitToMap(Map2Session.categories)
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = color),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("ثبت روی نقشه") }
-                }
-            }
-        }
-    }
-
-    if (showStaging) {
-        val list = sortedStaging()
-        Dialog(
-            onDismissRequest = {
-                // بستن با سیستم = ثبت انتخاب‌شده‌ها
-                val listNow = when (sortBy) {
-                    "code" -> staging.sortedBy { it.code }
-                    "num" -> staging.sortedWith(compareBy({ it.name.toDoubleOrNull() ?: Double.MAX_VALUE }, { it.name }))
-                    else -> staging.sortedBy { it.name }
-                }
-                val chosen = if (selectedIds.isEmpty()) listNow else listNow.filter { it.id in selectedIds }
-                if (chosen.isNotEmpty()) {
-                    val rid = stagingRowId
-                    if (rid != null && Map2Session.categoryById(rid) != null) {
-                        Map2Session.updateCategory(rid) { c ->
-                            val existingIds = c.points.map { it.id }.toSet()
-                            val merged = c.points + chosen.filter { it.id !in existingIds }
-                            c.copy(points = if (c.points.isEmpty()) chosen else merged)
-                        }
-                    } else {
-                        Map2Session.addCategory(points = chosen)
-                    }
-                    message = "${chosen.size} نقطه ثبت شد"
-                    syncRowsFromSession()
-                }
-                staging = emptyList()
-                selectedIds = emptySet()
-                showStaging = false
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF1E241A),
-                modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.9f)
-            ) {
-                Column(Modifier.padding(8.dp)) {
-                    Text("نمایش نقاط (${list.size})", fontWeight = FontWeight.Bold, color = Color.White)
-                    // ردیف گزینش
-                    Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = {
-                            selectMode = "all"; selectedIds = list.map { it.id }.toSet()
-                        }, contentPadding = PaddingValues(4.dp)) { Text("همه", fontSize = 10.sp) }
-                        TextButton(onClick = {
-                            selectMode = "none"; selectedIds = emptySet()
-                        }, contentPadding = PaddingValues(4.dp)) { Text("هیچ", fontSize = 10.sp) }
-                        OutlinedTextField(
-                            rangeA, { rangeA = it.filter { ch -> ch.isDigit() } },
-                            modifier = Modifier.width(48.dp),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.White),
-                            label = { Text("از", fontSize = 9.sp) }
-                        )
-                        OutlinedTextField(
-                            rangeB, { rangeB = it.filter { ch -> ch.isDigit() } },
-                            modifier = Modifier.width(48.dp),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.White),
-                            label = { Text("تا", fontSize = 9.sp) }
-                        )
-                        TextButton(onClick = {
-                            val a = (rangeA.toIntOrNull() ?: 1).coerceAtLeast(1)
-                            val b = (rangeB.toIntOrNull() ?: list.size).coerceAtMost(list.size)
-                            val slice = ((a - 1) until b).mapNotNull { list.getOrNull(it)?.id }
-                            selectedIds = slice.toSet()
-                            selectMode = "range"
-                        }, contentPadding = PaddingValues(4.dp)) { Text("بازه", fontSize = 10.sp) }
-                        TextButton(onClick = { sortBy = "num" }, contentPadding = PaddingValues(4.dp)) {
-                            Text("ترتیب عدد", fontSize = 10.sp)
-                        }
-                        TextButton(onClick = { sortBy = "name" }, contentPadding = PaddingValues(4.dp)) {
-                            Text("ترتیب نام", fontSize = 10.sp)
-                        }
-                        TextButton(onClick = { sortBy = "code" }, contentPadding = PaddingValues(4.dp)) {
-                            Text("ترتیب کد", fontSize = 10.sp)
-                        }
-                        TextButton(
-                            onClick = {
-                                if (selectedIds.isNotEmpty()) {
-                                    staging = staging.filter { it.id !in selectedIds }
-                                    selectedIds = emptySet()
-                                } else {
-                                    staging = emptyList()
-                                }
-                            },
-                            contentPadding = PaddingValues(4.dp)
-                        ) { Text("پاک", fontSize = 10.sp, color = Color(0xFFE57373)) }
-                        TextButton(
-                            onClick = {
-                                fun commitStaging() {
-                                    val chosen = if (selectedIds.isEmpty()) list
-                                    else list.filter { it.id in selectedIds }
-                                    if (chosen.isEmpty()) {
-                                        message = "نقطه‌ای برای ثبت نیست"
-                                        return
-                                    }
-                                    val rid = stagingRowId
-                                    if (rid != null && Map2Session.categoryById(rid) != null) {
-                                        Map2Session.updateCategory(rid) { c ->
-                                            // جایگزینی نقاط این ورود (نه فقط append تکراری)
-                                            val existingIds = c.points.map { it.id }.toSet()
-                                            val merged = c.points + chosen.filter { it.id !in existingIds }
-                                            c.copy(points = if (c.points.isEmpty()) chosen else merged)
-                                        }
-                                    } else {
-                                        val cat = Map2Session.addCategory(
-                                            name = Map2Session.nextPgName(),
-                                            points = chosen
+                            DxfColors.compose.take(8).forEachIndexed { idx, c ->
+                                Box(
+                                    Modifier
+                                        .size(18.dp)
+                                        .background(c, RoundedCornerShape(3.dp))
+                                        .border(
+                                            if (colorIdx == idx) 2.dp else 0.dp,
+                                            Color.White,
+                                            RoundedCornerShape(3.dp)
                                         )
-                                        stagingRowId = cat.id
-                                    }
-                                    staging = emptyList()
-                                    selectedIds = emptySet()
-                                    showStaging = false
-                                    syncRowsFromSession()
-                                    message = "${chosen.size} نقطه به دسته اضافه شد"
-                                }
-                                commitStaging()
-                            },
-                            contentPadding = PaddingValues(4.dp)
-                        ) { Text("ثبت", fontSize = 10.sp, color = color) }
+                                        .clickable { colorIdx = idx }
+                                )
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            MiniCheck("نماد", showSymbol) { showSymbol = it }
+                            MiniCheck("نام", showName) { showName = it }
+                            MiniCheck("کد", showCode) { showCode = it }
+                            MiniCheck("ارتفاع", showElev) { showElev = it }
+                        }
+                        Button(
+                            onClick = { commitPointDraw() },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) { Text("ثبت", fontSize = 13.sp) }
                     }
-                    // نمایش اطلاعات
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // ردیف ۲: گزینش و ترتیب
                     Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
+                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(showSymbol, { showSymbol = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                        Text("نماد", color = Color.White, fontSize = 10.sp)
-                        Checkbox(showName, { showName = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                        Text("شماره", color = Color.White, fontSize = 10.sp)
-                        Checkbox(showCode, { showCode = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                        Text("کد", color = Color.White, fontSize = 10.sp)
-                        Checkbox(showElev, { showElev = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                        Text("ارتفاع", color = Color.White, fontSize = 10.sp)
-                        OutlinedTextField(
-                            textSize, { textSize = it },
-                            modifier = Modifier.width(64.dp),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.White),
-                            label = { Text("سایز", fontSize = 9.sp) }
-                        )
+                        SelectLink("همه", selectMode == "all" && selectedIds.size == points.size) {
+                            selectMode = "all"
+                            selectedIds = points.map { it.id }.toSet()
+                            rangeAnchor = null
+                        }
+                        Sep()
+                        SelectLink("هیچکدام", selectedIds.isEmpty()) {
+                            selectMode = "none"
+                            selectedIds = emptySet()
+                            rangeAnchor = null
+                        }
+                        Sep()
+                        SelectLink("بازه", selectMode == "range") {
+                            selectMode = "range"
+                            rangeAnchor = null
+                            message = "حالت بازه: دو نقطه ابتدا و انتها"
+                        }
+                        Sep()
+                        SelectLink("ترتیب شماره", sortBy == "num") { sortBy = "num" }
+                        Sep()
+                        SelectLink("ترتیب کد", sortBy == "code") { sortBy = "code" }
                     }
-                    LazyColumn(Modifier.weight(1f)) {
-                        items(list, key = { it.id }) { p ->
-                            val sel = p.id in selectedIds
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .background(if (sel) color.copy(alpha = 0.2f) else Color.Transparent)
-                                    .clickable {
-                                        selectedIds = if (sel) selectedIds - p.id else selectedIds + p.id
-                                    }
-                                    .padding(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // لیست اکسلی
+                    PointsExcelList(
+                        points = displayList(),
+                        selectedIds = selectedIds,
+                        color = color,
+                        onToggle = { toggleSelect(it) },
+                        onChange = { updated ->
+                            points = points.map { if (it.id == updated.id) updated else it }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    // ترسیم خطی
+                    Text(
+                        "نقاط بر اساس کد دسته‌بندی می‌شوند (مثل ترسیم نقشه). برای کدهای نقطه‌ای سایز و نمایش متن را تنظیم کنید.",
+                        color = Color(0xFF8A9280),
+                        fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = lineTextSize,
+                            onValueChange = { lineTextSize = it },
+                            label = { Text("سایز متن نقطه", fontSize = 10.sp) },
+                            singleLine = true,
+                            modifier = Modifier.width(100.dp),
+                            textStyle = TextStyle(fontSize = 12.sp, color = Color.White),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                        MiniCheck("نام", lineShowName) { lineShowName = it }
+                        MiniCheck("کد", lineShowCode) { lineShowCode = it }
+                        MiniCheck("ارتفاع", lineShowElev) { lineShowElev = it }
+                        Button(
+                            onClick = { commitLineDraw() },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) { Text("ثبت ترسیم", fontSize = 13.sp) }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val codes = codeSettings.keys.sorted()
+                        items(codes, key = { it }) { code ->
+                            val s = codeSettings[code]!!
+                            Surface(
+                                color = Color(0xFF1E241A),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Checkbox(sel, {
-                                    selectedIds = if (it) selectedIds + p.id else selectedIds - p.id
-                                }, colors = CheckboxDefaults.colors(checkedColor = color))
-                                Column {
-                                    if (showName) Text(p.name, color = Color.White, fontSize = 12.sp)
-                                    if (showCode) Text(p.code, color = Color.LightGray, fontSize = 10.sp)
-                                    if (showElev) Text(String.format("%.3f", p.z), color = Color.LightGray, fontSize = 10.sp)
+                                Row(
+                                    Modifier.padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(code, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.width(64.dp))
+                                    listOf(
+                                        CodeCategory.LINE to "خط",
+                                        CodeCategory.POINT to "نقطه",
+                                        CodeCategory.IGNORE to "نادیده"
+                                    ).forEach { (cat, label) ->
+                                        FilterChip(
+                                            selected = s.category == cat,
+                                            onClick = {
+                                                codeSettings = codeSettings + (code to s.copy(category = cat))
+                                            },
+                                            label = { Text(label, fontSize = 10.sp) },
+                                            modifier = Modifier.padding(end = 2.dp)
+                                        )
+                                    }
                                     Text(
-                                        String.format("%.3f  %.3f", p.x, p.y),
-                                        color = Color.Gray,
-                                        fontSize = 9.sp
+                                        "${points.count { codeBase(it.code).equals(code, true) }} نقطه",
+                                        color = Color(0xFF8A9280),
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(start = 6.dp)
                                     )
                                 }
                             }
                         }
                     }
-                    TextButton(onClick = {
-                        val chosen = if (selectedIds.isEmpty()) list else list.filter { it.id in selectedIds }
-                        if (chosen.isNotEmpty()) {
-                            val rid = stagingRowId
-                            if (rid != null && Map2Session.categoryById(rid) != null) {
-                                Map2Session.updateCategory(rid) { c ->
-                                    val existingIds = c.points.map { it.id }.toSet()
-                                    val merged = c.points + chosen.filter { it.id !in existingIds }
-                                    c.copy(points = if (c.points.isEmpty()) chosen else merged)
-                                }
-                            } else {
-                                Map2Session.addCategory(points = chosen)
-                            }
-                            message = "${chosen.size} نقطه ثبت شد"
-                            syncRowsFromSession()
-                        }
-                        staging = emptyList()
-                        selectedIds = emptySet()
-                        showStaging = false
-                    }) { Text("بستن لیست (ثبت)") }
                 }
             }
         }
     }
 }
+
+data class PointDrawOptions(
+    val textSize: Double,
+    val colorAci: Int,
+    val showSymbol: Boolean,
+    val showName: Boolean,
+    val showCode: Boolean,
+    val showElev: Boolean
+)
+
+@Composable
+private fun MiniCheck(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clickable { onChange(!checked) }
+            .padding(horizontal = 2.dp)
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onChange,
+            modifier = Modifier.size(28.dp),
+            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF81C995))
+        )
+        Text(label, color = Color(0xFFCFD8C8), fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun SelectLink(label: String, active: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (active) Color(0xFF81C995) else Color(0xFFB0B8A8),
+        fontSize = 12.sp,
+        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun Sep() {
+    Text("|", color = Color(0xFF5A6258), fontSize = 12.sp)
+}
+
+@Composable
+private fun PointsExcelList(
+    points: List<Map2Point>,
+    selectedIds: Set<String>,
+    color: Color,
+    onToggle: (String) -> Unit,
+    onChange: (Map2Point) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val hScroll = rememberScrollState()
+    Column(modifier) {
+        Row(
+            Modifier
+                .horizontalScroll(hScroll)
+                .background(Color(0xFF2A3324), RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Header("✓", 36)
+            Header("N", 70)
+            Header("X", 100)
+            Header("Y", 100)
+            Header("Z", 80)
+            Header("کد", 80)
+        }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            items(points, key = { it.id }) { p ->
+                Row(
+                    Modifier
+                        .horizontalScroll(hScroll)
+                        .background(Color(0xFF1E241A))
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = p.id in selectedIds,
+                        onCheckedChange = { onToggle(p.id) },
+                        modifier = Modifier.width(36.dp).size(28.dp),
+                        colors = CheckboxDefaults.colors(checkedColor = color)
+                    )
+                    Cell(p.name, 70) { onChange(p.copy(name = it)) }
+                    Cell(fmt(p.x), 100, true) { v ->
+                        v.replace(',', '.').toDoubleOrNull()?.let { onChange(p.copy(x = it)) }
+                    }
+                    Cell(fmt(p.y), 100, true) { v ->
+                        v.replace(',', '.').toDoubleOrNull()?.let { onChange(p.copy(y = it)) }
+                    }
+                    Cell(fmt(p.z), 80, true) { v ->
+                        v.replace(',', '.').toDoubleOrNull()?.let { onChange(p.copy(z = it)) }
+                    }
+                    Cell(p.code, 80) { onChange(p.copy(code = it)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Header(t: String, w: Int) {
+    Text(
+        t,
+        color = Color(0xFFCFD8C8),
+        fontWeight = FontWeight.Bold,
+        fontSize = 11.sp,
+        modifier = Modifier.width(w.dp).padding(horizontal = 4.dp)
+    )
+}
+
+@Composable
+private fun Cell(value: String, w: Int, numeric: Boolean = false, onCommit: (String) -> Unit) {
+    var text by remember(value) { mutableStateOf(value) }
+    LaunchedEffect(value) { text = value }
+    BasicTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onCommit(it)
+        },
+        singleLine = true,
+        textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+        cursorBrush = SolidColor(Color.White),
+        keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        else KeyboardOptions.Default,
+        modifier = Modifier
+            .width(w.dp)
+            .padding(horizontal = 2.dp, vertical = 4.dp)
+            .background(Color(0xFF2A3324), RoundedCornerShape(3.dp))
+            .padding(4.dp)
+    )
+}
+
+private fun fmt(v: Double): String = String.format(Locale.US, "%.3f", v)
