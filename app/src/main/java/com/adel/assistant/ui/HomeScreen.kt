@@ -64,6 +64,9 @@ import java.util.Calendar
 import java.util.Locale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Architecture
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import com.adel.assistant.navigation.Routes
@@ -249,7 +252,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
