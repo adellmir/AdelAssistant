@@ -49,6 +49,7 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
     var showList by remember { mutableStateOf(false) }
     var tick by remember { mutableStateOf(0) }
 
+    var expandedEmployers by remember { mutableStateOf<Set<String>>(emptySet()) }
     var editEmployerOld by remember { mutableStateOf<String?>(null) }
     var editEmpName by remember { mutableStateOf("") }
     var editEmpPhone by remember { mutableStateOf("") }
@@ -181,7 +182,9 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
-                            e.sessions.take(8).forEach { s ->
+                            val expanded = e.employer in expandedEmployers
+                            val visibleSessions = if (expanded || e.sessions.size <= 8) e.sessions else e.sessions.take(8)
+                            visibleSessions.forEach { s ->
                                 Text(
                                     "• ${s.name} | جلسه ${s.day}/${s.month}/${s.year} | ${moneyM(s.amount)}",
                                     color = TextPrimary,
@@ -189,7 +192,23 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 )
                             }
                             if (e.sessions.size > 8) {
-                                Text("… و ${e.sessions.size - 8} مورد دیگر", color = TextSecondary, fontSize = 11.sp)
+                                Text(
+                                    if (expanded) "▲ بستن لیست (${e.sessions.size} مورد)"
+                                    else "… و ${e.sessions.size - 8} مورد دیگر — برای دیدن همه لمس کن",
+                                    color = color,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            expandedEmployers = if (expanded) {
+                                                expandedEmployers - e.employer
+                                            } else {
+                                                expandedEmployers + e.employer
+                                            }
+                                        }
+                                        .padding(vertical = 6.dp)
+                                )
                             }
                         }
                     }
