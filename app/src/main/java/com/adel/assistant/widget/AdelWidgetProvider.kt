@@ -72,7 +72,11 @@ class AdelWidgetProvider : AppWidgetProvider() {
                     y * 10000 + m * 100 + d
                 }
                 .take(3)
-                .map { "${it.name} — ${it.year}/${it.month}/${it.day}" }
+                .map {
+                    val hh = (it.hour.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+                    val mm = (it.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+                    "${it.name} — ${it.year}/${it.month}/${it.day} $hh:$mm"
+                }
         }
 
         /** Intent باز کردن یک Route مشخص داخل MainActivity */

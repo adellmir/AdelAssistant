@@ -679,5 +679,7 @@ private fun formatProjectDate(p: ProjectEntry): String {
     val y = p.year.ifBlank { "—" }
     val m = (p.month.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
     val d = (p.day.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-    return "$y/$m/$d"
+    val hh = (p.hour.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+    val mm = (p.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+    return "$y/$m/$d $hh:$mm"
 }

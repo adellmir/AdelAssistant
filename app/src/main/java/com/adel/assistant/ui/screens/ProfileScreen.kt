@@ -58,15 +58,26 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@forEach
                 val name = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.ifBlank { "سطح ${surfaces.size + loaded.size + 1}" }
                     ?: "سطح ${surfaces.size + loaded.size + 1}"
-                val pts = PointConverter.readBytes(bytes, uri.lastPathSegment ?: "points.txt")
+                val fname = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
+                val pts = PointConverter.readBytes(bytes, fname)
                     .map { VolPoint(it.id, it.x, it.y, it.z, it.code) }
                 if (pts.size >= 3) loaded += ProfileSurfaceSlot(name, pts)
-                else message = "فایل $name کمتر از ۳ نقطه داشت"
             } catch (_: Exception) { }
         }
         if (loaded.isNotEmpty()) {
-            ProfileSession.updateSurfaces(surfaces + loaded)
-            message = "${loaded.size} سطح وارد شد"
+            val merged = surfaces + loaded
+            ProfileSession.updateSurfaces(merged)
+            message = "${loaded.size} سطح اضافه شد (جمع: ${merged.size})"
+            // اگر الایمنت از قبل هست، پروفیل چندسطحی را دوباره حساب کن
+            if (alignment.size >= 2) {
+                val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
+                val start = startText.replace(',', '.').toDoubleOrNull() ?: 0.0
+                val ss = merged.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
+                if (ss.isNotEmpty()) {
+                    result = ProfileEngine.sample(alignment, ss, step, start)
+                    message = "${loaded.size} سطح اضافه شد — پروفیل با ${ss.size} سطح به‌روز شد"
+                }
+            }
         } else message = "سطح معتبر پیدا نشد"
     }
 
@@ -119,7 +130,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("تنظیمات پروفیل", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Button(onClick = { pickSurface.launch(arrayOf("*/*")) }) { // چند فایل همزمان
+                        Button(onClick = { pickSurface.launch(arrayOf("*/*")) }) {
                             Icon(Icons.Filled.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(5.dp)); Text("ورود سطوح")
                         }
                     }
@@ -131,8 +142,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                             IconButton(onClick = { ProfileSession.updateSurfaces(surfaces.filterIndexed { idx, _ -> idx != i }) }) { Icon(Icons.Filled.Delete, "حذف") }
                         }
                     }
-                    if (surfaces.isEmpty()) Text("هنوز سطحی وارد نشده — می‌توانید چند فایل سطح را همزمان انتخاب کنید.", color = TextSecondary)
-                    else Text("${surfaces.size} سطح فعال", color = TextSecondary, fontSize = 12.sp)
+                    if (surfaces.isEmpty()) Text("هنوز سطحی وارد نشده است.", color = TextSecondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(intervalText, { intervalText = it; recalc() }, label = { Text("فاصله ایستگاه (m)") }, singleLine = true, modifier = Modifier.weight(1f))
                         OutlinedTextField(startText, { startText = it; recalc() }, label = { Text("کیلومتر شروع") }, singleLine = true, modifier = Modifier.weight(1f))
@@ -180,7 +190,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                             }, modifier = Modifier.weight(1f)) { Text("خروجی CSV") }
                             Button(onClick = {
                                 val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
-                                val model = ProfileEngine.toDxfModel(r, ss, scale, layerName = "PROFILE", textHeightMeters = 0.4)
+                                val model = ProfileEngine.toDxfModel(r, ss, scale)
                                 ProfileSession.beginPlacement(model.toDxfText(), "profile.dxf")
                                 onOpenMap("placement")
                             }, modifier = Modifier.weight(1f)) {
@@ -207,7 +217,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(horizontalScaleText, { horizontalScaleText = it }, label = { Text("مقیاس طولی 1:") }, singleLine = true)
                     OutlinedTextField(verticalScaleText, { verticalScaleText = it }, label = { Text("مقیاس عرضی 1:") }, singleLine = true)
-                    val hh = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
+                    val hh = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 1000.0
                     val vv = verticalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
                     Text("ضریب ترسیم پروفیل (بزرگنمایی عمودی): ${"%.2f".format(hh / vv)}", fontWeight = FontWeight.Bold)
                 }
@@ -226,16 +236,27 @@ private fun ProfileChart(
     onTransform: (Float, Offset) -> Unit
 ) {
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // zoom/pan را در کلید pointerInput می‌گذاریم تا gesture با مقدار به‌روز کار کند (جلوگیری از کرش/حالت کهنه)
     Canvas(
-        Modifier.fillMaxWidth().height(360.dp).background(Color(0xFF111315), RoundedCornerShape(10.dp))
-            .pointerInput(Unit) {
+        Modifier
+            .fillMaxWidth()
+            .height(360.dp)
+            .background(Color(0xFF111315), RoundedCornerShape(10.dp))
+            .pointerInput(zoom, pan) {
                 detectTransformGestures { centroid, gesturePan, gestureZoom, _ ->
-                    val nz = (zoom * gestureZoom).coerceIn(0.5f, 8f)
-                    val factor = nz / zoom
-                    onTransform(nz, Offset(
-                        centroid.x - (centroid.x - pan.x) * factor + gesturePan.x,
-                        centroid.y - (centroid.y - pan.y) * factor + gesturePan.y
-                    ))
+                    val safeZoom = zoom.coerceIn(0.4f, 12f).let { if (it.isFinite()) it else 1f }
+                    val gz = if (gestureZoom.isFinite() && gestureZoom > 0f) gestureZoom else 1f
+                    val nz = (safeZoom * gz).coerceIn(0.4f, 12f)
+                    val factor = if (safeZoom > 1e-4f) nz / safeZoom else 1f
+                    val npx = centroid.x - (centroid.x - pan.x) * factor + gesturePan.x
+                    val npy = centroid.y - (centroid.y - pan.y) * factor + gesturePan.y
+                    onTransform(
+                        nz,
+                        Offset(
+                            if (npx.isFinite()) npx.coerceIn(-5000f, 5000f) else 0f,
+                            if (npy.isFinite()) npy.coerceIn(-5000f, 5000f) else 0f
+                        )
+                    )
                 }
             }
     ) {
@@ -250,21 +271,54 @@ private fun ProfileChart(
         val zRange = (maxZ - minZ).coerceAtLeast(1.0)
         fun sx(x: Double) = left + ((x - minX) / (maxX - minX)).toFloat() * plotW
         fun sy(z: Double) = top + ((maxZ - z) / zRange).toFloat() * plotH
-        fun tx(p: Offset) = Offset(left + (p.x - left) * zoom + pan.x, top + (p.y - top) * zoom + pan.y)
+        val zSafe = zoom.coerceIn(0.4f, 12f).let { if (it.isFinite()) it else 1f }
+        val panSafe = Offset(
+            if (pan.x.isFinite()) pan.x else 0f,
+            if (pan.y.isFinite()) pan.y else 0f
+        )
+        fun tx(p: Offset) = Offset(
+            left + (p.x - left) * zSafe + panSafe.x,
+            top + (p.y - top) * zSafe + panSafe.y
+        )
 
-        // station grid
-        result.rows.forEach { row ->
+        // station grid — محدود به تعداد معقول
+        val maxStations = 200
+        result.rows.take(maxStations).forEach { row ->
             val x = tx(Offset(sx(row.chainage), top)).x
+            if (!x.isFinite()) return@forEach
             drawLine(Color(0x3344FFFFFF), Offset(x, top), Offset(x, top + plotH), 1f)
-            drawText(textMeasurer, ProfileEngine.stationLabel(row.chainage), topLeft = Offset(x - 22f, size.height - 34f), style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp))
+            if (result.rows.size <= 80) {
+                drawText(
+                    textMeasurer,
+                    ProfileEngine.stationLabel(row.chainage),
+                    topLeft = Offset(x - 22f, size.height - 34f),
+                    style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp)
+                )
+            }
         }
-        val stationStep = if (result.rows.size > 1) (result.rows[1].chainage - result.rows[0].chainage).coerceAtLeast(0.01) else 10.0
-        val verticalGridStep = stationStep * 2.0
+        val stationStep = if (result.rows.size > 1)
+            (result.rows[1].chainage - result.rows[0].chainage).coerceAtLeast(0.01)
+        else 10.0
+        // گام شبکه ارتفاعی طوری که بیش از ~40 خط نشود
+        var verticalGridStep = (stationStep * 2.0).coerceAtLeast(0.5)
+        val zSpan = (maxZ - minZ).coerceAtLeast(1.0)
+        if (zSpan / verticalGridStep > 40.0) {
+            verticalGridStep = zSpan / 40.0
+        }
         var z = minZ
-        while (z <= maxZ + 1e-6) {
+        var guard = 0
+        while (z <= maxZ + 1e-6 && guard < 50) {
+            guard++
             val y = tx(Offset(left, sy(z))).y
-            drawLine(Color(0x3344FFFFFF), Offset(left, y), Offset(left + plotW, y), 1f)
-            drawText(textMeasurer, String.format(java.util.Locale.US, "%.2f", z), topLeft = Offset(4f, y - 6f), style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp))
+            if (y.isFinite()) {
+                drawLine(Color(0x3344FFFFFF), Offset(left, y), Offset(left + plotW, y), 1f)
+                drawText(
+                    textMeasurer,
+                    String.format(java.util.Locale.US, "%.2f", z),
+                    topLeft = Offset(4f, y - 6f),
+                    style = androidx.compose.ui.text.TextStyle(color = Color.LightGray, fontSize = 9.sp)
+                )
+            }
             z += verticalGridStep
         }
         surfaceNames.forEachIndexed { idx, name ->
@@ -273,15 +327,21 @@ private fun ProfileChart(
                 val zz = row.elevations[name]
                 if (zz == null) { prev = null; return@forEach }
                 val p = tx(Offset(sx(row.chainage), sy(zz)))
+                if (!p.x.isFinite() || !p.y.isFinite()) { prev = null; return@forEach }
                 prev?.let { drawLine(if (idx == 0) Color(0xFF4FC3F7) else Color(0xFFFFB74D), it, p, 3f) }
                 prev = p
             }
         }
-        drawText(textMeasurer, "فاصله ایستگاه: ${if (result.rows.size > 1) String.format(java.util.Locale.US, "%.2f", result.rows[1].chainage - result.rows[0].chainage) else "-"} m", topLeft = Offset(left, 4f), style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 10.sp))
+        drawText(
+            textMeasurer,
+            "فاصله ایستگاه: ${if (result.rows.size > 1) String.format(java.util.Locale.US, "%.2f", result.rows[1].chainage - result.rows[0].chainage) else "-"} m",
+            topLeft = Offset(left, 4f),
+            style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 10.sp)
+        )
     }
 }
 
-@Composable
+
 private fun ProfileTable(result: ProfileResult2, surfaces: List<ProfileSurface>) {
     Card(shape = RoundedCornerShape(12.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(8.dp)) {
