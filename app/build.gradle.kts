@@ -11,12 +11,18 @@ android {
         applicationId = "com.adel.assistant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0-skeleton"
+        // base 2000 + شماره بیلد CI → همیشه از نسخهٔ قبلی بزرگ‌تر و قابل آپدیت
+        val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: System.getenv("VERSION_CODE") ?: "0").toIntOrNull() ?: 0
+        val code = 2000 + runNumber
+        versionCode = code
+        versionName = "1.0.$code"
     }
 
     buildTypes {
         release {
+            isMinifyEnabled = false
+        }
+        debug {
             isMinifyEnabled = false
         }
     }
