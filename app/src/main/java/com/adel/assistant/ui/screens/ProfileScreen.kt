@@ -342,6 +342,7 @@ private fun ProfileChart(
 }
 
 
+@Composable
 private fun ProfileTable(result: ProfileResult2, surfaces: List<ProfileSurface>) {
     Card(shape = RoundedCornerShape(12.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(8.dp)) {
