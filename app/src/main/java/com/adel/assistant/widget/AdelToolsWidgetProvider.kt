@@ -43,8 +43,8 @@ class AdelToolsWidgetProvider : AppWidgetProvider() {
 
         fun buildViews(context: Context): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.adel_tools_widget)
-            views.setOnClickPendingIntent(R.id.btn_draw_map, openRoute(context, Routes.TOOL_DXF, 501))
-            views.setOnClickPendingIntent(R.id.btn_preview_map, openRoute(context, Routes.TOOL_DXF_PREVIEW, 502))
+            views.setOnClickPendingIntent(R.id.btn_draw_map, openRoute(context, Routes.SURVEY_PROJECT_CALENDAR, 501))
+            views.setOnClickPendingIntent(R.id.btn_preview_map, openRoute(context, Routes.TOOL_MAP2, 502))
             views.setOnClickPendingIntent(R.id.btn_converter, openRoute(context, Routes.TOOL_GSI, 503))
             views.setOnClickPendingIntent(R.id.btn_dump, openRoute(context, Routes.TOOL_TOTAL_STATION, 504))
             views.setOnClickPendingIntent(R.id.btn_plumb, openRoute(context, "tool/plumb", 505))

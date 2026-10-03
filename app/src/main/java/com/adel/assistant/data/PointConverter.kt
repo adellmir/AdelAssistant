@@ -18,12 +18,55 @@ object PointConverter {
     /** خواندن از بایت (برای KMZ که باینری/زیپ است) */
     fun readBytes(bytes: ByteArray, fileName: String): List<SurveyPoint> {
         val lower = fileName.lowercase()
+        val ext = extractExtension(lower)
         return when {
-            lower.endsWith(".kmz") || lower.endsWith(".kml") ->
+            ext == "kmz" || ext == "kml" || lower.endsWith(".kmz") || lower.endsWith(".kml") ->
                 KmlParser.parseBytes(bytes, fileName).points
-            lower.endsWith(".gsi") -> parseGsi(bytes.toString(Charsets.UTF_8))
-            else -> read(bytes.toString(Charsets.UTF_8), lower.substringAfterLast('.', "txt"))
+            ext == "gsi" || lower.endsWith(".gsi") -> parseGsi(bytes.toString(Charsets.UTF_8))
+            ext == "dat" || lower.endsWith(".dat") ->
+                parseDelimited(bytes.toString(Charsets.UTF_8), datOrder = true)
+            else -> {
+                val text = bytes.toString(Charsets.UTF_8)
+                // اگر پسوند نامشخص است ولی ستون‌ها شبیه N,Y,X,Z هستند → DAT
+                if (looksLikeDatOrder(text)) parseDelimited(text, datOrder = true)
+                else read(text, ext.ifBlank { "txt" })
+            }
         }
+    }
+
+    /** استخراج پسوند از نام یا URI (مثلاً content://.../Namaz%20Hashemie.dat) */
+    private fun extractExtension(nameOrUri: String): String {
+        val decoded = try {
+            java.net.URLDecoder.decode(nameOrUri, "UTF-8")
+        } catch (_: Exception) {
+            nameOrUri
+        }
+        val base = decoded.substringAfterLast('/').substringAfterLast(':')
+        val dot = base.lastIndexOf('.')
+        if (dot < 0 || dot == base.lastIndex) return ""
+        return base.substring(dot + 1).lowercase().takeWhile { it.isLetterOrDigit() }
+    }
+
+    /**
+     * تشخیص خودکار ترتیب DAT (N Y X Z):
+     * اگر در چند خط اول، ستون۲ ~ northing (معمولاً > 1e6) و ستون۳ ~ easting باشد.
+     */
+    private fun looksLikeDatOrder(text: String): Boolean {
+        var checked = 0
+        var datVotes = 0
+        text.lineSequence().forEach { raw ->
+            if (checked >= 8) return@forEach
+            val line = raw.trim()
+            if (line.isBlank() || line.startsWith("#")) return@forEach
+            val toks = line.split(Regex("[,;\t ]+")).filter { it.isNotBlank() }
+            if (toks.size < 4) return@forEach
+            val c1 = toks[1].replace(',', '.').toDoubleOrNull() ?: return@forEach
+            val c2 = toks[2].replace(',', '.').toDoubleOrNull() ?: return@forEach
+            checked++
+            // UTM zone 38-41 ایران: E ~ 2e5..8e5 ، N ~ 2.8e6..4.4e6
+            if (c1 > 1_000_000 && c2 < c1 && c2 > 50_000) datVotes++
+        }
+        return checked > 0 && datVotes * 2 >= checked
     }
 
     fun write(points: List<SurveyPoint>, extension: String): String = when (extension.lowercase()) {

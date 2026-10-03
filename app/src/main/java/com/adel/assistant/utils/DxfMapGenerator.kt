@@ -127,45 +127,74 @@ object DxfMapGenerator {
         }?.value
     }
 
+    /**
+     * ترسیم خطوط بر اساس خانوادهٔ کد (نه ترتیب خام فایل):
+     * ۱) همهٔ نقاط LINE با پایهٔ کد یکسان جمع می‌شوند
+     * ۲) بر اساس شماره نقطه مرتب می‌شوند
+     * ۳) پشت‌سرهم وصل می‌شوند — قطع شدن با کد دیگر در میانهٔ برداشت خط را نمی‌شکند
+     * ۴) فقط با .e / e. (در صورت وجود و closeOnE) زنجیره جدا می‌شود
+     * کاربر ممکن است .e نگذارد؛ در آن حالت کل خانواده یک زنجیره است.
+     */
     private fun writeAllLinesInOrder(
         sb: StringBuilder,
         points: List<SurveyPoint>,
         settings: Map<String, CodeSetting>
     ) {
-        var current = mutableListOf<SurveyPoint>()
-        var currentLayer = "0"
-        var currentColor = 7
-        var closeOnE = false
-
-        fun flush() {
-            if (current.size >= 2) {
-                for (i in 0 until current.size - 1) {
-                    writeLine(sb, current[i], current[i + 1], currentLayer, currentColor)
-                }
-            } else if (current.size == 1) {
-                writePointSymbol(sb, current[0], currentLayer, currentColor)
-            }
-            current = mutableListOf()
+        // خانواده → لیست نقاط
+        val families = linkedMapOf<String, MutableList<SurveyPoint>>()
+        points.forEach { p ->
+            val setting = resolveSetting(settings, p.code) ?: return@forEach
+            if (setting.category != CodeCategory.LINE) return@forEach
+            val fam = codeBase(p.code).ifBlank { p.code.trim().lowercase() }
+            if (fam.isBlank()) return@forEach
+            families.getOrPut(fam) { mutableListOf() }.add(p)
         }
 
-        points.forEach { p ->
-            val setting = resolveSetting(settings, p.code)
-            if (setting == null || setting.category != CodeCategory.LINE) {
-                flush()
-                return@forEach
-            }
+        families.forEach { (fam, rawList) ->
+            val setting = resolveSetting(settings, fam)
+                ?: resolveSetting(settings, rawList.first().code)
+                ?: return@forEach
             val layer = sanitizeLayer(
-                setting.layerName.ifBlank { "L-${p.code.substringBefore(".")}" }
+                setting.layerName.ifBlank { "L-$fam" }
             )
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
-            if (current.isNotEmpty() && layer != currentLayer) flush()
-            currentLayer = layer
-            currentColor = color
-            closeOnE = setting.closeOnE
-            current.add(p)
-            if (closeOnE && p.isEndOfLine()) flush()
+
+            // مرتب‌سازی بر اساس شماره نقطه (عددی در صورت امکان)
+            val sorted = rawList.sortedWith(
+                compareBy<SurveyPoint>(
+                    { it.id.toDoubleOrNull() ?: Double.MAX_VALUE },
+                    { it.id }
+                )
+            )
+
+            if (!setting.closeOnE) {
+                // بدون .e: کل نقاط خانواده به ترتیب شماره وصل می‌شوند
+                for (i in 0 until sorted.size - 1) {
+                    writeLine(sb, sorted[i], sorted[i + 1], layer, color)
+                }
+                if (sorted.size == 1) {
+                    writePointSymbol(sb, sorted[0], layer, color)
+                }
+            } else {
+                // با closeOnE: زنجیره‌ها با نقطهٔ .e جدا می‌شوند
+                var chain = mutableListOf<SurveyPoint>()
+                fun flushChain() {
+                    if (chain.size >= 2) {
+                        for (i in 0 until chain.size - 1) {
+                            writeLine(sb, chain[i], chain[i + 1], layer, color)
+                        }
+                    } else if (chain.size == 1) {
+                        writePointSymbol(sb, chain[0], layer, color)
+                    }
+                    chain = mutableListOf()
+                }
+                sorted.forEach { p ->
+                    chain.add(p)
+                    if (p.isEndOfLine()) flushChain()
+                }
+                flushChain()
+            }
         }
-        flush()
     }
 
     private fun writeLine(

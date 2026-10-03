@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
+import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.GsiPoint
 import java.io.BufferedReader
 import java.io.File
@@ -86,13 +87,45 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
                 BufferedReader(InputStreamReader(ins, Charsets.UTF_8)).readText()
             } ?: ""
             val name = uri.lastPathSegment?.lowercase() ?: ""
-            val parsed = when {
-                name.endsWith(".gsi") || name.endsWith(".dat") ||
-                    text.trimStart().startsWith("*11") ||
-                    text.contains("81..") ||
-                    text.contains("81.") -> GsiParser.parse(text)
-                name.endsWith(".dat") -> GsiParser.parseDat(text)
-                else -> GsiParser.parseTxt(text).ifEmpty { GsiParser.parseDat(text) }.ifEmpty { GsiParser.parse(text) }
+            val lowerName = name.lowercase()
+            val isDat = lowerName.endsWith(".dat") || lowerName.contains(".dat")
+            val isGsi = lowerName.endsWith(".gsi") ||
+                text.trimStart().startsWith("*11") ||
+                text.contains("81..")
+            val parsed: List<GsiPoint> = when {
+                isDat -> {
+                    // DAT: N Y X Z D — از PointConverter یا parseDat
+                    val sp = try {
+                        PointConverter.readBytes(text.toByteArray(Charsets.UTF_8), if (isDat) "points.dat" else name)
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    if (sp.isNotEmpty()) {
+                        sp.map { p ->
+                            GsiPoint(name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
+                        }
+                    } else {
+                        GsiParser.parseDat(text)
+                    }
+                }
+                isGsi -> GsiParser.parse(text)
+                else -> {
+                    // TXT/CSV: اول PointConverter، بعد parseTxt، در نهایت تشخیص DAT
+                    val sp = try {
+                        PointConverter.readBytes(text.toByteArray(Charsets.UTF_8), name)
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    if (sp.isNotEmpty()) {
+                        sp.map { p ->
+                            GsiPoint(name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
+                        }
+                    } else {
+                        GsiParser.parseTxt(text)
+                            .ifEmpty { GsiParser.parseDat(text) }
+                            .ifEmpty { GsiParser.parse(text) }
+                    }
+                }
             }
             points = parsed
             selectedIds = parsed.map { it.id }.toSet()
