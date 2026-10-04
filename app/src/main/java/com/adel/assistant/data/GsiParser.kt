@@ -289,4 +289,11 @@ object GsiParser {
 
     private fun esc(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    fun toCsv(points: List<GsiPoint>): String = buildString {
+        append("Name,E,N,Z,Code\n")
+        points.forEach { p ->
+            append(p.name); append(','); append(fmt(p.e)); append(','); append(fmt(p.n)); append(','); append(fmt(p.z)); append(','); append(p.code); append('\n')
+        }
+    }
+
 }

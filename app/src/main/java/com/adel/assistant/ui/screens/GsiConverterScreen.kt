@@ -1,22 +1,20 @@
 package com.adel.assistant.ui.screens
 
-import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.SortByAlpha
@@ -26,19 +24,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
-import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.GsiPoint
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStreamReader
+import com.adel.assistant.data.PointConverter
+import java.nio.charset.Charset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,20 +43,14 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     var points by remember { mutableStateOf<List<GsiPoint>>(emptyList()) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    var selectAll by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
     var showExportNameDialog by remember { mutableStateOf(false) }
     var pendingExportKind by remember { mutableStateOf("") }
     var exportBaseName by remember { mutableStateOf("gsi_export") }
-    var newestFirst by remember { mutableStateOf(true) }
+    var newestFirst by remember { mutableStateOf(false) }
     var sortByCode by remember { mutableStateOf(false) }
     var rangeSelectMode by remember { mutableStateOf(false) }
     var rangeAnchorId by remember { mutableStateOf<Long?>(null) }
-    var editTarget by remember { mutableStateOf<GsiPoint?>(null) }
-    var editName by remember { mutableStateOf("") }
-    var editE by remember { mutableStateOf("") }
-    var editN by remember { mutableStateOf("") }
-    var editZ by remember { mutableStateOf("") }
 
     val displayList = remember(points, newestFirst, sortByCode) {
         val base = if (sortByCode) {
@@ -68,8 +59,74 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         if (newestFirst) base.asReversed() else base
     }
 
-    fun selectedPoints(): List<GsiPoint> {
-        return if (selectAll) points else points.filter { it.id in selectedIds }
+    fun selectedPoints(): List<GsiPoint> =
+        if (selectedIds.isEmpty()) points else points.filter { it.id in selectedIds }
+
+    fun displayName(uri: Uri): String {
+        try {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (i >= 0) {
+                        val n = c.getString(i)
+                        if (!n.isNullOrBlank()) return n
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
+    }
+
+    fun parseAny(bytes: ByteArray, fileName: String): List<GsiPoint> {
+        val name = fileName.lowercase()
+        // 1) GSI
+        if (name.endsWith(".gsi") || name.contains(".gsi")) {
+            val t = bytes.toString(Charsets.UTF_8)
+            val g = GsiParser.parse(t)
+            if (g.isNotEmpty()) return g
+        }
+        // 2) DAT via PointConverter (N Y X Z)
+        if (name.endsWith(".dat") || name.contains(".dat")) {
+            val sp = try {
+                PointConverter.readBytes(bytes, "file.dat")
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (sp.isNotEmpty()) {
+                return sp.mapIndexed { i, p ->
+                    GsiPoint(id = System.nanoTime() + i, name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
+                }
+            }
+            val d = GsiParser.parseDat(bytes.toString(Charsets.UTF_8))
+            if (d.isNotEmpty()) return d
+        }
+        // 3) PointConverter general (auto DAT detect)
+        try {
+            val sp = PointConverter.readBytes(bytes, fileName)
+            if (sp.isNotEmpty()) {
+                return sp.mapIndexed { i, p ->
+                    GsiPoint(id = System.nanoTime() + i, name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        val text = try {
+            bytes.toString(Charsets.UTF_8)
+        } catch (_: Exception) {
+            bytes.toString(Charset.defaultCharset())
+        }
+        // 4) GSI by content
+        if (text.trimStart().startsWith("*11") || text.contains("81..") || text.contains("*41")) {
+            val g = GsiParser.parse(text)
+            if (g.isNotEmpty()) return g
+        }
+        // 5) DAT then TXT
+        val dat = GsiParser.parseDat(text)
+        if (dat.isNotEmpty()) return dat
+        val txt = GsiParser.parseTxt(text)
+        if (txt.isNotEmpty()) return txt
+        return GsiParser.parse(text)
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -83,63 +140,25 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         } catch (_: Exception) {
         }
         try {
-            val text = context.contentResolver.openInputStream(uri)?.use { ins ->
-                BufferedReader(InputStreamReader(ins, Charsets.UTF_8)).readText()
-            } ?: ""
-            val name = uri.lastPathSegment?.lowercase() ?: ""
-            val lowerName = name.lowercase()
-            val isDat = lowerName.endsWith(".dat") || lowerName.contains(".dat")
-            val isGsi = lowerName.endsWith(".gsi") ||
-                text.trimStart().startsWith("*11") ||
-                text.contains("81..")
-            val parsed: List<GsiPoint> = when {
-                isDat -> {
-                    // DAT: N Y X Z D — از PointConverter یا parseDat
-                    val sp = try {
-                        PointConverter.readBytes(text.toByteArray(Charsets.UTF_8), if (isDat) "points.dat" else name)
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-                    if (sp.isNotEmpty()) {
-                        sp.map { p ->
-                            GsiPoint(name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
-                        }
-                    } else {
-                        GsiParser.parseDat(text)
-                    }
-                }
-                isGsi -> GsiParser.parse(text)
-                else -> {
-                    // TXT/CSV: اول PointConverter، بعد parseTxt، در نهایت تشخیص DAT
-                    val sp = try {
-                        PointConverter.readBytes(text.toByteArray(Charsets.UTF_8), name)
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-                    if (sp.isNotEmpty()) {
-                        sp.map { p ->
-                            GsiPoint(name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
-                        }
-                    } else {
-                        GsiParser.parseTxt(text)
-                            .ifEmpty { GsiParser.parseDat(text) }
-                            .ifEmpty { GsiParser.parse(text) }
-                    }
-                }
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes == null || bytes.isEmpty()) {
+                status = "فایل خالی یا خوانده نشد"
+                return@rememberLauncherForActivityResult
             }
-            points = parsed
-            selectedIds = parsed.map { it.id }.toSet()
-            selectAll = true
-            status = if (parsed.isEmpty()) "نقطه‌ای یافت نشد" else "${parsed.size} نقطه"
+            val fname = displayName(uri)
+            val parsed = parseAny(bytes, fname)
+            if (parsed.isEmpty()) {
+                status = "نقطه‌ای از «$fname» خوانده نشد (${bytes.size} بایت)"
+                points = emptyList()
+                selectedIds = emptySet()
+            } else {
+                points = parsed
+                selectedIds = parsed.map { it.id }.toSet()
+                status = "${parsed.size} نقطه از «$fname» بارگذاری شد"
+            }
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
-            points = emptyList()
-            selectedIds = emptySet()
         }
-    }
-
-    fun saveFile(fileName: String, body: String, mime: String = "text/plain"): Boolean {
-        return FileExport.exportTextToDocuments(context, fileName, body, mime) != null
     }
 
     fun export(kind: String) {
@@ -149,318 +168,266 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             return
         }
         pendingExportKind = kind
-        exportBaseName = "export"
+        exportBaseName = "gsi_export"
         showExportNameDialog = true
     }
 
-    fun doExport(kind: String, base: String) {
+    fun doExport(base: String) {
         val list = selectedPoints()
-        if (list.isEmpty()) {
-            status = "نقطه‌ای انتخاب نشده"
-            return
+        val body = when (pendingExportKind) {
+            "txt" -> GsiParser.toTxt(list)
+            "dat" -> GsiParser.toDat(list)
+            "csv" -> GsiParser.toCsv(list)
+            "gsi" -> GsiParser.toGsi(list)
+            else -> GsiParser.toTxt(list)
         }
-        val b = base.trim().ifBlank { "export" }.replace(Regex("[\\/:*?\"<>|]"), "_")
-        val ok = when (kind) {
-            "txt" -> saveFile("$b.txt", GsiParser.toTxt(list))
-            "gsi" -> saveFile("$b.gsi", GsiParser.toGsi(list))
-            "dat" -> saveFile("$b.dat", GsiParser.toDat(list))
-            "kml" -> saveFile("$b.kml", GsiParser.toKml(list), "application/vnd.google-earth.kml+xml")
-            "dxf" -> saveFile("$b.dxf", GsiParser.toDxf(list), "application/dxf")
-            else -> false
+        val ext = pendingExportKind.ifBlank { "txt" }
+        val name = base.trim().ifBlank { "gsi_export" }.let {
+            if (it.endsWith(".$ext", true)) it else "$it.$ext"
         }
-        status = if (ok) "ذخیره شد: $b.$kind (${list.size} نقطه)" else "خطا در ذخیره $kind"
-    }
-
-    fun applyEdit() {
-        val t = editTarget ?: return
-        val e = editE.toDoubleOrNull()
-        val n = editN.toDoubleOrNull()
-        val z = editZ.toDoubleOrNull()
-        if (editName.isBlank() || e == null || n == null || z == null) {
-            status = "مقادیر نامعتبر"
-            return
-        }
-        points = points.map {
-            if (it.id == t.id) it.copy(name = editName.trim(), e = e, n = n, z = z) else it
-        }
-        editTarget = null
-        status = "ویرایش شد"
+        val ok = FileExport.exportTextToDocuments(context, name, body) != null
+        status = if (ok) "ذخیره شد: $name (${list.size} نقطه)" else "خطا در ذخیره"
+        showExportNameDialog = false
     }
 
     Scaffold(
+        containerColor = Color(0xFF1A1F16),
         topBar = {
             TopAppBar(
                 title = { Text("مبدل") },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("بازگشت", color = color) }
+                    IconButton(onClick = onBack) {
+                        Text("←", color = Color.White, fontSize = 20.sp)
+                    }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1A1F16),
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF24301C))
             )
-        },
-        containerColor = Color(0xFF12150F)
+        }
     ) { pad ->
         Column(
             Modifier
                 .padding(pad)
                 .fillMaxSize()
-                .padding(12.dp)
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (status.isNotBlank()) {
-                Text(status, color = Color(0xFFB0B8A8), fontSize = 13.sp)
-                Spacer(Modifier.height(6.dp))
-            }
-
-            // یک ردیف آیکن: باز کردن | ترتیب جدید/قدیم | انتخاب همه | گزینش | بازه | مرتب‌سازی کد
+            // Toolbar
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { picker.launch(arrayOf("*/*", "text/*", "application/octet-stream")) }
-                ) {
-                    Icon(Icons.Filled.FolderOpen, contentDescription = "باز کردن", tint = color)
+                IconButton(onClick = { picker.launch(arrayOf("*/*")) }) {
+                    Icon(Icons.Filled.FolderOpen, "باز کردن", tint = color)
                 }
-                IconButton(
-                    onClick = { newestFirst = !newestFirst },
-                    enabled = points.isNotEmpty()
-                ) {
-                    Icon(
-                        Icons.Filled.SwapVert,
-                        contentDescription = if (newestFirst) "جدید→قدیم" else "قدیم→جدید",
-                        tint = if (points.isNotEmpty()) color else Color.Gray
-                    )
+                IconButton(onClick = {
+                    selectedIds = points.map { it.id }.toSet()
+                    status = "همه انتخاب شدند (${points.size})"
+                }) {
+                    Icon(Icons.Filled.SelectAll, "همه", tint = color)
                 }
-                IconButton(
-                    onClick = {
-                        selectAll = true
-                        selectedIds = points.map { it.id }.toSet()
-                        rangeAnchorId = null
-                        status = "همه انتخاب شد"
-                    },
-                    enabled = points.isNotEmpty()
-                ) {
-                    Icon(Icons.Filled.SelectAll, contentDescription = "انتخاب همه", tint = if (points.isNotEmpty()) color else Color.Gray)
+                TextButton(onClick = {
+                    selectedIds = emptySet()
+                    status = "انتخاب پاک شد"
+                }) { Text("هیچ", color = color, fontSize = 12.sp) }
+                Text("|", color = Color(0xFF6A7260))
+                TextButton(onClick = {
+                    rangeSelectMode = !rangeSelectMode
+                    rangeAnchorId = null
+                    status = if (rangeSelectMode) "بازه: نقطه اول را بزن" else "بازه خاموش"
+                }) {
+                    Text(if (rangeSelectMode) "بازه✓" else "بازه", color = color, fontSize = 12.sp)
                 }
-                IconButton(
-                    onClick = {
-                        selectAll = false
-                        selectedIds = emptySet()
-                        rangeAnchorId = null
-                        rangeSelectMode = false
-                        status = "گزینش: هیچ‌کدام"
-                    },
-                    enabled = points.isNotEmpty()
-                ) {
-                    Icon(Icons.Filled.CheckBoxOutlineBlank, contentDescription = "گزینش خالی", tint = if (points.isNotEmpty()) color else Color.Gray)
+                IconButton(onClick = { sortByCode = !sortByCode }) {
+                    Icon(Icons.Filled.SortByAlpha, "کد", tint = if (sortByCode) color else Color.Gray)
                 }
-                IconButton(
-                    onClick = {
-                        rangeSelectMode = !rangeSelectMode
-                        rangeAnchorId = null
-                        selectAll = false
-                        status = if (rangeSelectMode) "بازه: دو نقطه ابتدا و انتها را بزن" else "بازه خاموش"
-                    },
-                    enabled = points.isNotEmpty()
-                ) {
-                    Icon(
-                        Icons.Filled.CheckBox,
-                        contentDescription = "انتخاب بازه‌ای",
-                        tint = if (rangeSelectMode) Color(0xFF81C995) else (if (points.isNotEmpty()) color else Color.Gray)
-                    )
+                IconButton(onClick = { newestFirst = !newestFirst }) {
+                    Icon(Icons.Filled.SwapVert, "ترتیب", tint = color)
                 }
-                IconButton(
-                    onClick = {
-                        sortByCode = !sortByCode
-                        status = if (sortByCode) "مرتب بر اساس کد" else "مرتب پیش‌فرض"
-                    },
-                    enabled = points.isNotEmpty()
-                ) {
-                    Icon(
-                        Icons.Filled.SortByAlpha,
-                        contentDescription = "مرتب‌سازی کد",
-                        tint = if (sortByCode) Color(0xFF81C995) else (if (points.isNotEmpty()) color else Color.Gray)
-                    )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("txt", "dat", "csv", "gsi").forEach { k ->
+                    OutlinedButton(onClick = { export(k) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
+                        Text(k.uppercase(), fontSize = 11.sp)
+                    }
                 }
+            }
+
+            if (status.isNotBlank()) {
+                Text(status, color = color, fontSize = 12.sp)
             }
             Text(
-                "📁 باز کردن  |  ↕ جدید/قدیم  |  ☑ همه  |  ☐ خالی  |  ▣ بازه  |  A کد",
-                color = Color(0xFF8A9280),
-                fontSize = 10.sp,
-                modifier = Modifier.fillMaxWidth()
+                if (points.isEmpty()) "فایلی باز نشده — GSI / DAT / TXT / CSV"
+                else "${points.size} نقطه | انتخاب‌شده: ${selectedIds.size}",
+                color = Color(0xFFB0B8A8),
+                fontSize = 12.sp
             )
 
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(
-                    "TXT" to "txt",
-                    "GSI" to "gsi",
-                    "KML" to "kml",
-                    "DXF" to "dxf"
-                ).forEach { (label, kind) ->
-                    Button(
-                        onClick = { export(kind) },
-                        enabled = points.isNotEmpty(),
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = color)
-                    ) { Text(label, fontSize = 12.sp) }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            LazyColumn(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(displayList, key = { it.id }) { p ->
-                    val checked = selectAll || p.id in selectedIds
+            // Excel-like table
+            if (points.isNotEmpty()) {
+                val hScroll = rememberScrollState()
+                Column(Modifier.fillMaxSize()) {
+                    // Header
                     Row(
                         Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1E241A), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                            .horizontalScroll(hScroll)
+                            .background(Color(0xFF2A3324), RoundedCornerShape(6.dp))
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = checked,
-                            onCheckedChange = { on ->
-                                selectAll = false
-                                if (rangeSelectMode) {
-                                    if (rangeAnchorId == null) {
-                                        rangeAnchorId = p.id
-                                        selectedIds = setOf(p.id)
-                                        status = "ابتدای بازه: ${p.name} — نقطه پایان را بزن"
-                                    } else {
-                                        val ids = displayList.map { it.id }
-                                        val i1 = ids.indexOf(rangeAnchorId)
-                                        val i2 = ids.indexOf(p.id)
-                                        if (i1 >= 0 && i2 >= 0) {
-                                            val a = minOf(i1, i2); val b = maxOf(i1, i2)
-                                            selectedIds = ids.subList(a, b + 1).toSet()
-                                            status = "بازه ${b - a + 1} نقطه انتخاب شد"
-                                        } else {
-                                            selectedIds = setOf(p.id)
-                                        }
-                                        rangeAnchorId = null
-                                    }
-                                } else {
-                                    selectedIds = if (on) selectedIds + p.id else selectedIds - p.id
-                                }
-                            },
-                            colors = CheckboxDefaults.colors(checkedColor = color)
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                p.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                "E ${fmt(p.e)}  N ${fmt(p.n)}  Z ${fmt(p.z)}",
-                                color = Color(0xFFB0B8A8),
-                                fontSize = 12.sp
-                            )
+                        Box(Modifier.width(40.dp), contentAlignment = Alignment.Center) {
+                            Text("✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
-                        TextButton(
-                            onClick = {
-                                editTarget = p
-                                editName = p.name
-                                editE = fmt(p.e)
-                                editN = fmt(p.n)
-                                editZ = fmt(p.z)
+                        HeaderCell("نام", 72)
+                        HeaderCell("E (X)", 100)
+                        HeaderCell("N (Y)", 100)
+                        HeaderCell("Z", 80)
+                        HeaderCell("کد", 72)
+                    }
+                    LazyColumn(
+                        Modifier
+                            .weight(1f)
+                            .horizontalScroll(hScroll),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        itemsIndexed(displayList, key = { _, p -> p.id }) { _, p ->
+                            val on = p.id in selectedIds
+                            Row(
+                                Modifier
+                                    .background(
+                                        if (on) Color(0xFF2A3A22) else Color(0xFF22281C),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(vertical = 2.dp, horizontal = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = on,
+                                    onCheckedChange = { checked ->
+                                        if (rangeSelectMode) {
+                                            if (rangeAnchorId == null) {
+                                                rangeAnchorId = p.id
+                                                selectedIds = setOf(p.id)
+                                                status = "نقطه اول بازه ثبت شد — نقطه دوم را بزن"
+                                            } else {
+                                                val ids = displayList.map { it.id }
+                                                val i1 = ids.indexOf(rangeAnchorId)
+                                                val i2 = ids.indexOf(p.id)
+                                                if (i1 >= 0 && i2 >= 0) {
+                                                    val a = minOf(i1, i2)
+                                                    val b = maxOf(i1, i2)
+                                                    selectedIds = ids.subList(a, b + 1).toSet()
+                                                    status = "بازه ${b - a + 1} نقطه"
+                                                }
+                                                rangeAnchorId = null
+                                            }
+                                        } else {
+                                            selectedIds =
+                                                if (checked) selectedIds + p.id else selectedIds - p.id
+                                        }
+                                    },
+                                    colors = CheckboxDefaults.colors(checkedColor = color),
+                                    modifier = Modifier.size(40.dp)
+                                )
+                                EditCell(p.name, 72) { v ->
+                                    points = points.map {
+                                        if (it.id == p.id) it.copy(name = v) else it
+                                    }
+                                }
+                                EditCell(fmt(p.e), 100, true) { v ->
+                                    v.replace(',', '.').toDoubleOrNull()?.let { d ->
+                                        points = points.map {
+                                            if (it.id == p.id) it.copy(e = d) else it
+                                        }
+                                    }
+                                }
+                                EditCell(fmt(p.n), 100, true) { v ->
+                                    v.replace(',', '.').toDoubleOrNull()?.let { d ->
+                                        points = points.map {
+                                            if (it.id == p.id) it.copy(n = d) else it
+                                        }
+                                    }
+                                }
+                                EditCell(fmt(p.z), 80, true) { v ->
+                                    v.replace(',', '.').toDoubleOrNull()?.let { d ->
+                                        points = points.map {
+                                            if (it.id == p.id) it.copy(z = d) else it
+                                        }
+                                    }
+                                }
+                                EditCell(p.code, 72) { v ->
+                                    points = points.map {
+                                        if (it.id == p.id) it.copy(code = v) else it
+                                    }
+                                }
                             }
-                        ) { Text("ویرایش", color = color, fontSize = 12.sp) }
-                        TextButton(
-                            onClick = {
-                                points = points.filter { it.id != p.id }
-                                selectedIds = selectedIds - p.id
-                                status = "حذف شد"
-                            }
-                        ) { Text("حذف", color = Color(0xFFE57373), fontSize = 12.sp) }
+                        }
                     }
                 }
             }
         }
     }
 
-    if (editTarget != null) {
-        AlertDialog(
-            onDismissRequest = { editTarget = null },
-            title = { Text("ویرایش نقطه") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = editName,
-                        onValueChange = { editName = it },
-                        label = { Text("نام") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = editE,
-                        onValueChange = { editE = it },
-                        label = { Text("E") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                    OutlinedTextField(
-                        value = editN,
-                        onValueChange = { editN = it },
-                        label = { Text("N") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                    OutlinedTextField(
-                        value = editZ,
-                        onValueChange = { editZ = it },
-                        label = { Text("Z") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { applyEdit() }) { Text("ذخیره", color = color) }
-            },
-            dismissButton = {
-                TextButton(onClick = { editTarget = null }) { Text("انصراف") }
-            }
-        )
-    }
     if (showExportNameDialog) {
         AlertDialog(
             onDismissRequest = { showExportNameDialog = false },
             title = { Text("نام فایل خروجی") },
             text = {
                 OutlinedTextField(
-                    value = exportBaseName,
-                    onValueChange = { exportBaseName = it },
+                    exportBaseName,
+                    { exportBaseName = it },
                     label = { Text("نام بدون پسوند") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    singleLine = true
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showExportNameDialog = false
-                    doExport(pendingExportKind, exportBaseName)
-                }) { Text("ذخیره") }
+                TextButton(onClick = { doExport(exportBaseName) }) { Text("ذخیره") }
             },
             dismissButton = {
                 TextButton(onClick = { showExportNameDialog = false }) { Text("انصراف") }
             }
         )
     }
+}
 
+@Composable
+private fun HeaderCell(title: String, width: Int) {
+    Text(
+        title,
+        Modifier.width(width.dp).padding(horizontal = 4.dp),
+        color = Color.White,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp
+    )
+}
+
+@Composable
+private fun EditCell(
+    value: String,
+    width: Int,
+    numeric: Boolean = false,
+    onChange: (String) -> Unit
+) {
+    var local by remember(value) { mutableStateOf(value) }
+    BasicTextField(
+        value = local,
+        onValueChange = {
+            local = it
+            onChange(it)
+        },
+        singleLine = true,
+        textStyle = TextStyle(color = Color(0xFFE8EDE0), fontSize = 12.sp),
+        cursorBrush = SolidColor(Color.White),
+        keyboardOptions = if (numeric)
+            KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        else KeyboardOptions.Default,
+        modifier = Modifier
+            .width(width.dp)
+            .padding(horizontal = 2.dp, vertical = 4.dp)
+            .background(Color(0xFF1A2218), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 6.dp)
+    )
 }
 
 private fun fmt(v: Double): String =

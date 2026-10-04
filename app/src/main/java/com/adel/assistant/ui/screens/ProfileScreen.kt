@@ -49,6 +49,10 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
     var drawingZoom by remember { mutableStateOf(1f) }
     var drawingPan by remember { mutableStateOf(Offset.Zero) }
     var showTable by remember { mutableStateOf(false) }
+    var showDxfSettings by remember { mutableStateOf(false) }
+    var dxfStartChainage by remember { mutableStateOf("0") }
+    var dxfStationTextSize by remember { mutableStateOf("1.0") }
+    var dxfProfileTextSize by remember { mutableStateOf("1.5") }
 
     val pickSurface = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
@@ -188,12 +192,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                                 FileExport.exportTextToDocuments(context, "profile.csv", csv, "text/csv")
                                 message = "CSV ذخیره شد"
                             }, modifier = Modifier.weight(1f)) { Text("خروجی CSV") }
-                            Button(onClick = {
-                                val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
-                                val model = ProfileEngine.toDxfModel(r, ss, scale)
-                                ProfileSession.beginPlacement(model.toDxfText(), "profile.dxf")
-                                onOpenMap("placement")
-                            }, modifier = Modifier.weight(1f)) {
+                            Button(onClick = { showDxfSettings = true }, modifier = Modifier.weight(1f)) {
                                 Icon(Icons.Filled.Draw, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("ترسیم DXF")
                             }
                         }
@@ -226,6 +225,62 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
         )
     }
 }
+
+
+    if (showDxfSettings) {
+        val r = result
+        AlertDialog(
+            onDismissRequest = { showDxfSettings = false },
+            title = { Text("تنظیمات ترسیم DXF") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        dxfStartChainage, { dxfStartChainage = it },
+                        label = { Text("کیلومتر شروع الایمنت") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        dxfStationTextSize, { dxfStationTextSize = it },
+                        label = { Text("سایز متن کیلومترها") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        dxfProfileTextSize, { dxfProfileTextSize = it },
+                        label = { Text("سایز متن پروفیل طولی") },
+                        singleLine = true
+                    )
+                    Text("خط الایمنت + کیلومتربندی عمود + همه سطوح پروفیل", color = TextSecondary, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (r == null) return@TextButton
+                    val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
+                    val startCh = dxfStartChainage.replace(',', '.').toDoubleOrNull() ?: 0.0
+                    val stSize = dxfStationTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.0
+                    val prSize = dxfProfileTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.5
+                    val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
+                    val model = ProfileEngine.toDxfModel(
+                        result = r,
+                        surfaces = ss,
+                        scale = scale,
+                        layerName = "PROFILE",
+                        alignment = alignment,
+                        stationInterval = step,
+                        startChainage = startCh,
+                        stationTextSize = stSize,
+                        profileTextSize = prSize
+                    )
+                    ProfileSession.beginPlacement(model.toDxfText(), "profile.dxf")
+                    showDxfSettings = false
+                    onOpenMap("placement")
+                }) { Text("ترسیم") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDxfSettings = false }) { Text("انصراف") }
+            }
+        )
+    }
 
 @Composable
 private fun ProfileChart(

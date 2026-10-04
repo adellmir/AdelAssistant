@@ -133,95 +133,160 @@ object ProfileEngine {
     }
 
     /**
-     * مدل کامل ترسیم پروفیل.
-     * @param textHeightMeters ارتفاع متن اعداد (پیش‌فرض ۰٫۴ = ۴۰ سانتی‌متر)
-     * @param layerName نام لایه انگلیسی (پیش‌فرض PROFILE)
+     * DXF پروفیل + خط الایمنت با کیلومتربندی عمود بر مسیر.
+     * @param alignment رأس‌های الایمنت در مختصات واقعی (اختیاری)
+     * @param stationInterval فاصله کیلومتربندی روی الایمنت (متر)
+     * @param startChainage کیلومتر شروع
+     * @param stationTextSize ارتفاع متن کیلومتر روی نقشه
+     * @param profileTextSize ارتفاع متن روی شیت پروفیل
      */
     fun toDxfModel(
         result: ProfileResult2,
         surfaces: List<ProfileSurface>,
         scale: ProfileScale,
         layerName: String = "PROFILE",
-        textHeightMeters: Double = 0.4
+        alignment: List<AlignmentVertex> = emptyList(),
+        stationInterval: Double = 10.0,
+        startChainage: Double = 0.0,
+        stationTextSize: Double = 1.0,
+        profileTextSize: Double = 1.5
     ): DxfModel {
         val h = scale.horizontal.coerceAtLeast(1.0)
         val v = scale.vertical.coerceAtLeast(1.0)
-        val th = textHeightMeters.coerceAtLeast(0.05)
         val lines = mutableListOf<DxfLine>()
         val texts = mutableListOf<DxfText>()
         val layers = linkedMapOf<String, DxfLayerInfo>()
         fun layer(name: String, color: Int) { layers.putIfAbsent(name, DxfLayerInfo(name, color)) }
-        val gridLayer = "PROFILE_GRID"
-        val axisLayer = "PROFILE_AXIS"
-        val labelLayer = "PROFILE_LABEL"
-        val surfaceLayer = layerName
-        layer(layerName, 3)
-        layer(gridLayer, 8)
-        layer(axisLayer, 7)
-        layer(labelLayer, 7)
 
-        if (result.rows.isEmpty()) return DxfModel(emptyList(), emptyList(), emptyList(), layers, 0.0, 0.0, 1.0, 1.0)
-        val x0 = result.rows.first().chainage / h
-        val x1 = result.rows.last().chainage / h
-        val zMin = floorTo(result.minElevation, 2.0)
-        val zMax = ceilTo(result.maxElevation, 2.0)
-        val y0 = zMin / v
-        val y1 = zMax / v
-        val stationStep = if (result.rows.size > 1) {
-            (result.rows[1].chainage - result.rows[0].chainage).coerceAtLeast(0.01)
-        } else 10.0
-        val xStep = max(0.001, stationStep / h)
-        val zStepMeters = max(0.1, stationStep * 2.0)
+        layer("ALIGN", 1)
+        layer("STATION", 7)
+        layer("PROFILE", 3)
+        layer("PROFILE2", 5)
+        layer("GRID", 8)
+        layer("LABEL", 7)
 
-        // محورهای اصلی (ضخیم‌تر از گرید)
-        lines += DxfLine(x0, y0, x1, y0, axisLayer, 7) // محور افقی (ایستگاه)
-        lines += DxfLine(x0, y0, x0, y1, axisLayer, 7) // محور قائم (ارتفاع)
-
-        // گرید عمودی + برچسب ایستگاه
-        var gx = floorTo(result.rows.first().chainage, stationStep)
-        var guard = 0
-        while (gx <= result.rows.last().chainage + 1e-9 && guard < 5000) {
-            val xx = gx / h
-            lines += DxfLine(xx, y0, xx, y1, gridLayer, 8)
-            texts += DxfText(xx, y0 - th * 1.5, th, stationLabel(gx), labelLayer, 7)
-            gx += stationStep
-            guard++
-        }
-        // گرید افقی + برچسب ارتفاع
-        var gz = zMin
-        guard = 0
-        while (gz <= zMax + 1e-9 && guard < 5000) {
-            val yy = gz / v
-            lines += DxfLine(x0, yy, x1, yy, gridLayer, 8)
-            texts += DxfText(x0 - th * 3.0, yy, th, String.format(java.util.Locale.US, "%.2f", gz), labelLayer, 7)
-            gz += zStepMeters
-            guard++
-        }
-
-        surfaces.forEachIndexed { surfaceIndex, s ->
-            val color = if (surfaceIndex == 0) 3 else 1 + (surfaceIndex % 6)
-            var previous: Pair<Double, Double>? = null
-            result.rows.forEach { row ->
-                val z = row.elevations[s.name] ?: run { previous = null; return@forEach }
-                val p = row.chainage / h to z / v
-                previous?.let { lines += DxfLine(it.first, it.second, p.first, p.second, surfaceLayer, color) }
-                previous = p
+        // ---- 1) خط الایمنت + کیلومتربندی عمود بر مسیر (مختصات واقعی) ----
+        if (alignment.size >= 2) {
+            for (i in 0 until alignment.size - 1) {
+                val a = alignment[i]
+                val b = alignment[i + 1]
+                lines += DxfLine(a.x, a.y, b.x, b.y, "ALIGN", 1)
             }
-            val lastZ = result.rows.asReversed().firstNotNullOfOrNull { it.elevations[s.name] }
-            if (lastZ != null) texts += DxfText(x1, lastZ / v + th * 1.2, th, s.name, labelLayer, color)
+            val step = stationInterval.coerceAtLeast(0.01)
+            val stations = stations(alignment, step, startChainage)
+            stations.forEach { st ->
+                // جهت مماس
+                val idx = findSegmentIndex(alignment, st.x, st.y)
+                val (dx, dy) = segmentDirection(alignment, idx)
+                val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1e-9)
+                val ux = dx / len
+                val uy = dy / len
+                // عمود
+                val px = -uy
+                val py = ux
+                val tick = 1.5
+                lines += DxfLine(
+                    st.x - px * tick, st.y - py * tick,
+                    st.x + px * tick, st.y + py * tick,
+                    "STATION", 7
+                )
+                val ang = Math.toDegrees(kotlin.math.atan2(uy, ux))
+                // متن عمود بر مسیر: زاویه مماس + 90
+                val textAng = ang + 90.0
+                val off = 2.0 + stationTextSize
+                texts += DxfText(
+                    st.x + px * off,
+                    st.y + py * off,
+                    stationTextSize.coerceAtLeast(0.2),
+                    stationLabel(st.chainage),
+                    "STATION",
+                    7,
+                    textAng
+                )
+            }
         }
-        texts += DxfText(x0, y1 + th * 3.0, th * 1.2, "PROFILE", labelLayer, 7)
-        texts += DxfText(
-            x0, y1 + th * 1.2, th,
-            "H=1:${h.toInt()}  V=1:${v.toInt()}  VE=${String.format(java.util.Locale.US, "%.2f", scale.verticalExaggeration)}",
-            labelLayer, 7
-        )
-        val model = DxfModel(lines, emptyList(), texts, layers, min(x0, x1), y0 - th * 4.0, max(x0, x1), y1 + th * 6.0)
-        return try {
-            model.recalculatedBounds()
-        } catch (_: Exception) {
-            model
+
+        // ---- 2) شیت پروفیل (همه سطوح) ----
+        if (result.rows.isNotEmpty()) {
+            val x0 = result.rows.first().chainage / h
+            val x1 = result.rows.last().chainage / h
+            val zMin = floorTo(result.minElevation, 2.0)
+            val zMax = ceilTo(result.maxElevation, 2.0)
+            val y0 = zMin / v
+            val y1 = zMax / v
+            val stationStep = if (result.rows.size > 1) result.rows[1].chainage - result.rows[0].chainage else 10.0
+            val xStep = max(0.001, stationStep / h)
+            val zStepMeters = max(0.1, stationStep * 2.0)
+            val pText = profileTextSize.coerceAtLeast(0.3)
+
+            var gx = floorTo(result.rows.first().chainage, max(0.01, stationStep))
+            while (gx <= result.rows.last().chainage + 1e-9) {
+                val xx = gx / h
+                lines += DxfLine(xx, y0, xx, y1, "GRID", 8)
+                texts += DxfText(xx, y0 - 2.5 / v, pText / v * h * 0.15, stationLabel(gx), "LABEL", 7)
+                gx += xStep * h
+            }
+            var gz = zMin
+            var guard = 0
+            while (gz <= zMax + 1e-9 && guard < 80) {
+                guard++
+                val yy = gz / v
+                lines += DxfLine(x0, yy, x1, yy, "GRID", 8)
+                texts += DxfText(x0 - 8.0 / h, yy, pText / v * h * 0.15, String.format(java.util.Locale.US, "%.2f", gz), "LABEL", 7)
+                gz += zStepMeters
+            }
+
+            // هر دو (همه) خطوط پروفیل سطوح
+            surfaces.forEachIndexed { surfaceIndex, s ->
+                val color = if (surfaceIndex == 0) 3 else 1 + (surfaceIndex % 6)
+                val sLayer = if (surfaceIndex == 0) "PROFILE" else "PROFILE2"
+                layer(sLayer, color)
+                var previous: Pair<Double, Double>? = null
+                result.rows.forEach { row ->
+                    val z = row.elevations[s.name] ?: run { previous = null; return@forEach }
+                    val pt = row.chainage / h to z / v
+                    previous?.let { lines += DxfLine(it.first, it.second, pt.first, pt.second, sLayer, color) }
+                    previous = pt
+                }
+                val lastZ = result.rows.asReversed().firstNotNullOfOrNull { it.elevations[s.name] }
+                if (lastZ != null) {
+                    texts += DxfText(x1, lastZ / v + 3.0 / v, pText, s.name, "LABEL", color)
+                }
+            }
+            texts += DxfText(x0, y1 + 4.0 / v, pText * 1.2, "PROFILE", "LABEL", 7)
+            texts += DxfText(
+                x0, y1 + 1.0 / v, pText * 0.8,
+                "H=1:${h.toInt()}  V=1:${v.toInt()}",
+                "LABEL", 7
+            )
         }
+
+        val model = DxfModel(lines, emptyList(), texts, layers, 0.0, 0.0, 1.0, 1.0)
+        return model.recalculatedBounds()
+    }
+
+    private fun findSegmentIndex(vertices: List<AlignmentVertex>, x: Double, y: Double): Int {
+        var best = 0
+        var bestD = Double.MAX_VALUE
+        for (i in 0 until vertices.size - 1) {
+            val a = vertices[i]
+            val b = vertices[i + 1]
+            val mx = (a.x + b.x) / 2
+            val my = (a.y + b.y) / 2
+            val d = (mx - x) * (mx - x) + (my - y) * (my - y)
+            if (d < bestD) {
+                bestD = d
+                best = i
+            }
+        }
+        return best
+    }
+
+    private fun segmentDirection(vertices: List<AlignmentVertex>, index: Int): Pair<Double, Double> {
+        val i = index.coerceIn(0, (vertices.size - 2).coerceAtLeast(0))
+        val a = vertices[i]
+        val b = vertices.getOrElse(i + 1) { a }
+        return (b.x - a.x) to (b.y - a.y)
     }
 
     private fun floorTo(v: Double, step: Double): Double = kotlin.math.floor(v / step) * step

@@ -5,7 +5,7 @@ import kotlin.math.sqrt
 
 data class DxfLine(val x1: Double, val y1: Double, val x2: Double, val y2: Double, val layer: String, val color: Int)
 data class DxfCircle(val x: Double, val y: Double, val r: Double, val layer: String, val color: Int)
-data class DxfText(val x: Double, val y: Double, val height: Double, val text: String, val layer: String, val color: Int)
+data class DxfText(val x: Double, val y: Double, val height: Double, val text: String, val layer: String, val color: Int, val rotation: Double = 0.0)
 data class DxfLayerInfo(val name: String, var colorAci: Int, var visible: Boolean = true, var locked: Boolean = false, var displayColor: Color? = null)
 
 data class DxfModel(
@@ -43,21 +43,7 @@ data class DxfModel(
     }
 
     fun toDxfText(): String = buildString {
-        val layerNames = linkedSetOf<String>()
-        layers.keys.forEach { layerNames.add(it) }
-        lines.forEach { layerNames.add(it.layer) }
-        circles.forEach { layerNames.add(it.layer) }
-        texts.forEach { layerNames.add(it.layer) }
-        if (layerNames.isEmpty()) layerNames.add("0")
         append("0\nSECTION\n2\nHEADER\n0\nENDSEC\n")
-        append("0\nSECTION\n2\nTABLES\n")
-        append("0\nTABLE\n2\nLAYER\n70\n${layerNames.size}\n")
-        layerNames.forEach { name ->
-            val info = layers[name]
-            val col = info?.colorAci ?: 7
-            append("0\nLAYER\n2\n$name\n70\n0\n62\n$col\n6\nCONTINUOUS\n")
-        }
-        append("0\nENDTAB\n0\nENDSEC\n")
         append("0\nSECTION\n2\nENTITIES\n")
         lines.forEach { l ->
             append("0\nLINE\n8\n${l.layer}\n10\n${l.x1}\n20\n${l.y1}\n11\n${l.x2}\n21\n${l.y2}\n")
@@ -66,7 +52,7 @@ data class DxfModel(
             append("0\nCIRCLE\n8\n${c.layer}\n10\n${c.x}\n20\n${c.y}\n40\n${c.r}\n")
         }
         texts.forEach { tx ->
-            append("0\nTEXT\n8\n${tx.layer}\n10\n${tx.x}\n20\n${tx.y}\n40\n${tx.height}\n1\n${tx.text}\n")
+            append("0\nTEXT\n8\n${tx.layer}\n10\n${tx.x}\n20\n${tx.y}\n40\n${tx.height}\n1\n${tx.text}\n50\n${tx.rotation}\n")
         }
         append("0\nENDSEC\n0\nEOF\n")
     }
