@@ -42,7 +42,7 @@ data class Map2PointCategory(
  * نشست مشترک نقشه ۲ — دسته‌های نقطه، سطوح توپو، الایمنت.
  */
 object Map2Session {
-    var projectName by mutableStateOf("نقشه۲")
+    var projectName by mutableStateOf("نقشه")
     var zone by mutableStateOf(UtmGeo.DEFAULT_ZONE)
     var categories by mutableStateOf<List<Map2PointCategory>>(emptyList())
     var alignment by mutableStateOf<List<AlignmentVertex>>(emptyList())
@@ -50,6 +50,16 @@ object Map2Session {
 
     /** سطوح ساخته‌شده در توپوگرافی: نام دسته → VolPoints */
     var topoSurfaces by mutableStateOf<Map<String, List<VolPoint>>>(emptyMap())
+
+    /** رنگ خطوط هر کد خانواده (ACI) — برای ترسیم خطی مشترک در پروژه */
+    var lineColors by mutableStateOf<Map<String, Int>>(emptyMap())
+
+    /**
+     * مدل‌های DXF اضافه‌شده به همین پروژه (توپو، پروفیل، خطوط، …)
+     * همه روی یک نقشه/خروجی واحد می‌مانند.
+     */
+    var projectDxfParts by mutableStateOf<List<Pair<String, String>>>(emptyList())
+
 
     fun nextPgName(): String {
         var n = 1
@@ -96,10 +106,51 @@ object Map2Session {
         topoSurfaces = topoSurfaces + (name to pts)
     }
 
+
+    /** همه نقاط نشست به‌صورت SurveyPoint — پیش‌فرض همه ابزارها */
+    fun toSurveyPoints(categoryIds: Set<String> = emptySet()): List<SurveyPoint> {
+        val src = if (categoryIds.isEmpty()) allPoints() else pointsOf(categoryIds)
+        return src.map { it.toSurvey() }
+    }
+
+    /**
+     * پس از ورود نقاط: برای پروفیل/توپو/خطوط یک سطح پیش‌فرض بساز
+     * تا بدون ورود مجدد فایل کار کنند.
+     */
+    fun seedToolsFromPoints() {
+        val vols = toVolPoints()
+        if (vols.isEmpty()) return
+        if (topoSurfaces.isEmpty()) {
+            setTopoSurface("سطح اصلی", vols)
+        }
+        // پروفیل: اگر سطحی ندارد، همین نقاط را بگذار
+        try {
+            if (ProfileSession.surfaces.isEmpty()) {
+                ProfileSession.updateSurfaces(
+                    listOf(ProfileSurfaceSlot("سطح اصلی", vols))
+                )
+            }
+        } catch (_: Exception) {
+        }
+        message = "نقاط برای پروفیل / توپو / ترسیم آماده است (${vols.size})"
+    }
+
+    fun addProjectPart(name: String, dxfText: String) {
+        projectDxfParts = projectDxfParts + (name to dxfText)
+    }
+
+    fun setLineColor(code: String, aci: Int) {
+        val key = codeBase(code).ifBlank { code }.lowercase()
+        if (key.isBlank()) return
+        lineColors = lineColors + (key to aci.coerceIn(1, 255))
+    }
+
     fun clearAll() {
         categories = emptyList()
         topoSurfaces = emptyMap()
         alignment = emptyList()
+        lineColors = emptyMap()
+        projectDxfParts = emptyList()
         message = ""
     }
 

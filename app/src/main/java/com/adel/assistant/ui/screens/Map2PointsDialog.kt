@@ -64,6 +64,7 @@ fun Map2PointsDialog(
 
     // ترسیم خطی — تنظیمات کدهای POINT
     var codeSettings by remember { mutableStateOf<Map<String, CodeSetting>>(emptyMap()) }
+    var lineColorAci by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var lineTextSize by remember { mutableStateOf("1.0") }
     var lineShowName by remember { mutableStateOf(true) }
     var lineShowCode by remember { mutableStateOf(true) }
@@ -98,6 +99,10 @@ fun Map2PointsDialog(
             // تنظیمات کد برای ترسیم خطی
             val unique = mapped.map { codeBase(it.code) }.filter { it.isNotBlank() }.distinct()
             codeSettings = unique.associateWith { DefaultCodeRules.createDefaultSetting(it) }
+            lineColorAci = unique.associateWith { code ->
+                Map2Session.lineColors[code.lowercase()]
+                    ?: DefaultCodeRules.createDefaultSetting(code).colorIndex
+            }
             message = "${mapped.size} نقطه از $name"
         } catch (e: Exception) {
             message = "خطا: ${e.message}"
@@ -179,6 +184,7 @@ fun Map2PointsDialog(
                 textColorAci = opts.colorAci
             )
         }
+        Map2Session.seedToolsFromPoints()
         onCommitPointDraw(chosen, opts)
     }
 
@@ -189,18 +195,29 @@ fun Map2PointsDialog(
         }
         val h = lineTextSize.replace(',', '.').toFloatOrNull()?.coerceIn(0.05f, 50f) ?: 1f
         // اعمال تنظیمات متن روی کدهای POINT
-        val updated = codeSettings.mapValues { (_, s) ->
-            if (s.category == CodeCategory.POINT) {
+        val updated = codeSettings.mapValues { (code, s) ->
+            val aci = lineColorAci[code] ?: s.colorIndex
+            Map2Session.setLineColor(code, aci)
+            if (s.category == CodeCategory.LINE) {
+                s.copy(colorIndex = aci)
+            } else if (s.category == CodeCategory.POINT) {
                 s.copy(
                     textSize = h,
                     showNumber = lineShowName,
                     showCode = lineShowCode,
-                    showZ = lineShowElev
+                    showZ = lineShowElev,
+                    colorIndex = aci
                 )
             } else s
         }
+        // نقاط را هم در نشست نگه دار (پروژه یکپارچه)
+        if (Map2Session.allPoints().isEmpty()) {
+            Map2Session.addCategory(Map2Session.nextPgName(), points)
+        }
+        Map2Session.seedToolsFromPoints()
         val survey = points.map { it.toSurvey() }
         val dxf = DxfMapGenerator.generate(survey, updated)
+        Map2Session.addProjectPart("خطوط", dxf)
         onCommitLineDraw(dxf)
     }
 
@@ -404,6 +421,31 @@ fun Map2PointsDialog(
                                         fontSize = 11.sp,
                                         modifier = Modifier.padding(start = 6.dp)
                                     )
+                                }
+                                // رنگ خط برای کدهای LINE
+                                if (s.category == CodeCategory.LINE) {
+                                    Row(
+                                        Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("رنگ خط:", color = Color(0xFFB0B8A8), fontSize = 11.sp)
+                                        val palette = listOf(
+                                            1 to "قرمز", 3 to "سبز", 5 to "آبی",
+                                            2 to "زرد", 6 to "magenta", 4 to "فیروزه", 7 to "سفید"
+                                        )
+                                        val cur = lineColorAci[code] ?: s.colorIndex
+                                        palette.forEach { (aci, label) ->
+                                            FilterChip(
+                                                selected = cur == aci,
+                                                onClick = {
+                                                    lineColorAci = lineColorAci + (code to aci)
+                                                    codeSettings = codeSettings + (code to s.copy(colorIndex = aci))
+                                                },
+                                                label = { Text(label, fontSize = 9.sp) }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

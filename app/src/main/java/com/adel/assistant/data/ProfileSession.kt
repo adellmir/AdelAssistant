@@ -13,7 +13,7 @@ object ProfileSession {
         private set
     var placementDxf by mutableStateOf<String?>(null)
         private set
-    var placementName by mutableStateOf("PROFILE.dxf")
+    var placementName by mutableStateOf("پروفیل.dxf")
         private set
     var alignmentMapModel by mutableStateOf<DxfModel?>(null)
         private set
@@ -44,13 +44,13 @@ object ProfileSession {
         val lines = mutableListOf<DxfLine>()
         val texts = mutableListOf<DxfText>()
         val layers = linkedMapOf<String, DxfLayerInfo>(
-            "PROFILE_SURF" to DxfLayerInfo("PROFILE_SURF", 2)
+            "سطوح پروفیل" to DxfLayerInfo("سطوح پروفیل", 2)
         )
         points.forEachIndexed { i, pt ->
-            lines += DxfLine(pt.x - r, pt.y, pt.x + r, pt.y, "PROFILE_SURF", 2)
-            lines += DxfLine(pt.x, pt.y - r, pt.x, pt.y + r, "PROFILE_SURF", 2)
+            lines += DxfLine(pt.x - r, pt.y, pt.x + r, pt.y, "سطوح پروفیل", 2)
+            lines += DxfLine(pt.x, pt.y - r, pt.x, pt.y + r, "سطوح پروفیل", 2)
             val label = if (pt.id.isNotBlank()) pt.id else "P${i + 1}"
-            texts += DxfText(pt.x + r * 1.5, pt.y + r * 1.5, textH, label, "PROFILE_SURF", 2)
+            texts += DxfText(pt.x + r * 1.5, pt.y + r * 1.5, textH, label, "سطوح پروفیل", 2)
         }
         return DxfModel(lines, emptyList(), texts, layers, minX, minY, maxX, maxY)
     }
@@ -69,7 +69,7 @@ object ProfileSession {
     }
     fun clearAlignmentResult() { alignmentResult = emptyList() }
 
-    fun beginPlacement(dxf: String, name: String = "PROFILE.dxf") {
+    fun beginPlacement(dxf: String, name: String = "پروفیل.dxf") {
         placementDxf = dxf
         placementName = name
     }
@@ -77,7 +77,7 @@ object ProfileSession {
         val d = placementDxf ?: return null
         val n = placementName
         placementDxf = null
-        placementName = "PROFILE.dxf"
+        placementName = "پروفیل.dxf"
         return d to n
     }
 }
