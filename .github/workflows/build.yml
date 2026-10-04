@@ -1,8 +1,7 @@
 name: Build APK
 
+# فقط با دستور دستی (Run workflow) — با push ساخته نمی‌شود
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -29,19 +28,21 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Rename APK with version
+      - name: Prepare single APK
         run: |
-          APK=app/build/outputs/apk/debug/app-debug.apk
           CODE=$((2000 + ${{ github.run_number }}))
-          OUT="app/build/outputs/apk/debug/AdelAssistant-v1.0.${CODE}-debug.apk"
-          cp "$APK" "$OUT"
-          echo "APK_PATH=$OUT" >> $GITHUB_ENV
-          echo "Built versionCode=$CODE"
+          SRC=app/build/outputs/apk/debug/app-debug.apk
+          OUT=app/build/outputs/apk/debug/AdelAssistant.apk
+          cp "$SRC" "$OUT"
+          # فقط یک فایل بماند
+          find app/build/outputs/apk/debug -type f ! -name 'AdelAssistant.apk' -delete
           ls -la app/build/outputs/apk/debug/
+          echo "versionCode=$CODE"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AdelAssistant-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: AdelAssistant-apk
+          path: app/build/outputs/apk/debug/AdelAssistant.apk
+          if-no-files-found: error
           retention-days: 14

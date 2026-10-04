@@ -65,6 +65,7 @@ fun Map2PointsDialog(
     // ترسیم خطی — تنظیمات کدهای POINT
     var codeSettings by remember { mutableStateOf<Map<String, CodeSetting>>(emptyMap()) }
     var lineColorAci by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var colorDialogCode by remember { mutableStateOf<String?>(null) }
     var lineTextSize by remember { mutableStateOf("1.0") }
     var lineShowName by remember { mutableStateOf(true) }
     var lineShowCode by remember { mutableStateOf(true) }
@@ -422,29 +423,14 @@ fun Map2PointsDialog(
                                         modifier = Modifier.padding(start = 6.dp)
                                     )
                                 }
-                                // رنگ خط برای کدهای LINE
+                                // دکمه رنگ — باز شدن پنجره انتخاب
                                 if (s.category == CodeCategory.LINE) {
-                                    Row(
-                                        Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    val cur = lineColorAci[code] ?: s.colorIndex
+                                    TextButton(
+                                        onClick = { colorDialogCode = code },
+                                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
                                     ) {
-                                        Text("رنگ خط:", color = Color(0xFFB0B8A8), fontSize = 11.sp)
-                                        val palette = listOf(
-                                            1 to "قرمز", 3 to "سبز", 5 to "آبی",
-                                            2 to "زرد", 6 to "magenta", 4 to "فیروزه", 7 to "سفید"
-                                        )
-                                        val cur = lineColorAci[code] ?: s.colorIndex
-                                        palette.forEach { (aci, label) ->
-                                            FilterChip(
-                                                selected = cur == aci,
-                                                onClick = {
-                                                    lineColorAci = lineColorAci + (code to aci)
-                                                    codeSettings = codeSettings + (code to s.copy(colorIndex = aci))
-                                                },
-                                                label = { Text(label, fontSize = 9.sp) }
-                                            )
-                                        }
+                                        Text("رنگ ($cur)", color = Color(0xFF81C995), fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -454,7 +440,58 @@ fun Map2PointsDialog(
             }
         }
     }
+
+
+    // پنجره انتخاب رنگ خط
+    colorDialogCode?.let { code ->
+        val s = codeSettings[code]
+        val cur = lineColorAci[code] ?: s?.colorIndex ?: 7
+        val palette = listOf(
+            1 to "قرمز",
+            3 to "سبز",
+            5 to "آبی",
+            2 to "زرد",
+            6 to "magenta",
+            4 to "فیروزه",
+            7 to "سفید",
+            30 to "نارنجی",
+            8 to "خاکستری"
+        )
+        AlertDialog(
+            onDismissRequest = { colorDialogCode = null },
+            title = { Text("رنگ خط — کد $code") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    palette.chunked(3).forEach { row ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            row.forEach { (aci, label) ->
+                                FilterChip(
+                                    selected = cur == aci,
+                                    onClick = {
+                                        lineColorAci = lineColorAci + (code to aci)
+                                        if (s != null) {
+                                            codeSettings = codeSettings + (code to s.copy(colorIndex = aci))
+                                        }
+                                        colorDialogCode = null
+                                    },
+                                    label = { Text("$label ($aci)", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { colorDialogCode = null }) { Text("بستن") }
+            }
+        )
+    }
 }
+
 
 data class PointDrawOptions(
     val textSize: Double,
