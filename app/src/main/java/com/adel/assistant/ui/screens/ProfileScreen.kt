@@ -62,8 +62,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@forEach
                 val name = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.ifBlank { "سطح ${surfaces.size + loaded.size + 1}" }
                     ?: "سطح ${surfaces.size + loaded.size + 1}"
-                val fname = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
-                val pts = PointConverter.readBytes(bytes, fname)
+                val pts = PointConverter.readBytes(bytes, uri.lastPathSegment ?: "points.txt")
                     .map { VolPoint(it.id, it.x, it.y, it.z, it.code) }
                 if (pts.size >= 3) loaded += ProfileSurfaceSlot(name, pts)
             } catch (_: Exception) { }
@@ -72,7 +71,6 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             val merged = surfaces + loaded
             ProfileSession.updateSurfaces(merged)
             message = "${loaded.size} سطح اضافه شد (جمع: ${merged.size})"
-            // اگر الایمنت از قبل هست، پروفیل چندسطحی را دوباره حساب کن
             if (alignment.size >= 2) {
                 val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
                 val start = startText.replace(',', '.').toDoubleOrNull() ?: 0.0
@@ -224,44 +222,49 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             confirmButton = { TextButton(onClick = { showScaleDialog = false }) { Text("تأیید") } }
         )
     }
-}
-
 
     if (showDxfSettings) {
-        val r = result
+        val currentResult = result
         AlertDialog(
             onDismissRequest = { showDxfSettings = false },
             title = { Text("تنظیمات ترسیم DXF") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        dxfStartChainage, { dxfStartChainage = it },
+                        value = dxfStartChainage,
+                        onValueChange = { dxfStartChainage = it },
                         label = { Text("کیلومتر شروع الایمنت") },
                         singleLine = true
                     )
                     OutlinedTextField(
-                        dxfStationTextSize, { dxfStationTextSize = it },
+                        value = dxfStationTextSize,
+                        onValueChange = { dxfStationTextSize = it },
                         label = { Text("سایز متن کیلومترها") },
                         singleLine = true
                     )
                     OutlinedTextField(
-                        dxfProfileTextSize, { dxfProfileTextSize = it },
+                        value = dxfProfileTextSize,
+                        onValueChange = { dxfProfileTextSize = it },
                         label = { Text("سایز متن پروفیل طولی") },
                         singleLine = true
                     )
-                    Text("خط الایمنت + کیلومتربندی عمود + همه سطوح پروفیل", color = TextSecondary, fontSize = 12.sp)
+                    Text(
+                        "خط الایمنت + کیلومتربندی عمود + همه سطوح پروفیل",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (r == null) return@TextButton
+                    val rNow = currentResult ?: return@TextButton
                     val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
                     val startCh = dxfStartChainage.replace(',', '.').toDoubleOrNull() ?: 0.0
                     val stSize = dxfStationTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.0
                     val prSize = dxfProfileTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.5
                     val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
                     val model = ProfileEngine.toDxfModel(
-                        result = r,
+                        result = rNow,
                         surfaces = ss,
                         scale = scale,
                         layerName = "PROFILE",
@@ -281,6 +284,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             }
         )
     }
+}
 
 @Composable
 private fun ProfileChart(
