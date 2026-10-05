@@ -400,7 +400,7 @@ private fun KmContextCard(
             // چپ: بیشتر
             Column(Modifier.weight(1f)) {
                 Text(
-                    "شفت ${ctx.nextShaft?.pointNo ?: "—"}: ${ctx.nextShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    "${ctx.nextShaft?.label ?: "شفت —"}: ${ctx.nextShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
                     color = Color(0xFF81C995), style = MaterialTheme.typography.labelSmall
                 )
                 Text(
@@ -418,7 +418,7 @@ private fun KmContextCard(
             // راست: کمتر
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                 Text(
-                    "شفت ${ctx.prevShaft?.pointNo ?: "—"}: ${ctx.prevShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
+                    "${ctx.prevShaft?.label ?: "شفت —"}: ${ctx.prevShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}",
                     color = Color(0xFFFFB74D), style = MaterialTheme.typography.labelSmall
                 )
                 Text(

@@ -282,8 +282,25 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 label = { Text("طول (سانتی‌متر)") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { addOrUpdateRow() }) {
-                Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
+            // عدد سفید ارتفاع زیر + — بدون به‌هم‌ریختن ردیف
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = { addOrUpdateRow() }) {
+                    Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
+                }
+                val elevHint = remember(pointNo, length, shaft, side) {
+                    val lenCm = length.toDoubleOrNullFa() ?: return@remember null
+                    if (pointNo.isBlank() || lenCm <= 0.0) return@remember null
+                    TunnelReportStore.elevOffsetAtLength(
+                        context, pointNo, lenCm, isTowardLess(shaft, side)
+                    )
+                }
+                if (elevHint != null) {
+                    Text(
+                        String.format(java.util.Locale.US, "%+.2f", elevHint),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -402,16 +402,30 @@ object TunnelReportStore {
                 appendLine("X=${"%.3f".format(it.x)} Y=${"%.3f".format(it.y)} Z=${"%.3f".format(it.z)}")
             }
             appendLine("— کمتر —")
-            appendLine("شفت ${prevShaft?.pointNo ?: "—"}: ${prevShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("${prevShaft?.label ?: "شفت —"}: ${prevShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
             appendLine("حفاری: ${prevReport?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
             appendLine("کد ${prevCoded?.let { it.extra.ifBlank { it.pointNo } } ?: "—"}: ${prevCoded?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
             appendLine("— بیشتر —")
-            appendLine("شفت ${nextShaft?.pointNo ?: "—"}: ${nextShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
+            appendLine("${nextShaft?.label ?: "شفت —"}: ${nextShaft?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
             appendLine("حفاری: ${nextReport?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
             appendLine("کد ${nextCoded?.let { it.extra.ifBlank { it.pointNo } } ?: "—"}: ${nextCoded?.let { "%.1f m".format(it.distanceM) } ?: "—"}")
         }.trimEnd()
         fun centerLabel(): String =
             nearest?.let { "نقطه ${it.pointNo} / km ${"%.3f".format(km)}" } ?: "km ${"%.3f".format(km)}"
+    }
+
+    /** نام نمایشی شفت: شفت ۱ / شفت ۲ از type، نه شماره نقطه */
+    fun shaftDisplayName(p: TunnelPoint): String {
+        val t = p.type.trim()
+        if (t.equals("start", true) || t == "0") return "شفت start"
+        if (t.equals("end", true)) return "شفت end"
+        val fromType = Regex("""(?i)(?:sh|shaft)?\s*([0-9]+)""").find(t)?.groupValues?.getOrNull(1)
+        if (fromType != null) return "شفت $fromType"
+        val digits = Regex("""[0-9]+""").find(t)?.value
+        if (digits != null) return "شفت $digits"
+        // type خالی — از شماره نقطه فقط اگر شبیه شفت باشد
+        val pn = Regex("""[0-9]+""").find(p.pointNo)?.value
+        return if (pn != null) "شفت $pn" else "شفت"
     }
 
     private fun isShaftType(type: String): Boolean {
@@ -435,17 +449,18 @@ object TunnelReportStore {
         val pts = allPoints(context).sortedBy { it.km }
         val nearest = findByKm(context, km)
         fun neigh(label: String, p: TunnelPoint) =
+
             KmNeighbor(label, p.pointNo, p.km, kotlin.math.abs(p.km - km), p.type)
 
         val shafts = pts.filter { isShaftType(it.type) }
-        val prevShaft = shafts.filter { it.km <= km }.maxByOrNull { it.km }?.let { neigh("شفت", it) }
-        val nextShaft = shafts.filter { it.km >= km }.minByOrNull { it.km }?.let { neigh("شفت", it) }
+        val prevShaft = shafts.filter { it.km <= km }.maxByOrNull { it.km }?.let { neigh(shaftDisplayName(it), it) }
+        val nextShaft = shafts.filter { it.km >= km }.minByOrNull { it.km }?.let { neigh(shaftDisplayName(it), it) }
         // اگر دقیقاً روی شفت است، قبل را یکی عقب‌تر بگیر
         val prevShaft2 = if (prevShaft != null && nextShaft != null && prevShaft.pointNo == nextShaft.pointNo) {
-            shafts.filter { it.km < km }.maxByOrNull { it.km }?.let { neigh("شفت", it) }
+            shafts.filter { it.km < km }.maxByOrNull { it.km }?.let { neigh(shaftDisplayName(it), it) }
         } else prevShaft
         val nextShaft2 = if (prevShaft != null && nextShaft != null && prevShaft.pointNo == nextShaft.pointNo) {
-            shafts.filter { it.km > km }.minByOrNull { it.km }?.let { neigh("شفت", it) }
+            shafts.filter { it.km > km }.minByOrNull { it.km }?.let { neigh(shaftDisplayName(it), it) }
         } else nextShaft
 
         val reports = allEntries(context).map { ensureCoords(context, it) }.sortedBy { it.km }
@@ -472,5 +487,30 @@ object TunnelReportStore {
 
         return KmContext(km, nearest, prevShaft2, nextShaft2, prevRep2, nextRep2, prevC2, nextC2)
     }
+
+    /**
+     * اختلاف ارتفاع پس از پیشروی lengthCm نسبت به نقطهٔ روز + ۱٫۴۵
+     * سمت بیشتر: درون‌یابی با نقطه بعدی | سمت کمتر: با نقطه قبلی
+     */
+    fun elevOffsetAtLength(
+        context: Context,
+        pointNo: String,
+        lengthCm: Double,
+        towardLess: Boolean
+    ): Double? {
+        val cur = findByPointNo(context, pointNo) ?: return null
+        val pts = allPoints(context).sortedBy { it.km }
+        val neighbor = if (towardLess) {
+            pts.filter { it.km < cur.km - 1e-9 }.maxByOrNull { it.km }
+        } else {
+            pts.filter { it.km > cur.km + 1e-9 }.minByOrNull { it.km }
+        } ?: return null
+        val lengthM = lengthCm / 100.0
+        val seg = kotlin.math.abs(neighbor.km - cur.km).coerceAtLeast(1e-9)
+        val t = (lengthM / seg).coerceIn(0.0, 1.0)
+        val zInterp = cur.z + (neighbor.z - cur.z) * t
+        return (zInterp - cur.z) + 1.45
+    }
+
 
 }
