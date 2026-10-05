@@ -28,7 +28,6 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
-import com.adel.assistant.data.tomanToProjectInput
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -44,9 +43,12 @@ private data class EmployerGroup(
     val totalRemain: Double
 )
 
-/** مبلغ به میلیون تومان برای متن پیامک */
-private fun formatMillionToman(toman: Double): String {
-    val m = tomanToProjectInput(toman)
+/**
+ * مبلغ پروژه‌ها در سیستم به‌صورت میلیون تومان ذخیره می‌شود (مثل نمایش UI).
+ * نباید دوباره به تومان تبدیل و تقسیم بر ۱٬۰۰۰٬۰۰۰ شود — همان باعث صفر شدن پیامک بود.
+ */
+private fun formatClaimsAmount(millionToman: Double): String {
+    val m = millionToman.coerceAtLeast(0.0)
     return if (kotlin.math.abs(m - m.toLong().toDouble()) < 1e-6) {
         formatMoney(m, 0)
     } else {
@@ -54,8 +56,8 @@ private fun formatMillionToman(toman: Double): String {
     }
 }
 
-private fun smsBodyForClaims(totalRemainToman: Double): String {
-    val amount = formatMillionToman(totalRemainToman)
+private fun smsBodyForClaims(totalRemainMillion: Double): String {
+    val amount = formatClaimsAmount(totalRemainMillion)
     return "با سلام جهت پرداخت هزینه نقشه‌برداری به‌مبلغ $amount م تومان. ممنون می‌شوم پس از پرداخت اطلاع‌رسانی بفرمایید.\n" +
         "کارت: 5859831142797561\n" +
         "شبا: 430180000000242375213376"
