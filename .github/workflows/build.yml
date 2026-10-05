@@ -1,6 +1,6 @@
 name: Build APK
 
-# فقط با دستور دستی (Run workflow) — با push ساخته نمی‌شود
+# فقط وقتی خودت Run workflow بزنی
 on:
   workflow_dispatch:
 
@@ -30,14 +30,11 @@ jobs:
 
       - name: Prepare single APK
         run: |
-          CODE=$((2000 + ${{ github.run_number }}))
           SRC=app/build/outputs/apk/debug/app-debug.apk
           OUT=app/build/outputs/apk/debug/AdelAssistant.apk
           cp "$SRC" "$OUT"
-          # فقط یک فایل بماند
           find app/build/outputs/apk/debug -type f ! -name 'AdelAssistant.apk' -delete
           ls -la app/build/outputs/apk/debug/
-          echo "versionCode=$CODE"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
