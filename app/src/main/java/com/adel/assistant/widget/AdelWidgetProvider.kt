@@ -73,9 +73,22 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 }
                 .take(3)
                 .map {
+                    val yi = it.year.toIntOrNullFa() ?: 0
+                    val mi = it.month.toIntOrNullFa() ?: 0
+                    val di = it.day.toIntOrNullFa() ?: 0
                     val hh = (it.hour.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
                     val mm = (it.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-                    "${it.name} — ${it.year}/${it.month}/${it.day} $hh:$mm"
+                    val wd = try {
+                        CalendarStore.weekdayNameJalali(yi, mi, di)
+                    } catch (_: Exception) {
+                        ""
+                    }
+                    val datePart = if (wd.isNotBlank()) {
+                        "$wd ${it.year}/${it.month}/${it.day} $hh:$mm"
+                    } else {
+                        "${it.year}/${it.month}/${it.day} $hh:$mm"
+                    }
+                    "${it.name} — $datePart"
                 }
         }
 
