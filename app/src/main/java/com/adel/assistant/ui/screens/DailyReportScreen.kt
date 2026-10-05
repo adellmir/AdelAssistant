@@ -29,6 +29,7 @@ import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.WorkingDraftStore
 import com.adel.assistant.data.XlsxReportWriter
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
@@ -170,7 +171,41 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             )
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
+        WorkingDraftStore.clearDaily(context)
         statusMsg = "ثبت شد"
+    }
+
+    
+    // بازیابی پیش‌نویس گزارش (چرخش / خروج موقت)
+    
+    LaunchedEffect(rows, year, month, day) {
+        WorkingDraftStore.saveDaily(
+            context,
+            WorkingDraftStore.DailyDraft(
+                year, month, day,
+                rows.map {
+                    WorkingDraftStore.DailyRow(
+                        it.shaft, it.side, it.pointNo, it.lengthCm,
+                        it.km, it.dailyProgress, it.shaftProgress, it.remaining,
+                        it.deviation, it.collapse
+                    )
+                }
+            )
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        val draft = WorkingDraftStore.loadDaily(context) ?: return@LaunchedEffect
+        if (draft.year == year && draft.month == month && draft.day == day && draft.rows.isNotEmpty()) {
+            rows = draft.rows.map {
+                PreviewRow(
+                    it.shaft, it.side, it.pointNo, it.lengthCm,
+                    it.km, it.dailyProgress, it.shaftProgress, it.remaining,
+                    it.deviation, it.collapse
+                )
+            }
+            statusMsg = "پیش‌نویس گزارش بازیابی شد"
+        }
     }
 
     Column(

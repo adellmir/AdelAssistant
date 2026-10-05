@@ -59,6 +59,9 @@ object Map2Session {
      * همه روی یک نقشه/خروجی واحد می‌مانند.
      */
     var projectDxfParts by mutableStateOf<List<Pair<String, String>>>(emptyList())
+    /** پروژهٔ ترسیمی باز — تا ذخیره یا صرف‌نظر */
+    var dirty by mutableStateOf(false)
+    var openProject by mutableStateOf(true)
 
 
     fun nextPgName(): String {
@@ -137,6 +140,25 @@ object Map2Session {
 
     fun addProjectPart(name: String, dxfText: String) {
         projectDxfParts = projectDxfParts + (name to dxfText)
+        dirty = true
+        openProject = true
+    }
+
+    fun markDirty() {
+        dirty = true
+        openProject = true
+    }
+
+    fun discardProject(context: Context? = null) {
+        categories = emptyList()
+        topoSurfaces = emptyMap()
+        alignment = emptyList()
+        lineColors = emptyMap()
+        projectDxfParts = emptyList()
+        dirty = false
+        openProject = false
+        message = "پروژه صرف‌نظر شد"
+        context?.let { save(it) }
     }
 
     fun setLineColor(code: String, aci: Int) {
@@ -185,8 +207,19 @@ object Map2Session {
             arr.put(co)
         }
         o.put("categories", arr)
+        val parts = JSONArray()
+        projectDxfParts.forEach { (n, d) ->
+            parts.put(JSONObject().put("name", n).put("dxf", d))
+        }
+        o.put("projectDxfParts", parts)
+        val lc = JSONObject()
+        lineColors.forEach { (k, v) -> lc.put(k, v) }
+        o.put("lineColors", lc)
+        o.put("dirty", dirty)
+        o.put("openProject", openProject)
         file(context).writeText(o.toString())
-        message = "نشست ذخیره شد"
+        dirty = false
+        message = "پروژه ذخیره شد"
     }
 
     fun load(context: Context) {
@@ -221,7 +254,23 @@ object Map2Session {
                 )
             }
             message = "نشست بارگذاری شد (${categories.size} دسته)"
-        } catch (e: Exception) {
+        
+            val partsArr = o.optJSONArray("projectDxfParts")
+            if (partsArr != null) {
+                projectDxfParts = (0 until partsArr.length()).mapNotNull { i ->
+                    val po = partsArr.optJSONObject(i) ?: return@mapNotNull null
+                    po.optString("name") to po.optString("dxf")
+                }
+            }
+            val lcObj = o.optJSONObject("lineColors")
+            if (lcObj != null) {
+                val map = mutableMapOf<String, Int>()
+                lcObj.keys().forEach { k -> map[k] = lcObj.optInt(k, 7) }
+                lineColors = map
+            }
+            dirty = o.optBoolean("dirty", false)
+            openProject = o.optBoolean("openProject", categories.isNotEmpty() || projectDxfParts.isNotEmpty())
+} catch (e: Exception) {
             message = "خطا بارگذاری: ${e.message}"
         }
     }

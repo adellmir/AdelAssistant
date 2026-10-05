@@ -1,5 +1,7 @@
 package com.adel.assistant
 
+import com.adel.assistant.data.Map2Session
+
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,6 +20,7 @@ import com.adel.assistant.widget.AdelWidgetProvider
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Map2Session.load(this)
         captureRoute(intent)
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -51,6 +54,14 @@ class MainActivity : ComponentActivity() {
         if (!route.isNullOrBlank()) {
             DeepLinkHolder.setRoute(route)
             intent.removeExtra("open_route")
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try {
+            Map2Session.save(this)
+        } catch (_: Exception) {
         }
     }
 }

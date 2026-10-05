@@ -149,7 +149,11 @@ object ProfileEngine {
         stationInterval: Double = 10.0,
         startChainage: Double = 0.0,
         stationTextSize: Double = 1.0,
-        profileTextSize: Double = 1.5
+        profileTextSize: Double = 1.5,
+        titleTextSize: Double = 2.0,
+        levelTextSize: Double = 1.5,
+        chainageFrom: Double? = null,
+        chainageTo: Double? = null
     ): DxfModel {
         val h = scale.horizontal.coerceAtLeast(1.0)
         val v = scale.vertical.coerceAtLeast(1.0)
@@ -208,19 +212,33 @@ object ProfileEngine {
 
         // ---- 2) شیت پروفیل (همه سطوح) ----
         if (result.rows.isNotEmpty()) {
-            val x0 = result.rows.first().chainage / h
-            val x1 = result.rows.last().chainage / h
+            val rowsAll = result.rows
+            val rows = when {
+                chainageFrom != null && chainageTo != null -> {
+                    val a = minOf(chainageFrom, chainageTo)
+                    val b = maxOf(chainageFrom, chainageTo)
+                    rowsAll.filter { it.chainage + 1e-9 >= a && it.chainage - 1e-9 <= b }
+                }
+                chainageFrom != null -> rowsAll.filter { it.chainage + 1e-9 >= chainageFrom }
+                chainageTo != null -> rowsAll.filter { it.chainage - 1e-9 <= chainageTo }
+                else -> rowsAll
+            }
+            if (rows.isEmpty()) {
+                // محدوده خالی — فقط الایمنت (اگر بود) برمی‌گردد
+            } else {
+            val x0 = rows.first().chainage / h
+            val x1 = rows.last().chainage / h
             val zMin = floorTo(result.minElevation, 2.0)
             val zMax = ceilTo(result.maxElevation, 2.0)
             val y0 = zMin / v
             val y1 = zMax / v
-            val stationStep = if (result.rows.size > 1) result.rows[1].chainage - result.rows[0].chainage else 10.0
+            val stationStep = if (rows.size > 1) rows[1].chainage - rows[0].chainage else 10.0
             val xStep = max(0.001, stationStep / h)
             val zStepMeters = max(0.1, stationStep * 2.0)
             val pText = profileTextSize.coerceAtLeast(0.3)
 
-            var gx = floorTo(result.rows.first().chainage, max(0.01, stationStep))
-            while (gx <= result.rows.last().chainage + 1e-9) {
+            var gx = floorTo(rows.first().chainage, max(0.01, stationStep))
+            while (gx <= rows.last().chainage + 1e-9) {
                 val xx = gx / h
                 lines += DxfLine(xx, y0, xx, y1, "GRID", 8)
                 texts += DxfText(xx, y0 - 2.5 / v, pText / v * h * 0.15, stationLabel(gx), "LABEL", 7)
@@ -232,7 +250,7 @@ object ProfileEngine {
                 guard++
                 val yy = gz / v
                 lines += DxfLine(x0, yy, x1, yy, "GRID", 8)
-                texts += DxfText(x0 - 8.0 / h, yy, pText / v * h * 0.15, String.format(java.util.Locale.US, "%.2f", gz), "LABEL", 7)
+                texts += DxfText(x0 - 8.0 / h, yy, levelTextSize.coerceAtLeast(0.3), String.format(java.util.Locale.US, "%.2f", gz), "LABEL", 7)
                 gz += zStepMeters
             }
 
@@ -242,23 +260,24 @@ object ProfileEngine {
                 val sLayer = if (surfaceIndex == 0) "PROFILE" else "PROFILE2"
                 layer(sLayer, color)
                 var previous: Pair<Double, Double>? = null
-                result.rows.forEach { row ->
+                rows.forEach { row ->
                     val z = row.elevations[s.name] ?: run { previous = null; return@forEach }
                     val pt = row.chainage / h to z / v
                     previous?.let { lines += DxfLine(it.first, it.second, pt.first, pt.second, sLayer, color) }
                     previous = pt
                 }
-                val lastZ = result.rows.asReversed().firstNotNullOfOrNull { it.elevations[s.name] }
+                val lastZ = rows.asReversed().firstNotNullOfOrNull { it.elevations[s.name] }
                 if (lastZ != null) {
                     texts += DxfText(x1, lastZ / v + 3.0 / v, pText, s.name, "LABEL", color)
                 }
             }
-            texts += DxfText(x0, y1 + 4.0 / v, pText * 1.2, "PROFILE", "LABEL", 7)
+            texts += DxfText(x0, y1 + 4.0 / v, titleTextSize.coerceAtLeast(0.3), "PROFILE", "LABEL", 7)
             texts += DxfText(
                 x0, y1 + 1.0 / v, pText * 0.8,
                 "H=1:${h.toInt()}  V=1:${v.toInt()}",
                 "LABEL", 7
             )
+            } // end rows not empty filtered
         }
 
         val model = DxfModel(lines, emptyList(), texts, layers, 0.0, 0.0, 1.0, 1.0)

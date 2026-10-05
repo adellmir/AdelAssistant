@@ -53,6 +53,10 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
     var dxfStartChainage by remember { mutableStateOf("0") }
     var dxfStationTextSize by remember { mutableStateOf("1.0") }
     var dxfProfileTextSize by remember { mutableStateOf("1.5") }
+    var dxfTitleTextSize by remember { mutableStateOf("2.0") }
+    var dxfLevelTextSize by remember { mutableStateOf("1.5") }
+    var dxfRangeFrom by remember { mutableStateOf("") }
+    var dxfRangeTo by remember { mutableStateOf("") }
 
     val pickSurface = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
@@ -248,8 +252,32 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                         label = { Text("سایز متن پروفیل طولی") },
                         singleLine = true
                     )
+                    OutlinedTextField(
+                        value = dxfTitleTextSize,
+                        onValueChange = { dxfTitleTextSize = it },
+                        label = { Text("سایز فونت عنوان پروفیل") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = dxfLevelTextSize,
+                        onValueChange = { dxfLevelTextSize = it },
+                        label = { Text("سایز فونت لول / تراز") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = dxfRangeFrom,
+                        onValueChange = { dxfRangeFrom = it },
+                        label = { Text("کیلومتر شروع محدوده ترسیم خطوط (خالی=همه)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = dxfRangeTo,
+                        onValueChange = { dxfRangeTo = it },
+                        label = { Text("کیلومتر پایان محدوده ترسیم خطوط (خالی=همه)") },
+                        singleLine = true
+                    )
                     Text(
-                        "خط الایمنت + کیلومتربندی عمود + همه سطوح پروفیل",
+                        "خط الایمنت + کیلومتربندی + پروفیل فقط در محدودهٔ درخواستی",
                         color = TextSecondary,
                         fontSize = 12.sp
                     )
@@ -263,6 +291,10 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                     val stSize = dxfStationTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.0
                     val prSize = dxfProfileTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.5
                     val step = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 10.0
+                    val titleSz = dxfTitleTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 2.0
+                    val levelSz = dxfLevelTextSize.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.2) ?: 1.5
+                    val fromCh = dxfRangeFrom.replace(',', '.').toDoubleOrNull()
+                    val toCh = dxfRangeTo.replace(',', '.').toDoubleOrNull()
                     val model = ProfileEngine.toDxfModel(
                         result = rNow,
                         surfaces = ss,
@@ -272,8 +304,16 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                         stationInterval = step,
                         startChainage = startCh,
                         stationTextSize = stSize,
-                        profileTextSize = prSize
+                        profileTextSize = prSize,
+                        titleTextSize = titleSz,
+                        levelTextSize = levelSz,
+                        chainageFrom = fromCh,
+                        chainageTo = toCh
                     )
+                    try {
+                        Map2Session.addProjectPart("PROFILE", model.toDxfText())
+                    } catch (_: Exception) {
+                    }
                     ProfileSession.beginPlacement(model.toDxfText(), "profile.dxf")
                     showDxfSettings = false
                     onOpenMap("placement")
