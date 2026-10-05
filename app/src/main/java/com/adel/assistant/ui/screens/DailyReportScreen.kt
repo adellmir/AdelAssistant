@@ -263,6 +263,23 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        // هشدار نزدیک شدن به نقطه با توضیح — فقط اگر موردی باشد
+        val proximityAlerts = rows.mapNotNull { r ->
+            val towardLess = isTowardLess(r.shaft, r.side)
+            TunnelReportStore.specialPointProximityAlert(context, r.km, towardLess)
+        }.distinct()
+        proximityAlerts.forEach { alert ->
+            Text(
+                alert,
+                color = Color(0xFFE53935),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp)
+            )
+        }
+
         Text("پیش‌نمایش گزارش", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         Spacer(modifier = Modifier.height(6.dp))
 

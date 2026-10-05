@@ -308,6 +308,52 @@ object TunnelReportStore {
     fun findByPointNo(context: Context, pointNo: String): TunnelPoint? =
         allPoints(context).firstOrNull { it.pointNo == pointNo }
 
+    /**
+     * هشدار نزدیک شدن به نقطه با توضیح (type غیرخالی).
+     * حرکت به کیلومتر بیشتر: از ۳ متری قبل از نقطه تا عبور.
+     * حرکت به کیلومتر کمتر: از ۳ متری بعد از نقطه (سمت بیشتر) تا عبور.
+     * اگر موردی نباشد null.
+     */
+    fun specialPointProximityAlert(
+        context: Context,
+        currentKm: Double,
+        towardLess: Boolean,
+        windowMeters: Double = 3.0
+    ): String? {
+        val specials = allPoints(context).filter { it.type.isNotBlank() }
+        if (specials.isEmpty()) return null
+
+        var best: Pair<TunnelPoint, Double>? = null // point to remaining
+
+        for (sp in specials) {
+            if (towardLess) {
+                // نزدیک‌شدن از کیلومتر بالاتر: پنجره [sp.km , sp.km + window]
+                // هنوز عبور نکرده: currentKm >= sp.km
+                if (currentKm + 1e-9 >= sp.km && currentKm <= sp.km + windowMeters + 1e-9) {
+                    val remain = (currentKm - sp.km).coerceAtLeast(0.0)
+                    if (best == null || remain < best.second) best = sp to remain
+                }
+            } else {
+                // نزدیک‌شدن از کیلومتر پایین‌تر: پنجره [sp.km - window , sp.km]
+                // هنوز عبور نکرده: currentKm <= sp.km
+                if (currentKm - 1e-9 <= sp.km && currentKm >= sp.km - windowMeters - 1e-9) {
+                    val remain = (sp.km - currentKm).coerceAtLeast(0.0)
+                    if (best == null || remain < best.second) best = sp to remain
+                }
+            }
+        }
+
+        val hit = best ?: return null
+        val (sp, remain) = hit
+        val remainText = if (kotlin.math.abs(remain - remain.toLong().toDouble()) < 1e-6) {
+            remain.toLong().toString()
+        } else {
+            String.format(java.util.Locale.US, "%.1f", remain)
+        }
+        return "$remainText متر مانده به «${sp.type}» (${sp.pointNo})"
+    }
+
+
     /** نزدیک‌ترین نقطهٔ محور تونل به مختصات XY (فاصلهٔ اقلیدسی) */
     fun findNearestByXy(context: Context, x: Double, y: Double): TunnelPoint? {
         val pts = allPoints(context)
