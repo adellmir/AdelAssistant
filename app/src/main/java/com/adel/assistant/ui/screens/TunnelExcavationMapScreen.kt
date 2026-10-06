@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -52,8 +53,8 @@ import com.adel.assistant.data.MapOverlayPoint
 import com.adel.assistant.data.MapOverlayStore
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
-import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.TunnelMapBgStore
+import com.adel.assistant.data.TunnelLayerPrefs
 import com.adel.assistant.data.DxfModel
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.filterNumericInput
@@ -112,6 +113,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showTunnel by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(true) }
     var showOverlay by remember { mutableStateOf(true) }
+    var showEvents by remember { mutableStateOf(TunnelLayerPrefs.showEvents(context)) }
+    var layerColors by remember { mutableStateOf(TunnelLayerPrefs.loadColors(context)) }
+    var colorEditLayer by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
@@ -278,7 +282,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
 
     fun exportDxf() {
         val fromReport = reportPts.map {
-            MapOverlayPoint(it.dateLabel.toEnglishDigits(), it.x, it.y, it.z, formatEn("%.3f", it.km), it.km, "report")
+            MapOverlayPoint(it.dateLabel, it.x, it.y, it.z, formatEn("%.3f", it.km), it.km, "report")
         }
         val all = overlays + fromReport
         if (all.isEmpty()) { status = "نقطه‌ای برای DXF نیست"; return }
@@ -518,8 +522,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 // نقشه ثابت آپلود‌شده (DXF) — خط + دایره + متن
                 if (showBg) {
                     bgModel?.lines?.forEach { ln ->
+                        val argb = layerColors[ln.layer]
+                            ?: layerColors[ln.layer.lowercase()]
+                            ?: 0xFF90CAF9.toInt()
                         drawLine(
-                            Color(0xFF90CAF9).copy(alpha = 0.85f),
+                            Color(argb).copy(alpha = 0.9f),
                             worldToScreen(ln.x1, ln.y1),
                             worldToScreen(ln.x2, ln.y2),
                             strokeWidth = 2f
@@ -602,6 +609,23 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                 }
+                // لایه «اتفاقات تونل»: متن D سمت چپ نقطه — سبز، سایز ۲۰ سانتی‌متر
+                if (showEvents) {
+                    val hPx = (0.20f * scale).coerceIn(14f, 72f)
+                    val eventPaint = Paint().apply {
+                        this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47) // سبز
+                        textSize = hPx
+                        isAntiAlias = true
+                        typeface = Typeface.DEFAULT_BOLD
+                        textAlign = Paint.Align.RIGHT // سمت چپ نقطه
+                    }
+                    overlays.filter { it.d.isNotBlank() }.forEach { p ->
+                        val c = worldToScreen(p.x, p.y)
+                        val tx = c.x - 8f
+                        val ty = c.y + hPx * 0.35f
+                        drawContext.canvas.nativeCanvas.drawText(p.d, tx, ty, eventPaint)
+                    }
+                }
             }
         }
 
@@ -664,6 +688,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     if (showLayers) {
+        val bgLayerNames = remember(bgModel) {
+            bgModel?.lines?.map { it.layer.ifBlank { "0" } }?.distinct()?.sorted() ?: emptyList()
+        }
         AlertDialog(
             onDismissRequest = { showLayers = false },
             title = { Text("لایه‌ها") },
@@ -681,9 +708,78 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(showOverlay, { showOverlay = it }); Text("نقاط دستی / GPS")
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = showEvents,
+                            onCheckedChange = {
+                                showEvents = it
+                                TunnelLayerPrefs.setShowEvents(context, it)
+                            }
+                        )
+                        Text("اتفاقات تونل")
+                    }
+                    if (bgLayerNames.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("رنگ لایه‌های خطی نقشه زمینه", color = TextSecondary, fontSize = 12.sp)
+                        bgLayerNames.forEach { ly ->
+                            val cur = layerColors[ly] ?: 0xFF90CAF9.toInt()
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Text(ly, modifier = Modifier.weight(1f), fontSize = 12.sp, color = TextPrimary)
+                                Box(
+                                    Modifier
+                                        .size(28.dp)
+                                        .background(Color(cur), RoundedCornerShape(4.dp))
+                                        .clickable { colorEditLayer = ly }
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { showLayers = false }) { Text("باشه") } }
+        )
+    }
+
+    // انتخاب رنگ لایه خطی — ذخیره پایدار
+    colorEditLayer?.let { ly ->
+        AlertDialog(
+            onDismissRequest = { colorEditLayer = null },
+            title = { Text("رنگ لایه: $ly") },
+            text = {
+                Column {
+                    TunnelLayerPrefs.palette.chunked(5).forEach { row ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            row.forEach { (name, argb) ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        Modifier
+                                            .size(36.dp)
+                                            .background(Color(argb), RoundedCornerShape(4.dp))
+                                            .clickable {
+                                                layerColors = layerColors + (ly to argb)
+                                                TunnelLayerPrefs.setColor(context, ly, argb)
+                                                colorEditLayer = null
+                                            }
+                                    )
+                                    Text(name, fontSize = 9.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { colorEditLayer = null }) { Text("بستن") }
+            }
         )
     }
 
