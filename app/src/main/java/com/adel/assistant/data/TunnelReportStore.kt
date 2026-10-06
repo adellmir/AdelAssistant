@@ -15,14 +15,19 @@ data class ReportEntry(
     val z: Double = 0.0
 ) {
     val key: String get() = "$shaft-${normalizeSide(side)}"
-    val dateSortKey: String get() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
-    /** برچسب تاریخ به فرم YYMMDD مثل 050624 */
+    val dateSortKey: String get() {
+        val yi = year.toEnglishDigits().trim()
+        val m = month.toIntOrNullFa() ?: 0
+        val d = day.toIntOrNullFa() ?: 0
+        return String.format(java.util.Locale.US, "%s%02d%02d", yi, m, d)
+    }
+    /** برچسب تاریخ به فرم YYMMDD مثل 050624 — همیشه ارقام لاتین */
     val dateLabel: String
         get() {
             val y = (year.toIntOrNullFa() ?: 0) % 100
             val m = month.toIntOrNullFa() ?: 0
             val d = day.toIntOrNullFa() ?: 0
-            return "%02d%02d%02d".format(y, m, d)
+            return String.format(java.util.Locale.US, "%02d%02d%02d", y, m, d)
         }
     val hasCoords: Boolean get() = !(x == 0.0 && y == 0.0 && z == 0.0)
 }

@@ -52,6 +52,7 @@ import com.adel.assistant.data.MapOverlayPoint
 import com.adel.assistant.data.MapOverlayStore
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.TunnelMapBgStore
 import com.adel.assistant.data.DxfModel
 import com.adel.assistant.data.UtmGeo
@@ -139,8 +140,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         reportPts = TunnelReportStore.allEntries(context).map { TunnelReportStore.ensureCoords(context, it) }
             .filter { it.x != 0.0 || it.y != 0.0 }
         overlays = MapOverlayStore.all(context)
-        // محور و نقاط ثبات به‌طور پیش‌فرض خاموش
-        showTunnel = false
+        showTunnel = true
         needFit = true
         status = "تونل ${tunnelPts.size} | گزارش ${reportPts.size} | دستی ${overlays.size}"
     }
@@ -278,7 +278,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
 
     fun exportDxf() {
         val fromReport = reportPts.map {
-            MapOverlayPoint(it.dateLabel, it.x, it.y, it.z, formatEn("%.3f", it.km), it.km, "report")
+            MapOverlayPoint(it.dateLabel.toEnglishDigits(), it.x, it.y, it.z, formatEn("%.3f", it.km), it.km, "report")
         }
         val all = overlays + fromReport
         if (all.isEmpty()) { status = "نقطه‌ای برای DXF نیست"; return }

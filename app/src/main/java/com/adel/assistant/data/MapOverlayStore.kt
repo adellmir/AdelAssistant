@@ -93,7 +93,7 @@ object MapOverlayStore {
             append("11\r\n${f(p.x + s)}\r\n21\r\n${f(p.y - s)}\r\n31\r\n0\r\n")
             // سه ردیف سمت چپ: شماره / ارتفاع / کیلومتراژ
             val tx = p.x - gapX
-            val labelTop = p.id // مثل 050627
+            val labelTop = p.id.toEnglishDigits() // مثل 050627 — لاتین
             val labelMid = f(p.z)
             val labelBot = f(p.km)
             append("0\r\nTEXT\r\n8\r\npoint-id\r\n62\r\n7\r\n")

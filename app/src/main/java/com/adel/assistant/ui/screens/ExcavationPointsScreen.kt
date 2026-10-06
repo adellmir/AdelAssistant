@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -79,7 +80,7 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         }
         val body = buildString {
             list.forEach { e ->
-                append(e.dateLabel)
+                append(e.dateLabel.toEnglishDigits())
                 append('\t')
                 append(String.format(Locale.US, "%.4f", e.x))
                 append('\t')
@@ -278,7 +279,7 @@ private fun buildExcavationDxf(list: List<ReportEntry>): String {
         sb.append(pair(11, fmt(x + cross))).append(pair(21, fmt(y - cross))).append(pair(31, fmt(z)))
         // سه خط متن سمت چپ
         val lines = listOf(
-            e.dateLabel,
+            e.dateLabel.toEnglishDigits(),
             String.format(Locale.US, "%.3f", e.z),
             String.format(Locale.US, "%.3f", e.km)
         )
