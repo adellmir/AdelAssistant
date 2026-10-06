@@ -66,6 +66,10 @@ fun Map2PointsDialog(
     var codeSettings by remember { mutableStateOf<Map<String, CodeSetting>>(emptyMap()) }
     var lineColorAci by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var colorDialogCode by remember { mutableStateOf<String?>(null) }
+    var symbolDialogCode by remember { mutableStateOf<String?>(null) }
+    var draftSymbol by remember { mutableStateOf(PointSymbol.NONE) }
+    var draftSymbolSize by remember { mutableStateOf("0.5") }
+    var draftSymbolAci by remember { mutableStateOf(7) }
     var lineTextSize by remember { mutableStateOf("1.0") }
     var lineShowName by remember { mutableStateOf(true) }
     var lineShowCode by remember { mutableStateOf(true) }
@@ -433,6 +437,29 @@ fun Map2PointsDialog(
                                         Text("رنگ ($cur)", color = Color(0xFF81C995), fontSize = 12.sp)
                                     }
                                 }
+                                // دکمه نماد برای کدهای نقطه‌ای
+                                if (s.category == CodeCategory.POINT) {
+                                    TextButton(
+                                        onClick = {
+                                            draftSymbol = s.symbol
+                                            draftSymbolSize = s.symbolSize.toString()
+                                            draftSymbolAci = s.colorIndex
+                                            symbolDialogCode = code
+                                        },
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                                    ) {
+                                        // شکل دکمه شبیه نماد
+                                        Text(
+                                            when (s.symbol) {
+                                                PointSymbol.CIRCLE -> "⬤"
+                                                PointSymbol.SQUARE -> "■"
+                                                PointSymbol.NONE -> "○"
+                                            },
+                                            color = Color(0xFF81C995),
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -492,6 +519,85 @@ fun Map2PointsDialog(
     }
 }
 
+
+
+    // پنجره انتخاب نماد نقطه
+    symbolDialogCode?.let { code ->
+        val paletteAci = listOf(5, 1, 2, 3, 200, 7, 30) // آبی قرمز زرد سبز بنفش سفید نارنجی
+        // ۱۵ خانه: خالی + ۷ دایره + ۷ مربع
+        val cells: List<Pair<PointSymbol, Int?>> = listOf(PointSymbol.NONE to null) +
+            paletteAci.map { PointSymbol.CIRCLE to it } +
+            paletteAci.map { PointSymbol.SQUARE to it }
+        AlertDialog(
+            onDismissRequest = { symbolDialogCode = null },
+            title = { Text("نماد — کد $code") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    cells.chunked(5).forEach { row ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            row.forEach { (sym, aci) ->
+                                val selected = draftSymbol == sym && (
+                                    sym == PointSymbol.NONE || aci == null || draftSymbolAci == aci
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (selected) Color(0xFF2A3A22) else Color(0xFF1E241A),
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clickable {
+                                            draftSymbol = sym
+                                            if (aci != null) draftSymbolAci = aci
+                                        }
+                                ) {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        when (sym) {
+                                            PointSymbol.NONE -> Text("·", color = Color.Gray, fontSize = 20.sp)
+                                            PointSymbol.CIRCLE -> Text(
+                                                "⬤",
+                                                color = aciColor(aci ?: 7),
+                                                fontSize = 22.sp
+                                            )
+                                            PointSymbol.SQUARE -> Text(
+                                                "■",
+                                                color = aciColor(aci ?: 7),
+                                                fontSize = 22.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = draftSymbolSize,
+                        onValueChange = { draftSymbolSize = it },
+                        label = { Text("سایز نماد (قطر/ضلع)") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val sz = draftSymbolSize.replace(',', '.').toFloatOrNull()?.coerceIn(0.05f, 50f) ?: 0.5f
+                    val s = codeSettings[code]
+                    if (s != null) {
+                        codeSettings = codeSettings + (code to s.copy(
+                            symbol = draftSymbol,
+                            symbolSize = sz,
+                            colorIndex = if (draftSymbol == PointSymbol.NONE) s.colorIndex else draftSymbolAci
+                        ))
+                    }
+                    symbolDialogCode = null
+                }) { Text("ثبت") }
+            },
+            dismissButton = {
+                TextButton(onClick = { symbolDialogCode = null }) { Text("انصراف") }
+            }
+        )
+    }
 
 data class PointDrawOptions(
     val textSize: Double,
@@ -630,3 +736,15 @@ private fun Cell(value: String, w: Int, numeric: Boolean = false, onCommit: (Str
 }
 
 private fun fmt(v: Double): String = String.format(Locale.US, "%.3f", v)
+
+
+private fun aciColor(aci: Int): Color = when (aci) {
+    1 -> Color(0xFFE53935)
+    2 -> Color(0xFFFDD835)
+    3 -> Color(0xFF43A047)
+    5 -> Color(0xFF1E88E5)
+    7 -> Color(0xFFEEEEEE)
+    30 -> Color(0xFFFB8C00)
+    200, 6 -> Color(0xFF8E24AA)
+    else -> Color(0xFFB0B8A8)
+}

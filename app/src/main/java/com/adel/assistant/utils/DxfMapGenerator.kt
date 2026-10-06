@@ -3,6 +3,7 @@ package com.adel.assistant.utils
 import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.CodeCategory
 import com.adel.assistant.data.CodeSetting
+import com.adel.assistant.data.PointSymbol
 import com.adel.assistant.data.DxfColors
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.isEndOfLine
@@ -84,7 +85,7 @@ object DxfMapGenerator {
             if (setting.category != CodeCategory.POINT) return@forEach
             val layer = sanitizeLayer(setting.layerName.ifBlank { "P-${p.code}" })
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
-            writePointSymbol(sb, p, layer, color)
+            writePointSymbol(sb, p, layer, color, setting)
             writePointLabel(sb, p, layer, color, setting)
         }
 
@@ -127,74 +128,45 @@ object DxfMapGenerator {
         }?.value
     }
 
-    /**
-     * ترسیم خطوط بر اساس خانوادهٔ کد (نه ترتیب خام فایل):
-     * ۱) همهٔ نقاط LINE با پایهٔ کد یکسان جمع می‌شوند
-     * ۲) بر اساس شماره نقطه مرتب می‌شوند
-     * ۳) پشت‌سرهم وصل می‌شوند — قطع شدن با کد دیگر در میانهٔ برداشت خط را نمی‌شکند
-     * ۴) فقط با .e / e. (در صورت وجود و closeOnE) زنجیره جدا می‌شود
-     * کاربر ممکن است .e نگذارد؛ در آن حالت کل خانواده یک زنجیره است.
-     */
     private fun writeAllLinesInOrder(
         sb: StringBuilder,
         points: List<SurveyPoint>,
         settings: Map<String, CodeSetting>
     ) {
-        // خانواده → لیست نقاط
-        val families = linkedMapOf<String, MutableList<SurveyPoint>>()
-        points.forEach { p ->
-            val setting = resolveSetting(settings, p.code) ?: return@forEach
-            if (setting.category != CodeCategory.LINE) return@forEach
-            val fam = codeBase(p.code).ifBlank { p.code.trim().lowercase() }
-            if (fam.isBlank()) return@forEach
-            families.getOrPut(fam) { mutableListOf() }.add(p)
+        var current = mutableListOf<SurveyPoint>()
+        var currentLayer = "0"
+        var currentColor = 7
+        var closeOnE = false
+
+        fun flush() {
+            if (current.size >= 2) {
+                for (i in 0 until current.size - 1) {
+                    writeLine(sb, current[i], current[i + 1], currentLayer, currentColor)
+                }
+            } else if (current.size == 1) {
+                writePointSymbol(sb, current[0], currentLayer, currentColor)
+            }
+            current = mutableListOf()
         }
 
-        families.forEach { (fam, rawList) ->
-            val setting = resolveSetting(settings, fam)
-                ?: resolveSetting(settings, rawList.first().code)
-                ?: return@forEach
+        points.forEach { p ->
+            val setting = resolveSetting(settings, p.code)
+            if (setting == null || setting.category != CodeCategory.LINE) {
+                flush()
+                return@forEach
+            }
             val layer = sanitizeLayer(
-                setting.layerName.ifBlank { "L-$fam" }
+                setting.layerName.ifBlank { "L-${p.code.substringBefore(".")}" }
             )
             val color = DxfColors.aci.getOrElse(setting.colorIndex) { 7 }
-
-            // مرتب‌سازی بر اساس شماره نقطه (عددی در صورت امکان)
-            val sorted = rawList.sortedWith(
-                compareBy<SurveyPoint>(
-                    { it.id.toDoubleOrNull() ?: Double.MAX_VALUE },
-                    { it.id }
-                )
-            )
-
-            if (!setting.closeOnE) {
-                // بدون .e: کل نقاط خانواده به ترتیب شماره وصل می‌شوند
-                for (i in 0 until sorted.size - 1) {
-                    writeLine(sb, sorted[i], sorted[i + 1], layer, color)
-                }
-                if (sorted.size == 1) {
-                    writePointSymbol(sb, sorted[0], layer, color)
-                }
-            } else {
-                // با closeOnE: زنجیره‌ها با نقطهٔ .e جدا می‌شوند
-                var chain = mutableListOf<SurveyPoint>()
-                fun flushChain() {
-                    if (chain.size >= 2) {
-                        for (i in 0 until chain.size - 1) {
-                            writeLine(sb, chain[i], chain[i + 1], layer, color)
-                        }
-                    } else if (chain.size == 1) {
-                        writePointSymbol(sb, chain[0], layer, color)
-                    }
-                    chain = mutableListOf()
-                }
-                sorted.forEach { p ->
-                    chain.add(p)
-                    if (p.isEndOfLine()) flushChain()
-                }
-                flushChain()
-            }
+            if (current.isNotEmpty() && layer != currentLayer) flush()
+            currentLayer = layer
+            currentColor = color
+            closeOnE = setting.closeOnE
+            current.add(p)
+            if (closeOnE && p.isEndOfLine()) flush()
         }
+        flush()
     }
 
     private fun writeLine(
@@ -215,36 +187,61 @@ object DxfMapGenerator {
         pair(sb, 31, fmt(p2.z))
     }
 
-    private fun writePointSymbol(sb: StringBuilder, p: SurveyPoint, layer: String, color: Int) {
-        val size = 0.15
-        pair(sb, 0, "CIRCLE")
-        pair(sb, 8, layer)
-        pair(sb, 62, color.toString())
-        pair(sb, 10, fmt(p.x))
-        pair(sb, 20, fmt(p.y))
-        pair(sb, 30, fmt(p.z))
-        pair(sb, 40, fmt(size))
-
-        val d = size * 1.4
-        pair(sb, 0, "LINE")
-        pair(sb, 8, layer)
-        pair(sb, 62, color.toString())
-        pair(sb, 10, fmt(p.x - d))
-        pair(sb, 20, fmt(p.y - d))
-        pair(sb, 30, fmt(p.z))
-        pair(sb, 11, fmt(p.x + d))
-        pair(sb, 21, fmt(p.y + d))
-        pair(sb, 31, fmt(p.z))
-
-        pair(sb, 0, "LINE")
-        pair(sb, 8, layer)
-        pair(sb, 62, color.toString())
-        pair(sb, 10, fmt(p.x - d))
-        pair(sb, 20, fmt(p.y + d))
-        pair(sb, 30, fmt(p.z))
-        pair(sb, 11, fmt(p.x + d))
-        pair(sb, 21, fmt(p.y - d))
-        pair(sb, 31, fmt(p.z))
+    private fun writePointSymbol(
+        sb: StringBuilder,
+        p: SurveyPoint,
+        layer: String,
+        color: Int,
+        setting: CodeSetting? = null
+    ) {
+        val size = (setting?.symbolSize ?: 0.5f).toDouble().coerceAtLeast(0.05)
+        val half = size / 2.0
+        val sym = setting?.symbol ?: PointSymbol.NONE
+        when (sym) {
+            PointSymbol.CIRCLE -> {
+                pair(sb, 0, "CIRCLE")
+                pair(sb, 8, layer)
+                pair(sb, 62, color.toString())
+                pair(sb, 10, fmt(p.x))
+                pair(sb, 20, fmt(p.y))
+                pair(sb, 30, fmt(p.z))
+                pair(sb, 40, fmt(half)) // radius = diameter/2 when size is diameter
+            }
+            PointSymbol.SQUARE -> {
+                // مربع با ضلع size، مرکز روی نقطه
+                val x1 = p.x - half; val y1 = p.y - half
+                val x2 = p.x + half; val y2 = p.y + half
+                fun edge(xa: Double, ya: Double, xb: Double, yb: Double) {
+                    pair(sb, 0, "LINE")
+                    pair(sb, 8, layer)
+                    pair(sb, 62, color.toString())
+                    pair(sb, 10, fmt(xa)); pair(sb, 20, fmt(ya)); pair(sb, 30, fmt(p.z))
+                    pair(sb, 11, fmt(xb)); pair(sb, 21, fmt(yb)); pair(sb, 31, fmt(p.z))
+                }
+                edge(x1, y1, x2, y1)
+                edge(x2, y1, x2, y2)
+                edge(x2, y2, x1, y2)
+                edge(x1, y2, x1, y1)
+            }
+            PointSymbol.NONE -> {
+                // نماد پیش‌فرض قبلی: دایره کوچک + ضربدر
+                val s0 = 0.15
+                pair(sb, 0, "CIRCLE")
+                pair(sb, 8, layer)
+                pair(sb, 62, color.toString())
+                pair(sb, 10, fmt(p.x)); pair(sb, 20, fmt(p.y)); pair(sb, 30, fmt(p.z))
+                pair(sb, 40, fmt(s0))
+                val d = s0 * 1.4
+                pair(sb, 0, "LINE")
+                pair(sb, 8, layer); pair(sb, 62, color.toString())
+                pair(sb, 10, fmt(p.x - d)); pair(sb, 20, fmt(p.y)); pair(sb, 30, fmt(p.z))
+                pair(sb, 11, fmt(p.x + d)); pair(sb, 21, fmt(p.y)); pair(sb, 31, fmt(p.z))
+                pair(sb, 0, "LINE")
+                pair(sb, 8, layer); pair(sb, 62, color.toString())
+                pair(sb, 10, fmt(p.x)); pair(sb, 20, fmt(p.y - d)); pair(sb, 30, fmt(p.z))
+                pair(sb, 11, fmt(p.x)); pair(sb, 21, fmt(p.y + d)); pair(sb, 31, fmt(p.z))
+            }
+        }
     }
 
     private fun writePointLabel(
@@ -254,26 +251,33 @@ object DxfMapGenerator {
         color: Int,
         setting: CodeSetting
     ) {
-        val parts = mutableListOf<String>()
-        if (setting.showNumber) parts.add(p.id)
-        if (setting.showXY) parts.add(String.format(Locale.US, "%.3f,%.3f", p.x, p.y))
-        if (setting.showZ) parts.add(String.format(Locale.US, "Z:%.2f", p.z))
-        if (setting.showCode) parts.add(p.code)
-        if (parts.isEmpty()) return
-
-        val text = parts.joinToString(" - ")
-            .replace("\r", " ")
-            .replace("\n", " ")
-
-        pair(sb, 0, "TEXT")
-        pair(sb, 8, layer)
-        pair(sb, 62, "7")
-        pair(sb, 10, fmt(p.x + 0.3))
-        pair(sb, 20, fmt(p.y + 0.3))
-        pair(sb, 30, fmt(p.z))
-        pair(sb, 40, fmt(setting.textSize.toDouble().coerceAtLeast(0.1)))
-        pair(sb, 1, text)
-        pair(sb, 50, "0")
+        val h = setting.textSize.toDouble().coerceAtLeast(0.2)
+        val gap = h * 1.35
+        var row = 0
+        fun put(text: String) {
+            // ردیف‌ها روی هم، بالای نقطه
+            val ty = p.y + h * 0.3 + row * gap
+            pair(sb, 0, "TEXT")
+            pair(sb, 8, layer)
+            pair(sb, 62, color.toString())
+            pair(sb, 10, fmt(p.x + h * 0.4))
+            pair(sb, 20, fmt(ty))
+            pair(sb, 30, fmt(p.z))
+            pair(sb, 40, fmt(h))
+            pair(sb, 1, text)
+            row++
+        }
+        // ردیف ۱: فقط شماره نقطه
+        if (setting.showNumber) {
+            val num = p.id
+            if (num.isNotBlank()) put(num)
+        }
+        // ردیف ۲: فقط کد
+        if (setting.showCode && p.code.isNotBlank()) put(p.code)
+        // ردیف ۳: ارتفاع با Z:
+        if (setting.showZ) put("Z:" + fmt(p.z))
+        // XY اگر فعال (اختیاری)
+        if (setting.showXY) put("X:${fmt(p.x)} Y:${fmt(p.y)}")
     }
 
     private fun fmt(v: Double): String = String.format(Locale.US, "%.4f", v)

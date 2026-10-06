@@ -11,6 +11,13 @@ enum class CodeCategory {
     POINT     // ترسیم نقاط
 }
 
+/** شکل نماد نقطه روی نقشه */
+enum class PointSymbol {
+    NONE,    // پیش‌فرض خالی / ضربدر کوچک قبلی
+    CIRCLE,
+    SQUARE
+}
+
 /**
  * تنظیمات یک کد خاص
  */
@@ -24,7 +31,11 @@ data class CodeSetting(
     var showXY: Boolean = false,
     var showZ: Boolean = false,
     var showCode: Boolean = true,
-    var textSize: Float = 2.5f
+    var textSize: Float = 2.5f,
+    /** شکل نماد؛ NONE = همان نماد پیش‌فرض ترسیم نقطه */
+    var symbol: PointSymbol = PointSymbol.NONE,
+    /** قطر دایره / ضلع مربع (متر) */
+    var symbolSize: Float = 0.5f
 )
 
 /**
@@ -110,12 +121,32 @@ object DefaultCodeRules {
             CodeCategory.IGNORE -> 8
         }
 
+        // نماد پیش‌فرض برای کدهای رایج
+        // ACI: 1=قرمز 2=زرد 3=سبز 5=آبی 7=سفید 30=نارنجی 200=بنفش
+        val (sym, symColor, symSize) = when (base) {
+            "ab" -> Triple(PointSymbol.CIRCLE, 5, 0.5f)      // آبی
+            "g" -> Triple(PointSymbol.CIRCLE, 3, 0.5f)       // سبز
+            "b" -> Triple(PointSymbol.CIRCLE, 7, 0.5f)       // سفید
+            "mb" -> Triple(PointSymbol.CIRCLE, 1, 0.5f)      // قرمز
+            "tb" -> Triple(PointSymbol.SQUARE, 1, 0.5f)      // مربع قرمز
+            "mm" -> Triple(PointSymbol.CIRCLE, 200, 0.5f)    // بنفش
+            "tm" -> Triple(PointSymbol.SQUARE, 200, 0.5f)    // مربع بنفش
+            "5" -> Triple(PointSymbol.CIRCLE, 30, 0.5f)      // نارنجی
+            else -> Triple(PointSymbol.NONE, colorIndex, 0.5f)
+        }
+        val finalColor = if (sym != PointSymbol.NONE) symColor else colorIndex
+        val finalCat = if (sym != PointSymbol.NONE && category == CodeCategory.IGNORE) {
+            CodeCategory.POINT
+        } else category
+
         return CodeSetting(
             code = code,
-            category = category,
-            colorIndex = colorIndex,
+            category = finalCat,
+            colorIndex = finalColor,
             layerName = layer,
-            closeOnE = closeOnE
+            closeOnE = closeOnE,
+            symbol = sym,
+            symbolSize = symSize
         )
     }
 }
