@@ -649,6 +649,72 @@ LaunchedEffect(profileMode) {
     }
     
     /** ترسیم نقاط دسته‌های نقشه ۲ روی لایهٔ هم‌نام دسته */
+
+    fun placeMap2PointDraw(pts: List<Map2Point>, opts: PointDrawOptions) {
+        if (pts.isEmpty()) {
+            message = "نقطه‌ای برای ترسیم نیست"
+            return
+        }
+        pushUndo()
+        docDirty = true
+        val id = ensureCadDrawing()
+        val h = opts.textSize.coerceAtLeast(0.05)
+        val cross = h * 0.35
+        val aci = opts.colorAci
+        drawings = drawings.map { dr ->
+            if (dr.id != id) return@map dr
+            var m = dr.model
+            val layers = m.layers.toMutableMap()
+            layers["point"] = DxfLayerInfo("point", aci, true)
+            layers["cod"] = DxfLayerInfo("cod", aci, true)
+            layers["high"] = DxfLayerInfo("high", aci, true)
+            layers["POINTS"] = DxfLayerInfo("POINTS", aci, true)
+            val newLines = m.lines.toMutableList()
+            val newTexts = m.texts.toMutableList()
+            pts.forEach { pt ->
+                if (opts.showSymbol) {
+                    newLines += DxfLine(pt.x - cross, pt.y, pt.x + cross, pt.y, "POINTS", aci)
+                    newLines += DxfLine(pt.x, pt.y - cross, pt.x, pt.y + cross, "POINTS", aci)
+                }
+                var row = 0
+                if (opts.showName) {
+                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, pt.name, "point", aci)
+                    row++
+                }
+                if (opts.showCode && pt.code.isNotBlank()) {
+                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, pt.code, "cod", aci)
+                    row++
+                }
+                if (opts.showElev) {
+                    val elev = String.format(java.util.Locale.US, "%.3f", pt.z)
+                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, elev, "high", aci)
+                }
+            }
+            m = m.copy(lines = newLines, texts = newTexts, layers = layers)
+            dr.copy(model = m.recalculatedBounds())
+        }
+        fitTrigger++
+        message = "${pts.size} نقطه ترسیم شد (لایه‌های point/cod/high)"
+    }
+
+    fun placeMap2LineDxf(dxfText: String) {
+        try {
+            val model = DxfParser.parse(dxfText)
+            if (model.isEmpty) {
+                message = "ترسیم خطی خالی بود"
+                return
+            }
+            pushUndo()
+            docDirty = true
+            drawings = drawings + ViewerDrawing(nextDrawingId, "line_codes.dxf", model)
+            nextDrawingId++
+            fitTrigger++
+            message = "ترسیم خطی بر اساس کد ثبت شد"
+        } catch (e: Exception) {
+            message = "خطای ترسیم خطی: ${e.message}"
+        }
+    }
+
     fun placeMap2CategoriesOnMap(cats: List<Map2PointCategory>) {
         pushUndo()
         docDirty = true
@@ -2597,7 +2663,14 @@ if (zoomWindowMode) {
         Map2PointsDialog(
             color = color,
             onDismiss = { showMap2Points = false },
-            onCommitToMap = { cats -> placeMap2CategoriesOnMap(cats) }
+            onCommitPointDraw = { pts, opts ->
+                placeMap2PointDraw(pts, opts)
+                showMap2Points = false
+            },
+            onCommitLineDraw = { dxf ->
+                placeMap2LineDxf(dxf)
+                showMap2Points = false
+            }
         )
     }
 if (showSaveDxfDialog) {
