@@ -517,11 +517,8 @@ fun Map2PointsDialog(
             }
         )
     }
-}
 
-
-
-    // پنجره انتخاب نماد نقطه
+// پنجره انتخاب نماد نقطه
     symbolDialogCode?.let { code ->
         val paletteAci = listOf(5, 1, 2, 3, 200, 7, 30) // آبی قرمز زرد سبز بنفش سفید نارنجی
         // ۱۵ خانه: خالی + ۷ دایره + ۷ مربع
@@ -598,6 +595,9 @@ fun Map2PointsDialog(
             }
         )
     }
+
+}
+
 
 data class PointDrawOptions(
     val textSize: Double,
