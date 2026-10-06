@@ -92,6 +92,25 @@ object Map2Session {
 
     fun allPoints(): List<Map2Point> = categories.flatMap { it.points }
 
+    /** مرکز حدود نقاط پروژه — برای قرارگیری پروفیل نزدیک نقاط */
+    fun projectBoundsCenter(): Pair<Double, Double>? {
+        val pts = allPoints()
+        if (pts.isEmpty()) return null
+        val minX = pts.minOf { it.x }
+        val maxX = pts.maxOf { it.x }
+        val minY = pts.minOf { it.y }
+        val maxY = pts.maxOf { it.y }
+        return (minX + maxX) / 2.0 to (minY + maxY) / 2.0
+    }
+
+    /** جایگزینی بخش هم‌نام یا افزودن — ترسیم‌ها روی هم می‌مانند */
+    fun upsertProjectPart(name: String, dxfText: String) {
+        val without = projectDxfParts.filterNot { it.first.equals(name, true) }
+        projectDxfParts = without + (name to dxfText)
+        dirty = true
+        openProject = true
+    }
+
     fun visiblePoints(): List<Map2Point> =
         categories.filter { it.visible }.flatMap { it.points }
 

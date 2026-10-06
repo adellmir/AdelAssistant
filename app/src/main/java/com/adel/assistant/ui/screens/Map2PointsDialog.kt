@@ -114,9 +114,22 @@ fun Map2PointsDialog(
         }
     }
 
-    // با باز شدن دیالوگ مستقیم درخواست فایل
+    // با باز شدن: نقاط قبلی جلسه را نشان بده؛ در غیر این صورت درخواست فایل
     LaunchedEffect(Unit) {
-        if (!filePicked && points.isEmpty()) {
+        val existing = Map2Session.allPoints()
+        if (existing.isNotEmpty() && points.isEmpty()) {
+            points = existing
+            selectedIds = existing.map { it.id }.toSet()
+            selectMode = "all"
+            filePicked = true
+            val unique = existing.map { codeBase(it.code) }.filter { it.isNotBlank() }.distinct()
+            codeSettings = unique.associateWith { DefaultCodeRules.createDefaultSetting(it) }
+            lineColorAci = unique.associateWith { code ->
+                Map2Session.lineColors[code.lowercase()]
+                    ?: DefaultCodeRules.createDefaultSetting(code).colorIndex
+            }
+            message = "${existing.size} نقطه از جلسه قبلی"
+        } else if (!filePicked && points.isEmpty()) {
             picker.launch(arrayOf("*/*", "text/*", "application/octet-stream", "application/vnd.google-earth.kml+xml"))
         }
     }
