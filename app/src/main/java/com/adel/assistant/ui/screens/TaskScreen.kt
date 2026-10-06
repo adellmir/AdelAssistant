@@ -138,14 +138,20 @@ fun TaskScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        val visibleTasks = if (showCompleted) tasks else tasks.filterNot { it.completed }
+        // انجام‌نشده‌ها جدید→قدیم، سپس انجام‌شده‌ها جدید→قدیم
+        val visibleTasks = run {
+            val base = if (showCompleted) tasks else tasks.filterNot { it.completed }
+            val open = base.filterNot { it.completed }.sortedByDescending { it.createdAt }
+            val done = base.filter { it.completed }.sortedByDescending { it.createdAt }
+            open + done
+        }
         if (visibleTasks.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Text("هنوز تسکی ثبت نشده است", color = Color.Gray)
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(visibleTasks, key = { _, item -> item.createdAt }) { _, task ->
+                itemsIndexed(visibleTasks, key = { _, item -> "${item.createdAt}_${item.title}" }) { _, task ->
                     val originalIndex = tasks.indexOfFirst { it.createdAt == task.createdAt }
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
                         Row(
