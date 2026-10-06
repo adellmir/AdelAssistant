@@ -139,7 +139,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         reportPts = TunnelReportStore.allEntries(context).map { TunnelReportStore.ensureCoords(context, it) }
             .filter { it.x != 0.0 || it.y != 0.0 }
         overlays = MapOverlayStore.all(context)
-        showTunnel = true
+        // محور و نقاط ثبات به‌طور پیش‌فرض خاموش
+        showTunnel = false
         needFit = true
         status = "تونل ${tunnelPts.size} | گزارش ${reportPts.size} | دستی ${overlays.size}"
     }

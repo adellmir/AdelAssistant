@@ -38,7 +38,6 @@ object AppMenu {
         tabs = listOf(
             MenuTab("تونل", listOf(
                 MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
-                MenuItem("کیلومتاژ", Icons.Filled.Route, Routes.SURVEY_TUNNEL_CHAINAGE),
                 MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
                 MenuItem("نقشه تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
                 MenuItem("نقاط تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),

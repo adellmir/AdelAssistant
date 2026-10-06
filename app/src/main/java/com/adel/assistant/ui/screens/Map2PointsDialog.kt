@@ -396,16 +396,43 @@ fun Map2PointsDialog(
                         val codes = codeSettings.keys.sorted()
                         items(codes, key = { it }) { code ->
                             val s = codeSettings[code]!!
+                            val aci = lineColorAci[code] ?: s.colorIndex
                             Surface(
                                 color = Color(0xFF1E241A),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
-                                    Modifier.padding(8.dp),
+                                    Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(code, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.width(64.dp))
+                                    // سمت راست: نام کد + نام لایه
+                                    Column(Modifier.width(88.dp)) {
+                                        Text(
+                                            code,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            maxLines = 2
+                                        )
+                                        OutlinedTextField(
+                                            value = s.layerName.ifBlank { code },
+                                            onValueChange = { v ->
+                                                codeSettings = codeSettings + (code to s.copy(layerName = v))
+                                            },
+                                            singleLine = true,
+                                            textStyle = TextStyle(fontSize = 11.sp, color = Color(0xFFE8EDE0)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(40.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF4A5A3A),
+                                                unfocusedBorderColor = Color(0xFF3A4430)
+                                            )
+                                        )
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    // خط / نقطه / نادیده
                                     listOf(
                                         CodeCategory.LINE to "خط",
                                         CodeCategory.POINT to "نقطه",
@@ -420,45 +447,39 @@ fun Map2PointsDialog(
                                             modifier = Modifier.padding(end = 2.dp)
                                         )
                                     }
-                                    Text(
-                                        "${points.count { codeBase(it.code).equals(code, true) }} نقطه",
-                                        color = Color(0xFF8A9280),
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(start = 6.dp)
-                                    )
-                                }
-                                // دکمه رنگ — باز شدن پنجره انتخاب
-                                if (s.category == CodeCategory.LINE) {
-                                    val cur = lineColorAci[code] ?: s.colorIndex
-                                    TextButton(
-                                        onClick = { colorDialogCode = code },
-                                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
-                                    ) {
-                                        Text("رنگ ($cur)", color = Color(0xFF81C995), fontSize = 12.sp)
-                                    }
-                                }
-                                // دکمه نماد برای کدهای نقطه‌ای
-                                if (s.category == CodeCategory.POINT) {
-                                    TextButton(
-                                        onClick = {
-                                            draftSymbol = s.symbol
-                                            draftSymbolSize = s.symbolSize.toString()
-                                            draftSymbolAci = s.colorIndex
-                                            symbolDialogCode = code
-                                        },
-                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                                    ) {
-                                        // شکل دکمه شبیه نماد
-                                        Text(
-                                            when (s.symbol) {
-                                                PointSymbol.CIRCLE -> "⬤"
-                                                PointSymbol.SQUARE -> "■"
-                                                PointSymbol.NONE -> "○"
+                                    // نماد (فقط نقطه)
+                                    if (s.category == CodeCategory.POINT) {
+                                        TextButton(
+                                            onClick = {
+                                                draftSymbol = s.symbol
+                                                draftSymbolSize = s.symbolSize.toString()
+                                                draftSymbolAci = s.colorIndex
+                                                symbolDialogCode = code
                                             },
-                                            color = Color(0xFF81C995),
-                                            fontSize = 16.sp
-                                        )
+                                            contentPadding = PaddingValues(4.dp)
+                                        ) {
+                                            Text(
+                                                when (s.symbol) {
+                                                    PointSymbol.CIRCLE -> "⬤"
+                                                    PointSymbol.SQUARE -> "■"
+                                                    PointSymbol.NONE -> "○"
+                                                },
+                                                color = Color(0xFF81C995),
+                                                fontSize = 16.sp
+                                            )
+                                        }
                                     }
+                                    Spacer(Modifier.weight(1f))
+                                    // مربع رنگی توپر در انتهای ردیف
+                                    Box(
+                                        Modifier
+                                            .size(28.dp)
+                                            .background(
+                                                aciToComposeColor(aci),
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .clickable { colorDialogCode = code }
+                                    )
                                 }
                             }
                         }
@@ -473,40 +494,61 @@ fun Map2PointsDialog(
     colorDialogCode?.let { code ->
         val s = codeSettings[code]
         val cur = lineColorAci[code] ?: s?.colorIndex ?: 7
+        // ۱۵ طیف — سفید سبز آبی زرد قرمز خاکستری بنفش نارنجی حتماً
         val palette = listOf(
-            1 to "قرمز",
+            7 to "سفید",
             3 to "سبز",
             5 to "آبی",
             2 to "زرد",
-            6 to "magenta",
-            4 to "فیروزه",
-            7 to "سفید",
+            1 to "قرمز",
+            8 to "خاکستری",
+            200 to "بنفش",
             30 to "نارنجی",
-            8 to "خاکستری"
+            4 to "فیروزه",
+            6 to "صورتی",
+            0 to "مشکی",
+            10 to "قرمز تیره",
+            150 to "آبی روشن",
+            40 to "قهوه‌ای",
+            60 to "سبز روشن"
         )
         AlertDialog(
             onDismissRequest = { colorDialogCode = null },
-            title = { Text("رنگ خط — کد $code") },
+            title = { Text("رنگ لایه — کد $code") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    palette.chunked(3).forEach { row ->
+                    palette.chunked(5).forEach { row ->
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             row.forEach { (aci, label) ->
-                                FilterChip(
-                                    selected = cur == aci,
-                                    onClick = {
-                                        lineColorAci = lineColorAci + (code to aci)
-                                        if (s != null) {
-                                            codeSettings = codeSettings + (code to s.copy(colorIndex = aci))
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            lineColorAci = lineColorAci + (code to aci)
+                                            if (s != null) {
+                                                codeSettings = codeSettings + (code to s.copy(colorIndex = aci))
+                                            }
+                                            colorDialogCode = null
                                         }
-                                        colorDialogCode = null
-                                    },
-                                    label = { Text("$label ($aci)", fontSize = 12.sp) },
-                                    modifier = Modifier.weight(1f)
-                                )
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(32.dp)
+                                            .background(
+                                                aciToComposeColor(aci),
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                    )
+                                    Text(
+                                        label,
+                                        fontSize = 9.sp,
+                                        color = if (cur == aci) Color(0xFF81C995) else Color(0xFFB0B8A8)
+                                    )
+                                }
                             }
                         }
                     }
@@ -738,13 +780,20 @@ private fun Cell(value: String, w: Int, numeric: Boolean = false, onCommit: (Str
 private fun fmt(v: Double): String = String.format(Locale.US, "%.3f", v)
 
 
-private fun aciColor(aci: Int): Color = when (aci) {
-    1 -> Color(0xFFE53935)
+private fun aciColor(aci: Int): Color = aciToComposeColor(aci)
+
+private fun aciToComposeColor(aci: Int): Color = when (aci) {
+    0 -> Color(0xFF000000)
+    1, 10 -> Color(0xFFE53935)
     2 -> Color(0xFFFDD835)
-    3 -> Color(0xFF43A047)
-    5 -> Color(0xFF1E88E5)
+    3, 60 -> Color(0xFF43A047)
+    4 -> Color(0xFF00ACC1)
+    5, 150 -> Color(0xFF1E88E5)
+    6 -> Color(0xFFD81B60)
     7 -> Color(0xFFEEEEEE)
+    8 -> Color(0xFF9E9E9E)
     30 -> Color(0xFFFB8C00)
-    200, 6 -> Color(0xFF8E24AA)
+    40 -> Color(0xFF6D4C41)
+    200 -> Color(0xFF8E24AA)
     else -> Color(0xFFB0B8A8)
 }
