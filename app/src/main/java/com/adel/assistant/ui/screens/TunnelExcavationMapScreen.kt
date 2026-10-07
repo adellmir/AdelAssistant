@@ -55,6 +55,10 @@ import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.TunnelMapBgStore
 import com.adel.assistant.data.TunnelLayerPrefs
+import com.adel.assistant.data.SurveyPoint
+import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.TunnelBenchmarkPoint
+import com.adel.assistant.data.TunnelBenchmarkStore
 import com.adel.assistant.data.DxfModel
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.filterNumericInput
@@ -116,6 +120,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showEvents by remember { mutableStateOf(TunnelLayerPrefs.showEvents(context)) }
     var layerColors by remember { mutableStateOf(TunnelLayerPrefs.loadColors(context)) }
     var colorEditLayer by remember { mutableStateOf<String?>(null) }
+    var showBenchmarkDialog by remember { mutableStateOf(false) }
+    var showBenchmarks by remember { mutableStateOf(true) }
+    var benchmarks by remember { mutableStateOf(TunnelBenchmarkStore.all(context)) }
     var menuOpen by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
@@ -144,6 +151,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         reportPts = TunnelReportStore.allEntries(context).map { TunnelReportStore.ensureCoords(context, it) }
             .filter { it.x != 0.0 || it.y != 0.0 }
         overlays = MapOverlayStore.all(context)
+        benchmarks = TunnelBenchmarkStore.all(context)
         showTunnel = true
         needFit = true
         status = "تونل ${tunnelPts.size} | گزارش ${reportPts.size} | دستی ${overlays.size}"
@@ -154,6 +162,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         reportPts = TunnelReportStore.allEntries(context).map { TunnelReportStore.ensureCoords(context, it) }
             .filter { it.x != 0.0 || it.y != 0.0 }
         overlays = MapOverlayStore.all(context)
+        benchmarks = TunnelBenchmarkStore.all(context)
         bgModel = TunnelMapBgStore.parseModel(context)
         needFit = true
         status = "تونل ${tunnelPts.size} | گزارش ${reportPts.size} | دستی ${overlays.size}"
@@ -401,7 +410,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                 val (cx, cy) = if (canvasSize.x > 0) screenToWorld(canvasSize.x / 2, canvasSize.y / 2)
                                 else 0.0 to 0.0
                                 openAddAt(cx, cy)
-                            }) { Icon(Icons.Outlined.AddLocationAlt, null, tint = Color.White) }
+                            }) { Icon(Icons.Outlined.Place, null, tint = Color.White) }
                             IconButton(onClick = { editMode = !editMode }) {
                                 Icon(if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit, null, tint = if (editMode) color else Color.White)
                             }
@@ -409,6 +418,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = {
                                 mapUploadLauncher.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream"))
                             }) { Icon(Icons.Outlined.Upload, null, tint = Color.White) }
+                            IconButton(onClick = { showBenchmarkDialog = true }) {
+                                Icon(Icons.Outlined.Place, "ورود بنچ‌مارک", tint = Color.White)
+                            }
                             IconButton(onClick = { showLayers = true }) { Icon(Icons.Outlined.Layers, null, tint = Color.White) }
                             IconButton(onClick = { showExport = true }) { Icon(Icons.Outlined.FileDownload, null, tint = Color.White) }
                         }
@@ -625,6 +637,30 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         val ty = c.y + hPx * 0.35f
                         drawContext.canvas.nativeCanvas.drawText(p.d, tx, ty, eventPaint)
                     }
+
+                // بنچ‌مارک: متن سبز ۲۰؟ ۱۰ سانتی‌متر سمت راست — ردیف۱ نام، ردیف۲ تراز
+                if (showBenchmarks) {
+                    val hPx = (0.10f * scale).coerceIn(12f, 64f)
+                    val bmPaint = Paint().apply {
+                        this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47)
+                        textSize = hPx
+                        isAntiAlias = true
+                        typeface = Typeface.DEFAULT_BOLD
+                        textAlign = Paint.Align.LEFT
+                    }
+                    benchmarks.forEach { bp ->
+                        val c = worldToScreen(bp.x, bp.y)
+                        drawCircle(Color(0xFF43A047), radius = 7f, center = c)
+                        drawCircle(Color.White, radius = 3f, center = c)
+                        val tx = c.x + 10f
+                        val ty = c.y
+                        val elev = String.format(java.util.Locale.US, "%.3f", bp.z)
+                        drawContext.canvas.nativeCanvas.apply {
+                            drawText(bp.name.ifBlank { bp.id }, tx, ty - hPx * 0.2f, bmPaint)
+                            drawText(elev, tx, ty + hPx * 1.0f, bmPaint)
+                        }
+                    }
+                }
                 }
             }
         }
@@ -718,6 +754,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         )
                         Text("اتفاقات تونل")
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(showBenchmarks, { showBenchmarks = it })
+                        Text("بنچ‌مارک")
+                    }
                     if (bgLayerNames.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Text("رنگ لایه‌های خطی نقشه زمینه", color = TextSecondary, fontSize = 12.sp)
@@ -746,6 +786,23 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     // انتخاب رنگ لایه خطی — ذخیره پایدار
+
+    if (showBenchmarkDialog) {
+        TunnelBenchmarkImportDialog(
+            color = color,
+            context = context,
+            onDismiss = {
+                showBenchmarkDialog = false
+                benchmarks = TunnelBenchmarkStore.all(context)
+            },
+            onSaved = {
+                benchmarks = TunnelBenchmarkStore.all(context)
+                needFit = true
+                status = "بنچ‌مارک: ${benchmarks.size} نقطه"
+            }
+        )
+    }
+
     colorEditLayer?.let { ly ->
         AlertDialog(
             onDismissRequest = { colorEditLayer = null },
@@ -934,3 +991,188 @@ private suspend fun loadTunnelTiles(
         }
     }.awaitAll().filterNotNull()
 }
+
+
+@Composable
+private fun TunnelBenchmarkImportDialog(
+    color: Color,
+    context: android.content.Context,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
+    var rows by remember {
+        mutableStateOf(
+            TunnelBenchmarkStore.all(context).map {
+                it to true // ticked by default
+            }.toMutableList()
+        )
+    }
+    var message by remember { mutableStateOf("") }
+    var selectMode by remember { mutableStateOf("all") } // all | none | range
+    var rangeFrom by remember { mutableStateOf("") }
+    var rangeTo by remember { mutableStateOf("") }
+
+    fun applySelection(mode: String) {
+        selectMode = mode
+        when (mode) {
+            "all" -> rows = rows.map { it.first to true }.toMutableList()
+            "none" -> rows = rows.map { it.first to false }.toMutableList()
+            "range" -> {
+                val a = rangeFrom.trim()
+                val b = rangeTo.trim()
+                if (a.isBlank() || b.isBlank()) return
+                rows = rows.map { (p, _) ->
+                    val n = p.name.ifBlank { p.id }
+                    val on = n >= a && n <= b || (n.toIntOrNull() != null && a.toIntOrNull() != null && b.toIntOrNull() != null &&
+                        n.toInt() in a.toInt()..b.toInt())
+                    p to on
+                }.toMutableList()
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
+            val ext = name.substringAfterLast('.', "txt").lowercase()
+            val text = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: return@rememberLauncherForActivityResult
+            val parsed = PointConverter.read(text, ext)
+            if (parsed.isEmpty()) {
+                message = "نقطه‌ای خوانده نشد"
+                return@rememberLauncherForActivityResult
+            }
+            val existingKeys = rows.map { (p, _) ->
+                "${p.name.trim().lowercase()}|${"%.3f".format(java.util.Locale.US, p.x)}|${"%.3f".format(java.util.Locale.US, p.y)}"
+            }.toSet()
+            val base = System.currentTimeMillis()
+            var added = 0
+            val merged = rows.toMutableList()
+            parsed.forEachIndexed { i, s ->
+                val nm = s.id.ifBlank { "BM${i + 1}" }
+                val key = "${nm.trim().lowercase()}|${"%.3f".format(java.util.Locale.US, s.x)}|${"%.3f".format(java.util.Locale.US, s.y)}"
+                if (key in existingKeys) return@forEachIndexed
+                val bp = TunnelBenchmarkPoint(
+                    id = "bm${base}_$i",
+                    name = nm,
+                    x = s.x, y = s.y, z = s.z,
+                    code = s.code
+                )
+                merged.add(bp to true)
+                added++
+            }
+            rows = merged
+            message = "افزوده شد: $added (تکراری‌ها رد شد) — جمع ${rows.size}"
+        } catch (e: Exception) {
+            message = "خطا: ${e.message}"
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ورود نقاط بنچ‌مارک") },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 480.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = {
+                        picker.launch(arrayOf("*/*", "text/*", "application/octet-stream"))
+                    }) { Text("فایل (GSI/TXT/…)") }
+                    TextButton(onClick = { applySelection("all") }) { Text("همه") }
+                    TextButton(onClick = { applySelection("none") }) { Text("هیچ") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(rangeFrom, { rangeFrom = it }, label = { Text("از") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(rangeTo, { rangeTo = it }, label = { Text("تا") }, modifier = Modifier.weight(1f), singleLine = true)
+                    TextButton(onClick = { applySelection("range") }) { Text("بازه") }
+                }
+                if (message.isNotBlank()) {
+                    Text(message, color = Color(0xFF81C995), fontSize = 12.sp)
+                }
+                // هدر اکسلی
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("✓", modifier = Modifier.width(32.dp), fontSize = 11.sp)
+                    Text("نام", modifier = Modifier.weight(1f), fontSize = 11.sp)
+                    Text("X", modifier = Modifier.weight(1f), fontSize = 11.sp)
+                    Text("Y", modifier = Modifier.weight(1f), fontSize = 11.sp)
+                    Text("Z", modifier = Modifier.weight(1f), fontSize = 11.sp)
+                }
+                LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    items(rows.size, key = { rows[it].first.id }) { idx ->
+                        val (pt, checked) = rows[idx]
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = { on ->
+                                    rows = rows.toMutableList().also { list ->
+                                        list[idx] = pt to on
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                            )
+                            OutlinedTextField(
+                                value = pt.name,
+                                onValueChange = { v ->
+                                    rows = rows.toMutableList().also {
+                                        it[idx] = pt.copy(name = v) to checked
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
+                            )
+                            OutlinedTextField(
+                                value = String.format(java.util.Locale.US, "%.3f", pt.x),
+                                onValueChange = { v ->
+                                    val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
+                                    rows = rows.toMutableList().also {
+                                        it[idx] = pt.copy(x = d) to checked
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
+                            )
+                            OutlinedTextField(
+                                value = String.format(java.util.Locale.US, "%.3f", pt.y),
+                                onValueChange = { v ->
+                                    val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
+                                    rows = rows.toMutableList().also {
+                                        it[idx] = pt.copy(y = d) to checked
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
+                            )
+                            OutlinedTextField(
+                                value = String.format(java.util.Locale.US, "%.3f", pt.z),
+                                onValueChange = { v ->
+                                    val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
+                                    rows = rows.toMutableList().also {
+                                        it[idx] = pt.copy(z = d) to checked
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // فقط تیک‌خورده‌ها نگه داشته می‌شوند — بدون تیک = حذف
+                val kept = rows.filter { it.second }.map { it.first }
+                TunnelBenchmarkStore.saveAll(context, kept)
+                onSaved()
+                onDismiss()
+            }) { Text("ثبت") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("انصراف") }
+        }
+    )
+}
+
