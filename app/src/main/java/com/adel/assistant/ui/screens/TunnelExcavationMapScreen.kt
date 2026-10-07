@@ -122,6 +122,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var colorEditLayer by remember { mutableStateOf<String?>(null) }
     var showBenchmarkDialog by remember { mutableStateOf(false) }
     var showBenchmarks by remember { mutableStateOf(true) }
+    var dimMode by remember { mutableStateOf(false) }
+    var dimA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var dimB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var dimMsg by remember { mutableStateOf<String?>(null) }
     var benchmarks by remember { mutableStateOf(TunnelBenchmarkStore.all(context)) }
     var menuOpen by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
@@ -437,13 +441,33 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                     modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
-                                        Icons.Outlined.Flag,
-                                        "بنچ‌مارک",
+                                        Icons.Outlined.FileOpen,
+                                        "ورود نقاط",
                                         tint = Color(0xFF81C995),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
-                                Text("بنچ", color = Color(0xFF81C995), fontSize = 9.sp)
+                                Text("ورود", color = Color(0xFF81C995), fontSize = 9.sp)
+                            }
+                            // اندازه‌گذاری
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(
+                                    onClick = {
+                                        dimMode = !dimMode
+                                        dimA = null; dimB = null; dimMsg = null
+                                        menuOpen = false
+                                        status = if (dimMode) "اندازه‌گذاری: نقطه اول را بزن" else ""
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Straighten,
+                                        "اندازه",
+                                        tint = if (dimMode) color else Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Text("اندازه", color = if (dimMode) color else Color.White, fontSize = 9.sp)
                             }
                             IconButton(onClick = { showLayers = true }, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Outlined.Layers, null, tint = Color.White, modifier = Modifier.size(22.dp))
@@ -453,6 +477,17 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             }
                         }
                     }
+                }
+            }
+            dimMsg?.let { msg ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = color,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp)
+                ) {
+                    Text(msg, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontSize = 13.sp)
                 }
             }
             // وضعیت
@@ -487,9 +522,24 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             }
                         }
                     }
-                    .pointerInput(editMode, overlays, scale, offset) {
+                    .pointerInput(editMode, overlays, scale, offset, dimMode) {
                         detectTapGestures(
                             onTap = { pos ->
+                                if (dimMode) {
+                                    val w = screenToWorld(pos.x, pos.y)
+                                    if (dimA == null) {
+                                        dimA = w
+                                        dimB = null
+                                        dimMsg = "نقطه دوم را بزن"
+                                    } else {
+                                        dimB = w
+                                        val a = dimA!!
+                                        val dist = kotlin.math.hypot(w.first - a.first, w.second - a.second)
+                                        dimMsg = String.format(java.util.Locale.US, "طول = %.3f m", dist)
+                                        dimA = null
+                                    }
+                                    return@detectTapGestures
+                                }
                                 var best: MapOverlayPoint? = null
                                 var bestD = 40f
                                 overlays.forEach { p ->
@@ -649,24 +699,51 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                 }
-                // لایه «اتفاقات تونل»: متن D سمت چپ نقطه — سبز، سایز ۲۰ سانتی‌متر
+                // لایه «اتفاقات تونل»: توضیح نقطه سمت چپ — سبز، ۲۰ سانتی‌متر
                 if (showEvents) {
                     val hPx = (0.20f * scale).coerceIn(14f, 72f)
                     val eventPaint = Paint().apply {
-                        this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47) // سبز
+                        this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47)
                         textSize = hPx
                         isAntiAlias = true
                         typeface = Typeface.DEFAULT_BOLD
-                        textAlign = Paint.Align.RIGHT // سمت چپ نقطه
+                        textAlign = Paint.Align.RIGHT
                     }
+                    // نقاط دستی با فیلد D
                     overlays.filter { it.d.isNotBlank() }.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
-                        val tx = c.x - 8f
+                        drawCircle(Color(0xFF43A047), radius = 6f, center = c)
+                        val tx = c.x - 10f
                         val ty = c.y + hPx * 0.35f
-                        drawContext.canvas.nativeCanvas.drawText(p.d, tx, ty, eventPaint)
+                        drawContext.canvas.nativeCanvas.drawText(p.d.trim(), tx, ty, eventPaint)
                     }
+                    // گزارش روزانه: ریزش / انحراف اگر متن داشته باشند
+                    reportPts.forEach { p ->
+                        val note = listOf(p.collapse, p.deviation)
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+                            .joinToString(" | ")
+                        if (note.isBlank()) return@forEach
+                        val c = worldToScreen(p.x, p.y)
+                        drawCircle(Color(0xFF66BB6A), radius = 5f, center = c)
+                        val tx = c.x - 10f
+                        val ty = c.y + hPx * 0.35f
+                        drawContext.canvas.nativeCanvas.drawText(note, tx, ty, eventPaint)
+                    }
+                }
 
                 // بنچ‌مارک: متن سبز ۲۰؟ ۱۰ سانتی‌متر سمت راست — ردیف۱ نام، ردیف۲ تراز
+                // خط اندازه‌گذاری
+                dimA?.let { a ->
+                    val sa = worldToScreen(a.first, a.second)
+                    drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sa)
+                    dimB?.let { b ->
+                        val sb = worldToScreen(b.first, b.second)
+                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3f)
+                        drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sb)
+                    }
+                }
+
                 if (showBenchmarks) {
                     val hPx = (0.10f * scale).coerceIn(12f, 64f)
                     val bmPaint = Paint().apply {
@@ -688,7 +765,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             drawText(elev, tx, ty + hPx * 1.0f, bmPaint)
                         }
                     }
-                }
                 }
             }
         }

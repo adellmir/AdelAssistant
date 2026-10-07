@@ -635,7 +635,7 @@ LaunchedEffect(profileMode) {
     }
 
     fun requestExit() {
-        if (docDirty) showExitSaveDialog = true else onBack()
+showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیره
     }
 
     BackHandler { requestExit() }
@@ -2648,37 +2648,50 @@ if (zoomWindowMode) {
     if (showExitSaveDialog) {
         AlertDialog(
             onDismissRequest = { showExitSaveDialog = false },
-            title = { Text("ذخیره تغییرات؟") },
+            title = { Text("نقشه حفظ شود؟") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("ترسیم ذخیره نشده است. مانند اتوکد:", fontSize = 13.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("با خروج از نقشه چه کار شود؟", fontSize = 13.sp)
                     if (openedDxfName != null) {
-                        Text("فایل بازشده: $openedDxfName", fontSize = 12.sp, color = Color.Gray)
-                    } else {
-                        Text("فایل قبلی وجود ندارد — نام جدید لازم است.", fontSize = 12.sp, color = Color.Gray)
+                        Text("فایل: $openedDxfName", fontSize = 11.sp, color = Color.Gray)
                     }
                 }
             },
             confirmButton = {
-                Column {
-                    if (openedDxfName != null) {
-                        TextButton(onClick = {
-                            if (saveCombined(openedDxfName!!)) {
-                                showExitSaveDialog = false
-                                onBack()
-                            }
-                        }) { Text("ذخیره روی همان فایل") }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = {
-                        showExitSaveDialog = false
-                        showSaveDxfDialog = true
-                        // پس از ذخیره دستی کاربر باید دوباره خارج شود؛ فلگ خروج بعد از save
-                    }) { Text("ذخیره با نام جدید…") }
-                    TextButton(onClick = {
+                        // ۱. بله — نقشه در حافظه بماند
                         showExitSaveDialog = false
                         docDirty = false
+                        Map2Session.openProject = true
+                        Map2Session.dirty = drawings.isNotEmpty()
                         onBack()
-                    }) { Text("بدون ذخیره خارج شو", color = Color(0xFFC62828)) }
+                    }) { Text("۱. بله — نقشه بماند") }
+                    TextButton(onClick = {
+                        // ۲. خیر — همه پاک
+                        showExitSaveDialog = false
+                        drawings = emptyList()
+                        docDirty = false
+                        try {
+                            Map2Session.discardProject(context)
+                        } catch (_: Exception) {
+                            Map2Session.projectDxfParts = emptyList()
+                            Map2Session.categories = emptyList()
+                            Map2Session.dirty = false
+                            Map2Session.openProject = false
+                        }
+                        onBack()
+                    }) { Text("۲. خیر — همه چیز پاک شود", color = Color(0xFFC62828)) }
+                    TextButton(onClick = {
+                        // ۳. ذخیره
+                        showExitSaveDialog = false
+                        if (openedDxfName != null) {
+                            if (saveCombined(openedDxfName!!)) onBack()
+                            else showSaveDxfDialog = true
+                        } else {
+                            showSaveDxfDialog = true
+                        }
+                    }) { Text("۳. ذخیره شود") }
                 }
             },
             dismissButton = {
