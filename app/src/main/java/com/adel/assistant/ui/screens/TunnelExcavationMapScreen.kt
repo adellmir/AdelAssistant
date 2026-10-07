@@ -394,35 +394,63 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                         modifier = Modifier
                             .padding(top = 6.dp)
-                            .width(52.dp)
+                            .width(56.dp)
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
-                            IconButton(onClick = { reload() }) { Icon(Icons.Outlined.Refresh, null, tint = Color.White) }
-                            IconButton(onClick = { needFit = true; fit() }) { Icon(Icons.Outlined.ZoomOutMap, null, tint = Color.White) }
+                            IconButton(onClick = { reload() }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.Refresh, "تازه‌سازی", tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                            IconButton(onClick = { needFit = true; fit() }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.ZoomOutMap, "فیت", tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
                             IconButton(onClick = {
                                 if (!hasGps) permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                 else readGps()
-                            }) { Icon(Icons.Outlined.MyLocation, null, tint = Color.White) }
+                            }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.MyLocation, "GPS", tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
                             IconButton(onClick = {
                                 val (cx, cy) = if (canvasSize.x > 0) screenToWorld(canvasSize.x / 2, canvasSize.y / 2)
                                 else 0.0 to 0.0
                                 openAddAt(cx, cy)
-                            }) { Icon(Icons.Outlined.Place, null, tint = Color.White) }
-                            IconButton(onClick = { editMode = !editMode }) {
-                                Icon(if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit, null, tint = if (editMode) color else Color.White)
+                            }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.Add, "نقطه دستی", tint = Color.White, modifier = Modifier.size(22.dp))
                             }
-                            IconButton(onClick = { showBaseDialog = true }) { Icon(Icons.Outlined.Map, null, tint = Color.White) }
+                            IconButton(onClick = { editMode = !editMode }, modifier = Modifier.size(40.dp)) {
+                                Icon(if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit, null, tint = if (editMode) color else Color.White, modifier = Modifier.size(22.dp))
+                            }
+                            IconButton(onClick = { showBaseDialog = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.Map, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
                             IconButton(onClick = {
                                 mapUploadLauncher.launch(arrayOf("*/*", "application/dxf", "text/*", "application/octet-stream"))
-                            }) { Icon(Icons.Outlined.Upload, null, tint = Color.White) }
-                            IconButton(onClick = { showBenchmarkDialog = true }) {
-                                Icon(Icons.Outlined.Place, "ورود بنچ‌مارک", tint = Color.White)
+                            }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.Upload, null, tint = Color.White, modifier = Modifier.size(22.dp))
                             }
-                            IconButton(onClick = { showLayers = true }) { Icon(Icons.Outlined.Layers, null, tint = Color.White) }
-                            IconButton(onClick = { showExport = true }) { Icon(Icons.Outlined.FileDownload, null, tint = Color.White) }
+                            // ورود بنچ‌مارک — مشخص و متمایز
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(
+                                    onClick = { showBenchmarkDialog = true; menuOpen = false },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Flag,
+                                        "بنچ‌مارک",
+                                        tint = Color(0xFF81C995),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Text("بنچ", color = Color(0xFF81C995), fontSize = 9.sp)
+                            }
+                            IconButton(onClick = { showLayers = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.Layers, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                            IconButton(onClick = { showExport = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.FileDownload, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
                         }
                     }
                 }

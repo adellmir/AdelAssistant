@@ -1776,12 +1776,16 @@ if (zoomWindowMode) {
         val glassDark = Color(0xCC1A1F18)
         @Composable
         fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = Color.White, onClick: () -> Unit) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).padding(horizontal = 2.dp)) {
-                IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
-                    Icon(icon, label, tint = tint, modifier = Modifier.size(22.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(34.dp).padding(horizontal = 0.dp)) {
+                IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(18.dp))
                 }
-                Text(label, color = tint.copy(alpha = 0.9f), fontSize = 9.sp, maxLines = 1)
+                Text(label, color = tint.copy(alpha = 0.9f), fontSize = 8.sp, maxLines = 1)
             }
+        }
+        @Composable
+        fun IconSep() {
+            Text("|", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, modifier = Modifier.padding(horizontal = 1.dp))
         }
         fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
         fun exitAllTools() {
@@ -1844,10 +1848,13 @@ if (zoomWindowMode) {
                                 when (menuGroup) {
                                     0 -> { // فایل
                                         GlassIcon(Icons.Filled.FolderOpen, "ورود") { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }
+                                        IconSep()
                                         GlassIcon(Icons.Filled.Save, "ذخیره") { showSaveDxfDialog = true; closeMenus() }
                                         if (!map2Mode) {
                                             GlassIcon(Icons.Filled.Terrain, "توپوگرافی") { onOpenTopography(); closeMenus() }
+                                            IconSep()
                                             GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
+                                            IconSep()
                                             GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
                                         }
                                     }
@@ -1888,6 +1895,7 @@ if (zoomWindowMode) {
                                         GlassIcon(Icons.Filled.ZoomOutMap, "فیت") { fitTrigger++; closeMenus() }
                                         if (map2Mode) {
                                             GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
+                                            IconSep()
                                             GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
                                         }
                                         GlassIcon(Icons.Filled.Crop, "پنجره") {
@@ -1923,6 +1931,7 @@ if (zoomWindowMode) {
                                             message = "خطوط را لمس کن"; closeMenus()
                                         }
                                         GlassIcon(Icons.Filled.CropSquare, "مساحت") { showAreaSub = true }
+                                        IconSep()
                                         GlassIcon(Icons.Filled.Place, "مختصات") { showCoordSub = true }
                                     }
                                     3 -> { // ترسیم
@@ -1948,7 +1957,9 @@ if (zoomWindowMode) {
                                     4 -> { // ویرایش
                                         if (map2Mode) {
                                             GlassIcon(Icons.Filled.Undo, "عقب") { doUndo(); closeMenus() }
+                                            IconSep()
                                             GlassIcon(Icons.Filled.Redo, "جلو") { doRedo(); closeMenus() }
+                                            IconSep()
                                             GlassIcon(Icons.Filled.Transform, "الاین") { onOpenAlign(); closeMenus() }
                                         }
                                         GlassIcon(Icons.Filled.NearMe, "انتخاب") {
