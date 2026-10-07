@@ -42,6 +42,7 @@ import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.VolumeScreen
+import com.adel.assistant.ui.screens.Map2Screen
 import com.adel.assistant.ui.screens.TopographyScreen
 import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
@@ -202,6 +203,18 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
 
         composable(Routes.TOOL_ALIGN) {
             AlignScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_MAP2) {
+            Map2Screen(
+                color = ToolPrimary,
+                onBack = { navController.popBackStack() },
+                onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) },
+                onOpenProfile = { navController.navigate(Routes.TOOL_PROFILE) },
+                onOpenVolume = { navController.navigate(Routes.TOOL_VOLUME) },
+                onOpenAlign = { navController.navigate(Routes.TOOL_ALIGN) },
+                onOpenArea = { navController.navigate(Routes.TOOL_AREA) },
+                onOpenDxf = { navController.navigate(Routes.TOOL_DXF) }
+            )
         }
         composable(Routes.TOOL_DXF) {
             DxfConverterScreen(onBack = { navController.popBackStack() }, onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) })

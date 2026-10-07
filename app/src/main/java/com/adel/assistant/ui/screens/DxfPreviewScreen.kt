@@ -99,22 +99,34 @@ fun DxfPreviewScreen(
     onOpenArea: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var drawings by remember {
-        val restored = try {
-            Map2Session.projectDxfParts.mapIndexedNotNull { i, (name, dxf) ->
-                try {
-                    val model = DxfParser.parse(dxf)
-                    if (model.isEmpty) null else ViewerDrawing(i + 1, name, model)
-                } catch (_: Exception) {
-                    null
-                }
-            }
+    var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
+    var nextDrawingId by remember { mutableStateOf(1) }
+    // بازیابی امن ترسیم‌های پروژه — خارج از remember تا کرش نکند
+    LaunchedEffect(Unit) {
+        if (drawings.isNotEmpty()) return@LaunchedEffect
+        val parts = try {
+            Map2Session.projectDxfParts.toList()
         } catch (_: Exception) {
             emptyList()
         }
-        mutableStateOf(restored)
+        if (parts.isEmpty()) return@LaunchedEffect
+        val restored = mutableListOf<ViewerDrawing>()
+        parts.forEachIndexed { i, (name, dxf) ->
+            try {
+                if (dxf.isBlank()) return@forEachIndexed
+                val model = DxfParser.parse(dxf)
+                if (!model.isEmpty) {
+                    restored += ViewerDrawing(i + 1, name, model)
+                }
+            } catch (_: Throwable) {
+                // نادیده — یک بخش خراب کل نقشه را نخواباند
+            }
+        }
+        if (restored.isNotEmpty()) {
+            drawings = restored
+            nextDrawingId = (restored.maxOfOrNull { it.id } ?: 0) + 1
+        }
     }
-    var nextDrawingId by remember { mutableStateOf((drawings.maxOfOrNull { it.id } ?: 0) + 1) }
     var message by remember { mutableStateOf("") }
     var profilePlacementModel by remember { mutableStateOf<DxfModel?>(null) }
     var profilePlacementName by remember { mutableStateOf("پروفیل.dxf") }
@@ -250,10 +262,16 @@ fun DxfPreviewScreen(
         try {
             val parts = drawings
                 .filter { !it.name.startsWith("_") }
-                .map { it.name to it.model.toDxfText() }
+                .mapNotNull { dr ->
+                    try {
+                        dr.name to dr.model.toDxfText()
+                    } catch (_: Throwable) {
+                        null
+                    }
+                }
             Map2Session.projectDxfParts = parts
             Map2Session.dirty = drawings.isNotEmpty()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
