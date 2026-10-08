@@ -142,6 +142,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var draftKm by remember { mutableStateOf("") }
     var draftId by remember { mutableStateOf<String?>(null) }
 
+    var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var hasGps by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -305,7 +306,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         status = if (ok) "DXF ذخیره شد" else "خطا در DXF"
     }
 
-    fun readGps() {
+    fun readGps(registerPoint: Boolean = false) {
         try {
             val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
             var best: Location? = null
@@ -317,8 +318,15 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             }
             if (best == null) { status = "موقعیت GPS در دسترس نیست"; return }
             val (e, n) = UtmGeo.fromLatLon(best.latitude, best.longitude, zone)
-            openAddAt(e, n, d0 = "GPS")
-            status = "GPS خوانده شد — توضیح (D) را وارد کن"
+            myLoc = e to n
+            needFit = false
+            // مرکز نقشه را نزدیک موقعیت نبریم مگر کاربر بخواهد — فقط نشان بده
+            if (registerPoint) {
+                openAddAt(e, n, d0 = "GPS")
+                status = "GPS ثبت نقطه — توضیح (D) را وارد کن"
+            } else {
+                status = String.format(java.util.Locale.US, "موقعیت شما: E=%.2f N=%.2f", e, n)
+            }
         } catch (_: SecurityException) {
             status = "مجوز موقعیت لازم است"
         } catch (e: Exception) {
@@ -330,7 +338,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasGps = granted
-        if (granted) readGps() else status = "مجوز موقعیت رد شد"
+        if (granted) readGps(registerPoint = false) else status = "مجوز موقعیت رد شد"
     }
 
     val mapUploadLauncher = rememberLauncherForActivityResult(
@@ -410,18 +418,37 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             IconButton(onClick = { needFit = true; fit() }, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Outlined.ZoomOutMap, "فیت", tint = Color.White, modifier = Modifier.size(22.dp))
                             }
-                            IconButton(onClick = {
-                                if (!hasGps) permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                                else readGps()
-                            }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Outlined.MyLocation, "GPS", tint = Color.White, modifier = Modifier.size(22.dp))
+                            // فقط نمایش موقعیت روی نقشه (ثبت نقطه نیست)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(
+                                    onClick = {
+                                        if (!hasGps) permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        else readGps(registerPoint = false)
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.MyLocation,
+                                        "موقعیت من",
+                                        tint = if (myLoc != null) Color(0xFF42A5F5) else Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Text("موقعیت", color = Color(0xFF90CAF9), fontSize = 9.sp)
                             }
-                            IconButton(onClick = {
-                                val (cx, cy) = if (canvasSize.x > 0) screenToWorld(canvasSize.x / 2, canvasSize.y / 2)
-                                else 0.0 to 0.0
-                                openAddAt(cx, cy)
-                            }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Outlined.Add, "نقطه دستی", tint = Color.White, modifier = Modifier.size(22.dp))
+                            // ثبت نقطه دستی روی مرکز صفحه
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(
+                                    onClick = {
+                                        val (cx, cy) = if (canvasSize.x > 0) screenToWorld(canvasSize.x / 2, canvasSize.y / 2)
+                                        else 0.0 to 0.0
+                                        openAddAt(cx, cy)
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Add, "نقطه دستی", tint = Color.White, modifier = Modifier.size(22.dp))
+                                }
+                                Text("نقطه", color = Color.White, fontSize = 9.sp)
                             }
                             IconButton(onClick = { editMode = !editMode }, modifier = Modifier.size(40.dp)) {
                                 Icon(if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit, null, tint = if (editMode) color else Color.White, modifier = Modifier.size(22.dp))
@@ -686,6 +713,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             drawText(formatEn("%.3f", p.km), tx, ty + lineH, textPaint)
                         }
                     }
+                }
+
+                // موقعیت فعلی کاربر
+                myLoc?.let { (ex, ny) ->
+                    val c = worldToScreen(ex, ny)
+                    drawCircle(Color(0xFF2196F3).copy(alpha = 0.25f), radius = 22f, center = c)
+                    drawCircle(Color(0xFF2196F3), radius = 10f, center = c)
+                    drawCircle(Color.White, radius = 4f, center = c)
                 }
 
                 if (showOverlay) {
