@@ -50,7 +50,8 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 .take(3)
         }
 
-        private fun upcomingProjects(context: Context): List<String> {
+        /** متن + لینک نشان در صورت وجود مختصات */
+        private fun upcomingProjects(context: Context): List<Pair<String, String?>> {
             val (ty, tm, td) = try {
                 CalendarStore.todayJalali()
             } catch (_: Exception) {
@@ -72,24 +73,22 @@ class AdelWidgetProvider : AppWidgetProvider() {
                     y * 10000 + m * 100 + d
                 }
                 .take(3)
-                .map {
-                    val yi = it.year.toIntOrNullFa() ?: 0
-                    val mi = it.month.toIntOrNullFa() ?: 0
-                    val di = it.day.toIntOrNullFa() ?: 0
-                    val hh = (it.hour.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-                    val mm = (it.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-                    val wd = try {
-                        CalendarStore.weekdayNameJalali(yi, mi, di)
-                    } catch (_: Exception) {
-                        ""
-                    }
-                    val datePart = if (wd.isNotBlank()) {
-                        "$wd ${it.year}/${it.month}/${it.day} $hh:$mm"
-                    } else {
-                        "${it.year}/${it.month}/${it.day} $hh:$mm"
-                    }
-                    "${it.name} — $datePart"
+                .map { p ->
+                    val label = "${p.name} — ${p.year}/${p.month}/${p.day}"
+                    label to (if (p.hasLocation) p.neshanUrl else null)
                 }
+        }
+
+        private fun openUrlIntent(context: Context, url: String, requestCode: Int): PendingIntent {
+            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            return PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
 
         /** Intent باز کردن یک Route مشخص داخل MainActivity */
@@ -180,9 +179,27 @@ class AdelWidgetProvider : AppWidgetProvider() {
             bindTask(R.id.tunnel_task_2, R.id.tunnel_task_2_done, tTasks.getOrNull(1), "tunnel_tasks", 302)
             bindTask(R.id.tunnel_task_3, R.id.tunnel_task_3_done, tTasks.getOrNull(2), "tunnel_tasks", 303)
 
-            views.setTextViewText(R.id.upcoming_1, upcoming.getOrNull(0) ?: "برنامه‌ای نیست")
-            views.setTextViewText(R.id.upcoming_2, upcoming.getOrNull(1) ?: "")
-            views.setTextViewText(R.id.upcoming_3, upcoming.getOrNull(2) ?: "")
+            val u1 = upcoming.getOrNull(0)
+            val u2 = upcoming.getOrNull(1)
+            val u3 = upcoming.getOrNull(2)
+            views.setTextViewText(R.id.upcoming_1, u1?.first ?: "برنامه‌ای نیست")
+            views.setTextViewText(R.id.upcoming_2, u2?.first ?: "")
+            views.setTextViewText(R.id.upcoming_3, u3?.first ?: "")
+            listOf(
+                R.id.upcoming_1 to u1,
+                R.id.upcoming_2 to u2,
+                R.id.upcoming_3 to u3
+            ).forEachIndexed { idx, (viewId, pair) ->
+                val url = pair?.second
+                if (!url.isNullOrBlank()) {
+                    views.setOnClickPendingIntent(viewId, openUrlIntent(context, url, 401 + idx))
+                } else {
+                    views.setOnClickPendingIntent(
+                        viewId,
+                        openRouteIntent(context, Routes.SURVEY_PROJECT_CALENDAR, 411 + idx)
+                    )
+                }
+            }
 
             return views
         }

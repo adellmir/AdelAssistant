@@ -16,9 +16,18 @@ data class ProjectEntry(
     val year: String,
     val hour: String = "9",
     val minute: String = "0",
-    /** شناسه رویداد تقویم دستگاه / Google Calendar */
-    val calendarEventId: String = ""
+    /** عرض جغرافیایی WGS84 — ۰ یعنی ثبت نشده */
+    val lat: Double = 0.0,
+    /** طول جغرافیایی WGS84 — ۰ یعنی ثبت نشده */
+    val lon: Double = 0.0
 ) {
+    val hasLocation: Boolean get() = lat != 0.0 || lon != 0.0
+    /** لینک مسیریاب نشان */
+    val neshanUrl: String
+        get() = if (hasLocation)
+            String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+        else ""
+
     val dateSortKey: String
         get() = "%s%02d%02d".format(
             year.ifBlank { "1405" },
@@ -48,7 +57,8 @@ object ProjectStore {
                     year = r.getOrElse(10) { "1405" },
                     hour = r.getOrElse(11) { "9" },
                     minute = r.getOrElse(12) { "0" },
-                    calendarEventId = r.getOrElse(13) { "" }
+                    lat = r.getOrElse(13) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    lon = r.getOrElse(14) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
                 )
             } catch (e: Exception) {
                 null
@@ -61,7 +71,8 @@ object ProjectStore {
             listOf(
                 it.row, it.day, it.month, it.name,
                 it.amount.toString(), it.settled.toString(), it.remaining.toString(),
-                it.employer, it.phone, it.description, it.year, it.hour, it.minute, it.calendarEventId
+                it.employer, it.phone, it.description, it.year, it.hour, it.minute,
+                it.lat.toString(), it.lon.toString()
             )
         }
         CsvStore.overwriteAll(context, CSV, rows)
@@ -206,5 +217,24 @@ object ProjectStore {
                 sessions = sorted
             )
         }.sortedByDescending { it.sessions.firstOrNull()?.dateSortKey.orEmpty() }
+    }
+}
+
+
+/** باز کردن مسیریاب نشان برای مختصات */
+fun openNeshanNav(context: Context, lat: Double, lon: Double) {
+    if (lat == 0.0 && lon == 0.0) return
+    val url = String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+    try {
+        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+    } catch (_: Exception) {
+        try {
+            context.startActivity(
+                android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("geo:$lat,$lon?q=$lat,$lon")
+                )
+            )
+        } catch (_: Exception) { }
     }
 }

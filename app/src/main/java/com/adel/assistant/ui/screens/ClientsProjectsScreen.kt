@@ -49,7 +49,6 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
     var showList by remember { mutableStateOf(false) }
     var tick by remember { mutableStateOf(0) }
 
-    var expandedEmployers by remember { mutableStateOf<Set<String>>(emptySet()) }
     var editEmployerOld by remember { mutableStateOf<String?>(null) }
     var editEmpName by remember { mutableStateOf("") }
     var editEmpPhone by remember { mutableStateOf("") }
@@ -182,33 +181,23 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
-                            val expanded = e.employer in expandedEmployers
-                            val visibleSessions = if (expanded || e.sessions.size <= 8) e.sessions else e.sessions.take(8)
-                            visibleSessions.forEach { s ->
+                            e.sessions.take(8).forEach { s ->
                                 Text(
                                     "• ${s.name} | جلسه ${s.day}/${s.month}/${s.year} | ${moneyM(s.amount)}",
+                                    color = if (s.hasLocation) color else TextPrimary,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.clickable {
+                                        if (s.hasLocation) openNeshanNav(context, s.lat, s.lon)
+                                        else locEditProject = s
+                                    }
+                                )
+                            }",
                                     color = TextPrimary,
                                     fontSize = 12.sp
                                 )
                             }
                             if (e.sessions.size > 8) {
-                                Text(
-                                    if (expanded) "▲ بستن لیست (${e.sessions.size} مورد)"
-                                    else "… و ${e.sessions.size - 8} مورد دیگر — برای دیدن همه لمس کن",
-                                    color = color,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            expandedEmployers = if (expanded) {
-                                                expandedEmployers - e.employer
-                                            } else {
-                                                expandedEmployers + e.employer
-                                            }
-                                        }
-                                        .padding(vertical = 6.dp)
-                                )
+                                Text("… و ${e.sessions.size - 8} مورد دیگر", color = TextSecondary, fontSize = 11.sp)
                             }
                         }
                     }
@@ -228,6 +217,16 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 }
                                 IconButton(onClick = { call(p.phone) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val withLoc = p.sessions.firstOrNull { it.hasLocation }
+                                        if (withLoc != null) openNeshanNav(context, withLoc.lat, withLoc.lon)
+                                        else locEditProject = p.sessions.firstOrNull()
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Filled.NearMe, contentDescription = "مسیریاب", tint = color)
                                 }
                             }
                             Text(
@@ -250,6 +249,18 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                 }
             }
         }
+
+    locEditProject?.let { pe ->
+        ProjectLocationPickerDialog(
+            initialLat = pe.lat,
+            initialLon = pe.lon,
+            onConfirm = { la, lo ->
+                ProjectStore.save(context, pe.copy(lat = la, lon = lo))
+                locEditProject = null
+                tick++
+            },
+            onDismiss = { locEditProject = null }
+        )
     }
 
     if (editEmployerOld != null) {

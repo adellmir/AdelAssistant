@@ -62,6 +62,9 @@ fun ProjectRegisterScreen(
     var hour by remember { mutableStateOf("9") }
     var minute by remember { mutableStateOf("0") }
     var name by remember { mutableStateOf("") }
+    var locLat by remember { mutableStateOf(0.0) }
+    var locLon by remember { mutableStateOf(0.0) }
+    var showLocationPicker by remember { mutableStateOf(false) }
     var employer by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -123,13 +126,14 @@ fun ProjectRegisterScreen(
             description = description,
             year = year,
             hour = hour.ifBlank { "9" },
-            minute = minute.ifBlank { "0" }
+            minute = minute.ifBlank { "0" },
+            lat = locLat,
+            lon = locLon
         )
-        var calEventId = entry.calendarEventId
+        ProjectStore.save(context, entry)
+
         var calMsg = ""
         if (addToCalendar && name.isNotBlank()) {
-            // اگر ویرایش و event قبلی هست، حذف و درج مجدد
-            calEventId.toLongOrNull()?.let { CalendarHelper.deleteEvent(context, it) }
             val eventId = CalendarHelper.insertProjectEvent(
                 context = context,
                 title = "پروژه: $name",
@@ -145,14 +149,9 @@ fun ProjectRegisterScreen(
                 hour = hour.toIntOrNullFa() ?: 9,
                 minute = minute.toIntOrNullFa() ?: 0
             )
-            if (eventId != null) {
-                calEventId = eventId.toString()
-                calMsg = " + تقویم"
-            } else {
-                calMsg = " (تقویم ثبت نشد — مجوز یا تقویم را چک کنید)"
-            }
+            calMsg = if (eventId != null) " + تقویم" else " (تقویم ثبت نشد — مجوز یا تقویم را چک کنید)"
         }
-        ProjectStore.save(context, entry.copy(calendarEventId = calEventId))
+
         statusMsg = "ثبت شد$calMsg"
         clearForm()
     }
@@ -279,6 +278,21 @@ fun ProjectRegisterScreen(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 6.dp)
+        ) {
+            OutlinedButton(onClick = { showLocationPicker = true }) {
+                Text(if (locLat != 0.0 || locLon != 0.0) "موقعیت ثبت‌شده ✓" else "ثبت موقعیت روی نقشه")
+            }
+            if (locLat != 0.0 || locLon != 0.0) {
+                TextButton(onClick = {
+                    com.adel.assistant.data.openNeshanNav(context, locLat, locLon)
+                }) { Text("نشان") }
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = 4.dp)
         ) {
             Checkbox(
@@ -365,6 +379,8 @@ fun ProjectRegisterScreen(
                                 amount = if (p.amount == p.amount.toLong().toDouble()) p.amount.toLong().toString() else p.amount.toString()
                                 description = p.description
                                 phone = p.phone
+                                locLat = p.lat
+                                locLon = p.lon
                                 editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
@@ -380,6 +396,19 @@ fun ProjectRegisterScreen(
                 }
             }
         }
+    }
+
+    if (showLocationPicker) {
+        ProjectLocationPickerDialog(
+            initialLat = locLat,
+            initialLon = locLon,
+            onConfirm = { la, lo ->
+                locLat = la
+                locLon = lo
+                statusMsg = "موقعیت ثبت شد"
+            },
+            onDismiss = { showLocationPicker = false }
+        )
     }
 
     confirmCallFor?.let { p ->
