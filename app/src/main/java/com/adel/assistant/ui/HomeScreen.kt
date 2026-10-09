@@ -39,7 +39,6 @@ import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.openNeshanNav
-import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.ui.screens.ProjectLocationPickerDialog
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
@@ -103,6 +102,10 @@ private fun jalaliDateWithWeekday(): String {
 private fun todaySortKey(): String {
     val (y, m, d) = CalendarStore.todayJalali()
     return String.format(Locale.US, "%d%02d%02d", y, m, d)
+}
+
+object PendingAssistantPrompt {
+    var text: String = ""
 }
 
 @Composable

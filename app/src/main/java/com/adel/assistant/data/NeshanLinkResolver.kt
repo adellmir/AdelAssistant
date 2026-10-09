@@ -113,9 +113,11 @@ object NeshanLinkResolver {
         // @lat,lng  یا  @lat,lng,zoom
         Regex("""@(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)""")
             .find(text)?.let { m ->
-                val la = m.groupValues[1].toDoubleOrNull() ?: return@let null
-                val lo = m.groupValues[2].toDoubleOrNull() ?: return@let null
-                if (valid(la, lo)) return Result(la, lo)
+                val la = m.groupValues[1].toDoubleOrNull()
+                val lo = m.groupValues[2].toDoubleOrNull()
+                if (la != null && lo != null && valid(la, lo)) {
+                    return Result(la, lo)
+                }
             }
         // lat=..&lng=.. یا lon=
         val latM = Regex("""(?:^|[?&#/])(?:lat|latitude)=(-?\d{1,3}\.\d+)""", RegexOption.IGNORE_CASE)
@@ -125,21 +127,27 @@ object NeshanLinkResolver {
         if (latM != null && lonM != null) {
             val la = latM.groupValues[1].toDouble()
             val lo = lonM.groupValues[1].toDouble()
-            if (valid(la, lo)) return Result(la, lo)
+            if (valid(la, lo)) {
+                return Result(la, lo)
+            }
         }
         // geo:lat,lon
         Regex("""geo:(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)""", RegexOption.IGNORE_CASE)
             .find(text)?.let { m ->
                 val la = m.groupValues[1].toDouble()
                 val lo = m.groupValues[2].toDouble()
-                if (valid(la, lo)) return Result(la, lo)
+                if (valid(la, lo)) {
+                    return Result(la, lo)
+                }
             }
         // q=lat,lon
         Regex("""[?&]q=(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)""")
             .find(text)?.let { m ->
                 val la = m.groupValues[1].toDouble()
                 val lo = m.groupValues[2].toDouble()
-                if (valid(la, lo)) return Result(la, lo)
+                if (valid(la, lo)) {
+                    return Result(la, lo)
+                }
             }
         // دو عدد پشت‌سرهم شبیه مختصات ایران (lat 25-40, lon 44-64)
         Regex("""(-?\d{2}\.\d{4,})\s*[,،\s]\s*(-?\d{2}\.\d{4,})""")
@@ -163,21 +171,29 @@ object NeshanLinkResolver {
             .find(html)?.let { m ->
                 val la = m.groupValues[1].toDouble()
                 val lo = m.groupValues[2].toDouble()
-                if (valid(la, lo)) return Result(la, lo)
+                if (valid(la, lo)) {
+                    return Result(la, lo)
+                }
             }
         Regex(""""lat"\s*:\s*(-?\d+\.?\d*)\s*,\s*"(?:lng|lon)"\s*:\s*(-?\d+\.?\d*)""")
             .find(html)?.let { m ->
                 val la = m.groupValues[1].toDouble()
                 val lo = m.groupValues[2].toDouble()
-                if (valid(la, lo)) return Result(la, lo)
+                if (valid(la, lo)) {
+                    return Result(la, lo)
+                }
             }
         // center: [lon, lat] یا [lat, lon]
         Regex("""center"\s*:\s*\[\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*]""")
             .find(html)?.let { m ->
                 val a = m.groupValues[1].toDouble()
                 val b = m.groupValues[2].toDouble()
-                if (valid(a, b)) return Result(a, b)
-                if (valid(b, a)) return Result(b, a)
+                if (valid(a, b)) {
+                    return Result(a, b)
+                }
+                if (valid(b, a)) {
+                    return Result(b, a)
+                }
             }
         return parseCoordsFromText(html)
     }
