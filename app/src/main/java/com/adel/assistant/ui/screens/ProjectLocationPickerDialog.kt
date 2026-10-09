@@ -24,6 +24,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.adel.assistant.data.NeshanLinkResolver
 
 /**
  * انتخاب موقعیت پروژه روی نقشه خیابان/ماهواره (اینترنت).
@@ -45,6 +50,9 @@ fun ProjectLocationPickerDialog(
     var isUpdate by remember { mutableStateOf(initialLat != 0.0 || initialLon != 0.0) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var status by remember { mutableStateOf("نگه‌داشتن ۱.۵ثانیه روی نقشه برای ثبت") }
+    var linkText by remember { mutableStateOf("") }
+    var resolving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val startLat = if (initialLat != 0.0) initialLat else 35.6892
     val startLon = if (initialLon != 0.0) initialLon else 51.3890
@@ -139,6 +147,55 @@ function goTo(lat, lon){ map.setView([lat, lon], 16); }
         text = {
             Column(Modifier.fillMaxWidth().height(420.dp)) {
                 Text(status, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = linkText,
+                    onValueChange = { linkText = it },
+                    label = { Text("لینک نشان / مختصات") },
+                    placeholder = { Text("https://nshn.ir/...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !resolving
+                )
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        if (linkText.isBlank()) {
+                            status = "لینک را بچسبان"
+                            return@Button
+                        }
+                        resolving = true
+                        status = "در حال خواندن لینک…"
+                        scope.launch {
+                            val res = withContext(Dispatchers.IO) {
+                                try { NeshanLinkResolver.resolve(linkText) } catch (e: Exception) { null }
+                            }
+                            resolving = false
+                            if (res == null) {
+                                status = "مختصات از لینک خوانده نشد"
+                            } else {
+                                pendingLat = res.lat
+                                pendingLon = res.lon
+                                isUpdate = initialLat != 0.0 || initialLon != 0.0
+                                webView?.evaluateJavascript(
+                                    "setCross(${res.lat}, ${res.lon}); goTo(${res.lat}, ${res.lon});",
+                                    null
+                                )
+                                status = String.format(
+                                    java.util.Locale.US,
+                                    "موقعیت از لینک: %.5f , %.5f %s",
+                                    res.lat, res.lon,
+                                    if (res.title.isNotBlank()) "— ${res.title}" else ""
+                                )
+                                showConfirm = true
+                            }
+                        }
+                    },
+                    enabled = !resolving && linkText.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (resolving) "صبر کنید…" else "ثبت از لینک نشان")
+                }
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(onClick = {
