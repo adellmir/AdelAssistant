@@ -101,13 +101,6 @@ function goTo(lat, lon){ map.setView([lat, lon], 16); }
 """.trimIndent()
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) locateGps()
-        else status = "مجوز موقعیت رد شد"
-    }
-
     fun locateGps() {
         try {
             val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
@@ -131,6 +124,13 @@ function goTo(lat, lon){ map.setView([lat, lon], 16); }
         } catch (e: Exception) {
             status = "خطا GPS: ${e.message}"
         }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) locateGps()
+        else status = "مجوز موقعیت رد شد"
     }
 
     AlertDialog(
