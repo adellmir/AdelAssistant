@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
-import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.openNeshanNav
+import com.adel.assistant.data.formatMoney
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -58,15 +58,12 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
 
     fun refresh() { tick++ }
 
-    val employers = remember(tick, searchEmployer, showList, tab) {
-        if (!showList && searchEmployer.isBlank() && searchProject.isBlank()) emptyList()
-        else if (tab == 1) ProjectStore.employerProfiles(context, searchEmployer)
-        else emptyList()
+    // با زدن سربرگ همه موارد همان سربرگ نمایش داده شود (جستجو فقط فیلتر)
+    val employers = remember(tick, searchEmployer, tab) {
+        if (tab == 1) ProjectStore.employerProfiles(context, searchEmployer) else emptyList()
     }
-    val projects = remember(tick, searchProject, showList, tab) {
-        if (!showList && searchEmployer.isBlank() && searchProject.isBlank()) emptyList()
-        else if (tab == 0) ProjectStore.projectProfiles(context, searchProject)
-        else emptyList()
+    val projects = remember(tick, searchProject, tab) {
+        if (tab == 0) ProjectStore.projectProfiles(context, searchProject) else emptyList()
     }
 
     fun doSearch() {
@@ -86,50 +83,71 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(Background)
+            .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "کارفرمایان و پروژه‌ها", color = color, onBack = onBack)
 
-        Column(Modifier.padding(horizontal = 16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = searchProject,
                 onValueChange = { searchProject = it },
                 label = { Text("جستجو پروژه") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             )
-            Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = searchEmployer,
                 onValueChange = { searchEmployer = it },
                 label = { Text("جستجو کارفرما") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             )
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { doSearch() },
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("جستجو / نمایش لیست") }
+        }
+        Spacer(Modifier.height(6.dp))
+        Button(
+            onClick = { doSearch() },
+            colors = ButtonDefaults.buttonColors(containerColor = color),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("جستجو") }
 
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("پروژه", "کارفرمایان").forEachIndexed { i, label ->
-                    FilterChip(
-                        selected = tab == i,
-                        onClick = { tab = i; if (showList) refresh() },
-                        label = { Text(label) }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf("پروژه", "کارفرمایان").forEachIndexed { i, label ->
+                val selected = tab == i
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            tab = i
+                            showList = true
+                            refresh()
+                        },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (selected) color.copy(alpha = 0.2f) else Color.Transparent
+                ) {
+                    Text(
+                        label,
+                        modifier = Modifier
+                            .padding(vertical = 12.dp)
+                            .fillMaxWidth(),
+                        color = if (selected) color else TextSecondary,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
         }
 
         Spacer(Modifier.height(8.dp))
+        if (!showList) {
+            Text(
+                "سربرگ را بزن یا جستجو کن تا لیست نمایش داده شود",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
 
         LazyColumn(
-            Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (tab == 1) {
@@ -150,14 +168,11 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 IconButton(onClick = { call(e.phone) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
                                 }
-                                IconButton(
-                                    onClick = {
-                                        editEmployerOld = e.employer
-                                        editEmpName = e.employer
-                                        editEmpPhone = e.phone
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
+                                IconButton(onClick = {
+                                    editEmployerOld = e.employer
+                                    editEmpName = e.employer
+                                    editEmpPhone = e.phone
+                                }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = TextSecondary)
                                 }
                             }
@@ -177,15 +192,8 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                     }
                                 )
                             }
-                            e.sessions.take(5).forEach { s ->
-                                SessionSettleRow(s, color) {
-                                    if (ProjectStore.isFullySettled(s)) {
-                                        ProjectStore.markUnsettled(context, s.row)
-                                    } else {
-                                        ProjectStore.markSettled(context, s.row)
-                                    }
-                                    refresh()
-                                }
+                            if (e.sessions.size > 8) {
+                                Text("… و ${e.sessions.size - 8} مورد دیگر", color = TextSecondary, fontSize = 11.sp)
                             }
                         }
                     }
@@ -199,9 +207,14 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                     ) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(p.name, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                    Text(p.employer, color = TextSecondary, fontSize = 12.sp)
+                                Row(
+                                    Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(p.name, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
+                                    Text("|", color = TextSecondary, fontSize = 12.sp)
+                                    Text(p.employer, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
                                 }
                                 IconButton(onClick = { call(p.phone) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
@@ -218,11 +231,11 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                 }
                             }
                             Text(
-                                "جلسه: ${p.sessionCount} | دریافتی: ${moneyM(p.totalReceived)} | مانده: ${moneyM(p.totalClaims)}",
+                                "جلسات: ${p.sessionCount} | درآمد: ${moneyM(p.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(p.totalReceived)} | مانده: ${moneyM(p.totalClaims)}",
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
-                            p.sessions.take(5).forEach { s ->
+                            p.sessions.forEach { s ->
                                 SessionSettleRow(s, color) {
                                     if (ProjectStore.isFullySettled(s)) {
                                         ProjectStore.markUnsettled(context, s.row)

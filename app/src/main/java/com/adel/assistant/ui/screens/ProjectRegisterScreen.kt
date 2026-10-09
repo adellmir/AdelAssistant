@@ -249,25 +249,31 @@ fun ProjectRegisterScreen(
                 keyboardOptions = numKb)
         }
 
-        OutlinedTextField(
-            value = name,
-            onValueChange = {
-                name = it
-                // اگر هم‌نام قبلی وجود داشت، کارفرما/تلفن/مبلغ را پیش‌فرض کن
-                val last = ProjectStore.lastByProjectName(context, it)
-                if (last != null && editingRow == null) {
-                    if (employer.isBlank()) employer = last.employer
-                    if (phone.isBlank()) phone = last.phone
-                    if (amount.isBlank()) {
-                        amount = if (last.amount == last.amount.toLong().toDouble())
-                            last.amount.toLong().toString() else last.amount.toString()
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                    val last = ProjectStore.lastByProjectName(context, it)
+                    if (last != null && editingRow == null) {
+                        if (employer.isBlank()) employer = last.employer
+                        if (phone.isBlank()) phone = last.phone
+                        if (amount.isBlank()) {
+                            amount = if (last.amount == last.amount.toLong().toDouble())
+                                last.amount.toLong().toString() else last.amount.toString()
+                        }
                     }
-                }
-            },
-            label = { Text("نام پروژه") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth())
+                },
+                label = { Text("نام پروژه") },
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = employer,
+                onValueChange = { employer = it },
+                label = { Text("کارفرما") },
+                modifier = Modifier.weight(1f)
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
                 keyboardOptions = numKb)

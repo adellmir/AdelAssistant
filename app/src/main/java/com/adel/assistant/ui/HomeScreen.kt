@@ -2,15 +2,6 @@ package com.adel.assistant.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -47,6 +38,9 @@ import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.data.openNeshanNav
+import com.adel.assistant.data.ProjectEntry
+import com.adel.assistant.ui.screens.ProjectLocationPickerDialog
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.widget.AdelWidgetProvider
@@ -64,9 +58,6 @@ import java.util.Calendar
 import java.util.Locale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Architecture
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import com.adel.assistant.navigation.Routes
@@ -114,12 +105,10 @@ private fun todaySortKey(): String {
     return String.format(Locale.US, "%d%02d%02d", y, m, d)
 }
 
-object PendingAssistantPrompt {
-    var text: String = ""
-}
-
 @Composable
 fun HomeScreen(onNavigate: (String) -> Unit) {
+    var locEditProject by remember { mutableStateOf<ProjectEntry?>(null) }
+
     val context = LocalContext.current
     val sections = AppMenu.sections
     var sectionIndex by rememberSaveable { mutableStateOf(1) }
@@ -157,8 +146,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             } catch (_: Exception) { emptyList() }
         )
     }
-    var planOpen by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var tasksOpen by rememberSaveable { mutableStateOf(false) }
     var projectTasks by remember {
         mutableStateOf(
             try {
@@ -245,7 +233,60 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
             }
 
-            // ---- برنامه‌ریزی (پروژه + تسک) ----
+            // ---- برنامه‌های کاری ----
+            DashboardCard(title = "برنامه‌های کاری پیش‌رو") {
+                if (projects.isEmpty()) {
+                    Text(
+                        "پروژه‌ای از امروز به بعد ثبت نشده",
+                        color = TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    ScrollBox3 {
+                        projects.forEach { p ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable {
+                                        if (p.hasLocation) openNeshanNav(context, p.lat, p.lon)
+                                        else locEditProject = p
+                                    },
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    p.name.ifBlank { "بدون نام" },
+                                    color = if (p.hasLocation) MaterialTheme.colorScheme.primary else TextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    formatProjectDate(p),
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            locEditProject?.let { pe ->
+                ProjectLocationPickerDialog(
+                    initialLat = pe.lat,
+                    initialLon = pe.lon,
+                    onConfirm = { la, lo ->
+                        ProjectStore.save(context, pe.copy(lat = la, lon = lo))
+                        locEditProject = null
+                    },
+                    onDismiss = { locEditProject = null }
+                )
+            }
+
+            // ---- تسک‌ها ----
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = SurfaceColor,
@@ -256,207 +297,119 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { planOpen = !planOpen },
+                            .clickable { tasksOpen = !tasksOpen },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "برنامه‌ریزی",
+                            "تسک‌های انجام‌نشده",
                             style = MaterialTheme.typography.titleSmall,
                             color = TextPrimary,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            "پروژه ${projects.size} | تسک ${projectTasks.size + tunnelTasks.size}",
+                            "تونل ${tunnelTasks.size} عدد  پروژه ${projectTasks.size} عدد",
                             color = TextSecondary,
                             style = MaterialTheme.typography.bodySmall
                         )
                         Icon(
-                            imageVector = if (planOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            imageVector = if (tasksOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                             contentDescription = null,
                             tint = TextSecondary,
                             modifier = Modifier.padding(start = 4.dp)
                         )
                     }
-                    if (planOpen) {
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text("پروژه پیش‌رو", color = WorkPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        if (projects.isEmpty()) {
-                            Text("پروژه‌ای از امروز به بعد ثبت نشده", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            ScrollBox3 {
-                                projects.forEach { p ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            p.name.ifBlank { "بدون نام" },
-                                            color = TextPrimary,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Text(formatProjectDate(p), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
-                            }
-                        }
-
+                    if (tasksOpen) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            "تسک پروژه ▶",
-                            color = WorkPrimary,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onNavigate(Routes.SURVEY_PROJECT_TASKS) }
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        if (projectTasks.isEmpty()) {
-                            Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            ScrollBox3 {
-                                projectTasks.forEach { task ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 3.dp)
-                                            .clickable { completeTask("project_tasks", task.title, task.createdAt) },
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("○", color = WorkPrimary, modifier = Modifier.padding(end = 6.dp))
-                                        Text(task.title, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            "تسک تونل ▶",
-                            color = WorkPrimary,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onNavigate(Routes.SURVEY_TUNNEL_TASKS) }
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        if (tunnelTasks.isEmpty()) {
-                            Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            ScrollBox3 {
-                                tunnelTasks.forEach { task ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 3.dp)
-                                            .clickable { completeTask("tunnel_tasks", task.title, task.createdAt) },
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("○", color = WorkPrimary, modifier = Modifier.padding(end = 6.dp))
-                                        Text(task.title, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ---- نوار جستجو + دستیار ----
-            val allMenuItems = remember {
-                AppMenu.sections.flatMap { sec -> sec.tabs.flatMap { tab -> tab.items } }.distinctBy { it.route }
-            }
-            val tunnelDefaultItems = remember {
-                AppMenu.sections
-                    .find { it.title == "نقشه‌برداری" }
-                    ?.tabs?.find { it.title == "تونل" }
-                    ?.items
-                    ?: emptyList()
-            }
-            val query = searchQuery.trim()
-            val filteredItems: List<MenuItem> = remember(query, sectionIndex, tabIndex) {
-                if (query.isNotEmpty()) {
-                    val words = query.split(Regex("\\s+")).filter { it.isNotBlank() }
-                    allMenuItems.filter { item ->
-                        val title = item.title
-                        words.any { w -> title.contains(w, ignoreCase = true) }
-                    }
-                } else {
-                    // خالی: اگر بخش نقشه‌برداری و تب تونل — پیش‌فرض تونل؛ وگرنه آیتم‌های بخش فعلی
-                    val sec = sections.getOrElse(sectionIndex) { sections.first() }
-                    val tabs = sec.tabs
-                    val ti = tabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
-                    if (sec.title == "نقشه‌برداری" && (tabs.getOrNull(ti)?.title == "تونل" || tabs.size <= 1)) {
-                        tunnelDefaultItems.ifEmpty { tabs.getOrNull(ti)?.items.orEmpty() }
-                    } else {
-                        tabs.getOrNull(ti)?.items.orEmpty()
-                    }
-                }
-            }
-
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = SurfaceColor,
-                border = BorderStroke(0.5.dp, BorderColor),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // سمت چپ: دستیار
-                    Icon(
-                        Icons.Filled.SmartToy,
-                        contentDescription = "دستیار",
-                        tint = ToolPrimary,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clickable {
-                                val q = searchQuery.trim()
-                                if (q.isNotEmpty()) {
-                                    PendingAssistantPrompt.text = q
-                                }
-                                onNavigate(Routes.ASSISTANT)
-                            }
-                            .padding(4.dp)
-                    )
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("جستجوی برنامه یا پرسش از دستیار…", color = TextMuted, fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        textStyle = TextStyle(fontSize = 14.sp, color = TextPrimary),
-                        leadingIcon = {
-                            Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                        }
-                    )
-                }
-            }
-
-            // اگر جستجو فعال است، نتایج را نشان بده؛ وگرنه منوی بخش
-            if (query.isNotEmpty()) {
-                Text(
-                    "نتایج جستجو (${filteredItems.size})",
-                    color = TextSecondary,
+                    "تسک‌های پروژه ▶",
+                    color = WorkPrimary,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 4.dp)
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        onNavigate(com.adel.assistant.navigation.Routes.SURVEY_PROJECT_TASKS)
+                    }
                 )
-                MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
+                Spacer(modifier = Modifier.height(4.dp))
+                if (projectTasks.isEmpty()) {
+                    Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    ScrollBox3 {
+                        projectTasks.forEach { t ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "• ${t.title}",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "انجام",
+                                    color = WorkPrimary,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clickable { completeTask("project_tasks", t.title, t.createdAt) }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    "تسک‌های تونل ▶",
+                    color = WorkPrimary,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        onNavigate(com.adel.assistant.navigation.Routes.SURVEY_TUNNEL_TASKS)
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                if (tunnelTasks.isEmpty()) {
+                    Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    ScrollBox3 {
+                        tunnelTasks.forEach { t ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "• ${t.title}",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "انجام",
+                                    color = WorkPrimary,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clickable { completeTask("tunnel_tasks", t.title, t.createdAt) }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+                }
             }
 
-            if (searchQuery.trim().isEmpty()) {
             // ---- عنوان بخش ----
             Text(
                 section.title,
@@ -502,71 +455,56 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             )
         }
 
-            }
-
-        // ---- نوار پایین: نقشه‌برداری / نقشه / ابزار / مالی ----
+        // ---- نوار پایین ----
         Surface(color = SurfaceHigh, shadowElevation = 4.dp) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                    .padding(vertical = 10.dp, horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // index mapping: 0=survey in sections? AppMenu.sections = finance, survey, tools
-                val surveyIdx = sections.indexOfFirst { it.title == "نقشه‌برداری" }.let { if (it < 0) 1 else it }
-                val toolsIdx = sections.indexOfFirst { it.title == "ابزار" }.let { if (it < 0) 2 else it }
-                val financeIdx = sections.indexOfFirst { it.title == "مالی" }.let { if (it < 0) 0 else it }
-
-                // نقشه‌برداری
-                Column(
-                    modifier = Modifier.weight(1f).clickable {
-                        sectionIndex = surveyIdx
-                        tabIndex = 0
-                        searchQuery = ""
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val sel = sectionIndex == surveyIdx
-                    Icon(Icons.Filled.Architecture, "نقشه‌برداری", tint = if (sel) sections[surveyIdx].color else TextMuted)
-                    Spacer(Modifier.height(4.dp))
-                    Text("نقشه‌برداری", fontSize = 11.sp, color = if (sel) sections[surveyIdx].color else TextMuted)
+                sections.forEachIndexed { index, s ->
+                    val selected = index == sectionIndex
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                sectionIndex = index
+                                // مالی: پیش‌فرض سربرگ پروژه
+                                tabIndex = if (index == 0) 1 else 0
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            s.icon,
+                            contentDescription = s.title,
+                            tint = if (selected) s.color else TextMuted
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            s.title,
+                            fontSize = 11.sp,
+                            color = if (selected) s.color else TextMuted
+                        )
+                    }
                 }
-                // نقشه (نقشه ۲)
                 Column(
-                    modifier = Modifier.weight(1f).clickable { onNavigate(Routes.TOOL_MAP2) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onNavigate(Routes.ASSISTANT) },
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Filled.Layers, "نقشه", tint = ToolPrimary)
-                    Spacer(Modifier.height(4.dp))
-                    Text("نقشه", fontSize = 11.sp, color = ToolPrimary)
-                }
-                // ابزار
-                Column(
-                    modifier = Modifier.weight(1f).clickable {
-                        sectionIndex = toolsIdx
-                        tabIndex = 0
-                        searchQuery = ""
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val sel = sectionIndex == toolsIdx
-                    Icon(Icons.Filled.Build, "ابزار", tint = if (sel) sections[toolsIdx].color else TextMuted)
-                    Spacer(Modifier.height(4.dp))
-                    Text("ابزار", fontSize = 11.sp, color = if (sel) sections[toolsIdx].color else TextMuted)
-                }
-                // مالی
-                Column(
-                    modifier = Modifier.weight(1f).clickable {
-                        sectionIndex = financeIdx
-                        tabIndex = 0
-                        searchQuery = ""
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val sel = sectionIndex == financeIdx
-                    Icon(Icons.Filled.AttachMoney, "مالی", tint = if (sel) sections[financeIdx].color else TextMuted)
-                    Spacer(Modifier.height(4.dp))
-                    Text("مالی", fontSize = 11.sp, color = if (sel) sections[financeIdx].color else TextMuted)
+                    Icon(
+                        Icons.Filled.SmartToy,
+                        contentDescription = "دستیار",
+                        tint = ToolPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "دستیار",
+                        fontSize = 11.sp,
+                        color = ToolPrimary
+                    )
                 }
             }
         }
@@ -677,17 +615,7 @@ private fun ScrollBox3(content: @Composable ColumnScope.() -> Unit) {
 
 private fun formatProjectDate(p: ProjectEntry): String {
     val y = p.year.ifBlank { "—" }
-    val yi = p.year.toIntOrNullFa() ?: 0
-    val mi = p.month.toIntOrNullFa() ?: 0
-    val di = p.day.toIntOrNullFa() ?: 0
-    val m = mi.toString().padStart(2, '0')
-    val d = di.toString().padStart(2, '0')
-    val hh = (p.hour.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-    val mm = (p.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-    val wd = try {
-        CalendarStore.weekdayNameJalali(yi, mi, di)
-    } catch (_: Exception) {
-        ""
-    }
-    return if (wd.isNotBlank()) "$wd $y/$m/$d $hh:$mm" else "$y/$m/$d $hh:$mm"
+    val m = (p.month.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+    val d = (p.day.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+    return "$y/$m/$d"
 }
