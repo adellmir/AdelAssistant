@@ -434,10 +434,13 @@ fun ProjectRegisterScreen(
         ProjectLocationPickerDialog(
             initialLat = locLat,
             initialLon = locLon,
-            onConfirm = { la, lo ->
+            initialLink = locLink,
+            onConfirm = { la, lo, link ->
                 locLat = la
                 locLon = lo
+                if (link.isNotBlank()) locLink = link
                 statusMsg = "موقعیت ثبت شد"
+                showLocationPicker = false
             },
             onDismiss = { showLocationPicker = false }
         )
