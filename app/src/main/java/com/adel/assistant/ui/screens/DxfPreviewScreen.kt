@@ -1,6 +1,10 @@
 package com.adel.assistant.ui.screens
 
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.GeoExport
+import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.Map2Session
+import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.ProfileSurfaceSlot
 import com.adel.assistant.data.ProfileSession
 import com.adel.assistant.data.TopographySession
@@ -2904,47 +2908,103 @@ if (showSaveDxfDialog) {
     if (showExportPickedDialog) {
         AlertDialog(
             onDismissRequest = { showExportPickedDialog = false },
-            title = { Text("خروجی مختصات") },
+            title = { Text("خروجی مختصات / GIS") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${pickedPoints.size} نقطه — فرمت را انتخاب کن")
-                    listOf("txt", "gsi", "dxf", "kml").forEach { fmt ->
-                        Button(
-                            onClick = {
-                                try {
-                                    val gsiPts = pickedPoints.mapIndexed { i, p ->
-                                        GsiPoint(
-                                            id = p.id.toLong(),
-                                            name = "P${p.id}",
-                                            e = p.easting,
-                                            n = p.northing,
-                                            z = 0.0,
-                                            code = ""
-                                        )
+                    val map2Count = Map2Session.allPoints().size
+                    Text("انتخابی: ${pickedPoints.size}  |  نقشه۲: $map2Count", fontSize = 12.sp)
+                    Text("فرمت خروجی:", fontSize = 12.sp)
+                    listOf("txt", "gsi", "dxf", "csv", "kml", "gpx").forEach { fmt ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    try {
+                                        if (pickedPoints.isEmpty()) {
+                                            message = "نقطه انتخابی نیست"
+                                            return@Button
+                                        }
+                                        val gsiPts = pickedPoints.map { p ->
+                                            GsiPoint(
+                                                id = p.id.toLong(),
+                                                name = "P${p.id}",
+                                                e = p.easting,
+                                                n = p.northing,
+                                                z = 0.0,
+                                                code = ""
+                                            )
+                                        }
+                                        val survey = GeoExport.surveyFromGsi(gsiPts)
+                                        val z = zone
+                                        val body = when (fmt) {
+                                            "txt" -> GsiParser.toTxt(gsiPts)
+                                            "gsi" -> GsiParser.toGsi(gsiPts)
+                                            "dxf" -> GsiParser.toDxf(gsiPts)
+                                            "csv" -> PointConverter.write(survey, "csv")
+                                            "kml" -> GeoExport.toKml(survey, "picked", z)
+                                            "gpx" -> GeoExport.toGpx(survey, "picked", z)
+                                            else -> GsiParser.toTxt(gsiPts)
+                                        }
+                                        val mime = when (fmt) {
+                                            "dxf" -> "application/dxf"
+                                            "kml" -> "application/vnd.google-earth.kml+xml"
+                                            "gpx" -> "application/gpx+xml"
+                                            "csv" -> "text/csv"
+                                            else -> "text/plain"
+                                        }
+                                        val name = "picked_coords.$fmt"
+                                        val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
+                                        message = if (ok) "ذخیره شد: $name" else "خطا در ذخیره"
+                                    } catch (e: Exception) {
+                                        message = "خطا خروجی: ${e.message}"
                                     }
-                                    val body = when (fmt) {
-                                        "txt" -> GsiParser.toTxt(gsiPts)
-                                        "gsi" -> GsiParser.toGsi(gsiPts)
-                                        "dxf" -> GsiParser.toDxf(gsiPts)
-                                        "kml" -> GsiParser.toKml(gsiPts, "picked")
-                                        else -> GsiParser.toTxt(gsiPts)
+                                    showExportPickedDialog = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = color)
+                            ) { Text("${fmt.uppercase()} انتخابی", fontSize = 11.sp) }
+
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        val survey = Map2Session.toSurveyPoints()
+                                        if (survey.isEmpty()) {
+                                            message = "نقطه‌ای در نقشه ۲ نیست"
+                                            return@OutlinedButton
+                                        }
+                                        val z = Map2Session.zone
+                                        val alignTrack = if (Map2Session.alignment.size >= 2) {
+                                            listOf(Map2Session.alignment.map {
+                                                SurveyPoint("A", it.x, it.y, 0.0, "alignment")
+                                            })
+                                        } else emptyList()
+                                        val body = when (fmt) {
+                                            "txt" -> PointConverter.write(survey, "txt")
+                                            "gsi" -> PointConverter.write(survey, "gsi")
+                                            "dxf" -> PointConverter.write(survey, "dxf")
+                                            "csv" -> PointConverter.write(survey, "csv")
+                                            "kml" -> GeoExport.toKml(survey, Map2Session.projectName, z, lines = alignTrack)
+                                            "gpx" -> GeoExport.toGpx(survey, Map2Session.projectName, z, tracks = alignTrack)
+                                            else -> PointConverter.write(survey, "txt")
+                                        }
+                                        val mime = when (fmt) {
+                                            "dxf" -> "application/dxf"
+                                            "kml" -> "application/vnd.google-earth.kml+xml"
+                                            "gpx" -> "application/gpx+xml"
+                                            "csv" -> "text/csv"
+                                            else -> "text/plain"
+                                        }
+                                        val safe = Map2Session.projectName.replace(Regex("[^\w\u0600-\u06FF\-]+"), "_").ifBlank { "map2" }
+                                        val name = "${safe}_points.$fmt"
+                                        val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
+                                        message = if (ok) "ذخیره شد: $name (${survey.size} نقطه)" else "خطا در ذخیره"
+                                    } catch (e: Exception) {
+                                        message = "خطا خروجی نقشه۲: ${e.message}"
                                     }
-                                    val mime = when (fmt) {
-                                        "dxf" -> "application/dxf"
-                                        "kml" -> "application/vnd.google-earth.kml+xml"
-                                        else -> "text/plain"
-                                    }
-                                    val name = "picked_coords.$fmt"
-                                    val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
-                                    message = if (ok) "ذخیره شد: Documents/AdelAssistant/…/$name" else "خطا در ذخیره"
-                                } catch (e: Exception) {
-                                    message = "خطا خروجی: ${e.message}"
-                                }
-                                showExportPickedDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = color)
-                        ) { Text(fmt.uppercase()) }
+                                    showExportPickedDialog = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("${fmt.uppercase()} نقشه۲", fontSize = 11.sp) }
+                        }
                     }
                 }
             },
