@@ -32,6 +32,8 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     val context = LocalContext.current
     var points by remember { mutableStateOf(TopographySession.points) }
     var intervalText by remember { mutableStateOf("1") }
+    var geoidN by remember { mutableStateOf("") }
+    var applyGeoid by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<TopographyEngine.Result?>(null) }
     var zoom by remember { mutableStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -40,7 +42,11 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
 
     fun rebuild() {
         val iv = intervalText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.01) ?: 1.0
-        result = TopographyEngine.build(points, iv)
+        val src = if (applyGeoid) {
+            val n = geoidN.replace(',', '.').toDoubleOrNull() ?: GeoidHeight.IRAN_DEFAULT_N
+            GeoidHeight.convertVolPoints(points, n, toOrtho = true)
+        } else points
+        result = TopographyEngine.build(src, iv)
         message = if (result!!.warnings.isEmpty()) "توپوگرافی ساخته شد: ${result!!.triangles.size} مثلث، ${result!!.contours.segments.size} قطعه خط تراز" else result!!.warnings.joinToString("\n")
     }
 
@@ -88,6 +94,26 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                     Spacer(Modifier.width(5.dp))
                     Button(onClick = { rebuild() }, enabled = points.size >= 3) { Text("ترسیم") }
                 }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = {
+                        val vols = Map2Session.toVolPoints()
+                        if (vols.size < 3) {
+                            message = "نقشه ۲ کمتر از ۳ نقطه دارد"
+                        } else {
+                            points = vols
+                            TopographySession.updatePoints(vols)
+                            message = "${vols.size} نقطه از نقشه ۲ بارگذاری شد"
+                            rebuild()
+                        }
+                    }, modifier = Modifier.weight(1f)) { Text("از نقشه ۲") }
+                    OutlinedButton(onClick = {
+                        result?.let { r ->
+                            val text = TopographyEngine.exportDxf(r)
+                            Map2Session.upsertProjectPart("TOPO-CONTOUR", text)
+                            message = "کانتور/TIN به پروژه نقشه ۲ اضافه شد"
+                        } ?: run { message = "اول ترسیم کن" }
+                    }, enabled = result != null, modifier = Modifier.weight(1f)) { Text("به نقشه ۲") }
+                }
             }
 
             Card(Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(12.dp)) {
@@ -121,7 +147,24 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         AlertDialog(
             onDismissRequest = { showInterval = false },
             title = { Text("فاصله خطوط تراز") },
-            text = { OutlinedTextField(intervalText, { intervalText = it }, label = { Text("فاصله (متر)") }, singleLine = true) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(intervalText, { intervalText = it }, label = { Text("فاصله خطوط تراز (متر)") }, singleLine = true)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(applyGeoid, { applyGeoid = it })
+                        Text("تبدیل ارتفاع با ژئوئید N", fontSize = 12.sp)
+                    }
+                    if (applyGeoid) {
+                        OutlinedTextField(
+                            geoidN, { geoidN = it },
+                            label = { Text("N ژئوئید (متر)") },
+                            placeholder = { Text("${GeoidHeight.IRAN_DEFAULT_N}") },
+                            singleLine = true,
+                            supportingText = { Text("Z_ortho = Z_ellip − N — مقدار دقیق را از مدل محلی بگذارید", fontSize = 10.sp) }
+                        )
+                    }
+                }
+            },
             confirmButton = { TextButton(onClick = { showInterval = false; if (points.size >= 3) rebuild() }) { Text("تأیید") } },
             dismissButton = { TextButton(onClick = { showInterval = false }) { Text("انصراف") } }
         )

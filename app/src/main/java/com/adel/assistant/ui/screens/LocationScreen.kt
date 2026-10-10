@@ -44,6 +44,7 @@ import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.GeoidHeight
 import com.adel.assistant.data.CompassMath
 import com.adel.assistant.data.rememberCompassHeading
 import com.adel.assistant.ui.CompassDial
@@ -72,6 +73,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var pointName by remember { mutableStateOf("") }
     var pointCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var geoidNText by remember { mutableStateOf(GeoidHeight.IRAN_DEFAULT_N.toString()) }
     val compassHeading = rememberCompassHeading()
     var zoneText by remember { mutableStateOf(UtmGeo.DEFAULT_ZONE.toString()) }
     var autoZone by remember { mutableStateOf(true) }
@@ -754,6 +756,39 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             )
                             HorizontalDivider(color = TextSecondary.copy(alpha = 0.2f))
                         }
+                    }
+                }
+            }
+
+            // —— ژئوئید / ارتفاع ——
+            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ارتفاع ژئوئید (N)", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Z_ortho = Z_ellip − N  |  برای دقت بالا N را از مدل محلی وارد کنید", fontSize = 11.sp, color = TextSecondary)
+                    OutlinedTextField(
+                        geoidNText, { geoidNText = it },
+                        label = { Text("N (متر)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = numKb
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = {
+                            val n = geoidNText.toDoubleOrNullFa() ?: GeoidHeight.IRAN_DEFAULT_N
+                            if (points.isEmpty()) { status = "نقطه‌ای نیست"; return@OutlinedButton }
+                            persist(points.map { pt ->
+                                pt.copy(alt = GeoidHeight.ellipsoidToOrtho(pt.alt, n))
+                            })
+                            status = "ارتفاع همه نقاط → ارتومتریک (N=$n)"
+                        }, modifier = Modifier.weight(1f)) { Text("بیضوی→ارتو") }
+                        OutlinedButton(onClick = {
+                            val n = geoidNText.toDoubleOrNullFa() ?: GeoidHeight.IRAN_DEFAULT_N
+                            if (points.isEmpty()) { status = "نقطه‌ای نیست"; return@OutlinedButton }
+                            persist(points.map { pt ->
+                                pt.copy(alt = GeoidHeight.orthoToEllipsoid(pt.alt, n))
+                            })
+                            status = "ارتفاع همه نقاط → بیضوی (N=$n)"
+                        }, modifier = Modifier.weight(1f)) { Text("ارتو→بیضوی") }
                     }
                 }
             }
