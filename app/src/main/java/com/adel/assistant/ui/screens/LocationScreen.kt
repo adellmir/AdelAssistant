@@ -44,6 +44,9 @@ import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.CompassMath
+import com.adel.assistant.data.rememberCompassHeading
+import com.adel.assistant.ui.CompassDial
 import com.adel.assistant.data.CoordFormats
 import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.formatEn
@@ -69,6 +72,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var pointName by remember { mutableStateOf("") }
     var pointCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    val compassHeading = rememberCompassHeading()
     var zoneText by remember { mutableStateOf(UtmGeo.DEFAULT_ZONE.toString()) }
     var autoZone by remember { mutableStateOf(true) }
     var northernHemi by remember { mutableStateOf(true) }
@@ -611,11 +615,53 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 }
             }
 
-            // —— ابزار فاصله / آفست ——
+            // —— ابزار فاصله / آفست / قطب‌نما ——
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("فاصله / آزیموت / آفست", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("دو نقطه را از لیست انتخاب کنید (A سپس B)", fontSize = 11.sp, color = TextSecondary)
+                    Text("فاصله / آزیموت / قطب‌نما", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("دو نقطه را از لیست انتخاب کنید (A سپس B) — یا هدف‌گیری با GPS", fontSize = 11.sp, color = TextSecondary)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val hdg = compassHeading.value.toDouble()
+                        val targetPt = points.find { it.id == selA }
+                        val targetBearing: Float? = if (targetPt != null && liveLat != null && liveLon != null) {
+                            LocationStore.distanceAndAzimuth(liveLat!!, liveLon!!, targetPt.lat, targetPt.lon).second.toFloat()
+                        } else null
+                        CompassDial(
+                            headingDeg = compassHeading.value,
+                            targetBearingDeg = targetBearing,
+                            size = 88.dp,
+                            accent = color
+                        )
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "جهت فعلی: ${formatEn("%.0f", hdg)}°",
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary,
+                                fontSize = 14.sp
+                            )
+                            if (targetPt != null && liveLat != null && liveLon != null) {
+                                val (d, az) = LocationStore.distanceAndAzimuth(liveLat!!, liveLon!!, targetPt.lat, targetPt.lon)
+                                val turn = CompassMath.turnToTarget(hdg, az)
+                                val turnTxt = when {
+                                    kotlin.math.abs(turn) < 5 -> "رو به هدف"
+                                    turn > 0 -> formatEn("%.0f° به راست", turn)
+                                    else -> formatEn("%.0f° به چپ", -turn)
+                                }
+                                Text("هدف: ${targetPt.name}", color = color, fontSize = 13.sp)
+                                Text(
+                                    "فاصله ${formatEn("%.1f", d)} m | آزیموت ${formatEn("%.0f", az)}°",
+                                    fontSize = 12.sp, color = TextSecondary
+                                )
+                                Text(turnTxt, fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
+                            } else {
+                                Text("نقطه A را انتخاب کنید و GPS روشن باشد تا هدف‌گیری فعال شود", fontSize = 11.sp, color = TextSecondary)
+                            }
+                        }
+                    }
                     if (distInfo.isNotBlank()) {
                         Text(distInfo, color = color, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }

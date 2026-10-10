@@ -1,6 +1,10 @@
 package com.adel.assistant.ui.screens
 
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.CompassMath
+import com.adel.assistant.data.LocationStore
+import com.adel.assistant.data.rememberCompassHeading
+import com.adel.assistant.ui.CompassDial
 import com.adel.assistant.data.GeoExport
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.Map2Session
@@ -136,6 +140,8 @@ fun DxfPreviewScreen(
     var profilePlacementActive by remember { mutableStateOf(false) }
     val profileAlignmentMode = profileMode == "alignment"
     var zoneText by remember { mutableStateOf("40") }
+    val compassHeading = rememberCompassHeading()
+    var showCompass by remember { mutableStateOf(true) }
     var baseMap by remember { mutableStateOf(BaseMap.NONE) }
     var emptyMapColor by remember { mutableStateOf(Color(0xFF202124)) }
     var showEmptyColorPalette by remember { mutableStateOf(false) }
@@ -1103,6 +1109,56 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
     }
 
     Box(Modifier.fillMaxSize().background(Background)) {
+
+            if (showCompass) {
+                val hdg = compassHeading.value
+                val targetBearing: Float? = run {
+                    val gps = myLoc
+                    if (gps != null && pickedPoints.isNotEmpty()) {
+                        val (la, lo) = UtmGeo.toLatLon(gps.first, gps.second, zone)
+                        val tp = pickedPoints.last()
+                        LocationStore.distanceAndAzimuth(la, lo, tp.lat, tp.lon).second.toFloat()
+                    } else if (pickedPoints.size >= 2) {
+                        val a = pickedPoints[pickedPoints.size - 2]
+                        val b = pickedPoints.last()
+                        LocationStore.distanceAndAzimuth(a.lat, a.lon, b.lat, b.lon).second.toFloat()
+                    } else null
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xCC111111),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 56.dp, end = 8.dp)
+                ) {
+                    Column(
+                        Modifier.padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CompassDial(
+                            headingDeg = hdg,
+                            targetBearingDeg = targetBearing,
+                            size = 72.dp,
+                            accent = color
+                        )
+                        Text(
+                            String.format(java.util.Locale.US, "%.0f°", hdg),
+                            color = Color.White,
+                            fontSize = 11.sp
+                        )
+                        if (targetBearing != null) {
+                            val turn = CompassMath.turnToTarget(hdg.toDouble(), targetBearing.toDouble())
+                            val t = when {
+                                kotlin.math.abs(turn) < 5 -> "رو به هدف"
+                                turn > 0 -> String.format(java.util.Locale.US, "%.0f° راست", turn)
+                                else -> String.format(java.util.Locale.US, "%.0f° چپ", -turn)
+                            }
+                            Text(t, color = color, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = if (baseMap == BaseMap.SATELLITE) Color(0xFF111111) else if (baseMap == BaseMap.NONE) emptyMapColor else Color(0xFF202124)
