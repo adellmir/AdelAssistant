@@ -35,6 +35,7 @@ import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
+import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
