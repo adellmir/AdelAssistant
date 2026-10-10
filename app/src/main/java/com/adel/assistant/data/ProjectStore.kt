@@ -19,14 +19,19 @@ data class ProjectEntry(
     /** عرض جغرافیایی WGS84 — ۰ یعنی ثبت نشده */
     val lat: Double = 0.0,
     /** طول جغرافیایی WGS84 — ۰ یعنی ثبت نشده */
-    val lon: Double = 0.0
+    val lon: Double = 0.0,
+    /** لینک کوتاه/بلند نشان — اگر باشد برای مسیریابی اولویت دارد */
+    val neshanLink: String = ""
 ) {
-    val hasLocation: Boolean get() = lat != 0.0 || lon != 0.0
+    val hasLocation: Boolean get() = lat != 0.0 || lon != 0.0 || neshanLink.isNotBlank()
     /** لینک مسیریاب نشان */
     val neshanUrl: String
-        get() = if (hasLocation)
-            String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
-        else ""
+        get() = when {
+            neshanLink.isNotBlank() -> neshanLink.trim()
+            lat != 0.0 || lon != 0.0 ->
+                String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+            else -> ""
+        }
 
     val dateSortKey: String
         get() = "%s%02d%02d".format(
@@ -58,7 +63,8 @@ object ProjectStore {
                     hour = r.getOrElse(11) { "9" },
                     minute = r.getOrElse(12) { "0" },
                     lat = r.getOrElse(13) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
-                    lon = r.getOrElse(14) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
+                    lon = r.getOrElse(14) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    neshanLink = r.getOrElse(15) { "" }
                 )
             } catch (e: Exception) {
                 null
@@ -72,7 +78,7 @@ object ProjectStore {
                 it.row, it.day, it.month, it.name,
                 it.amount.toString(), it.settled.toString(), it.remaining.toString(),
                 it.employer, it.phone, it.description, it.year, it.hour, it.minute,
-                it.lat.toString(), it.lon.toString()
+                it.lat.toString(), it.lon.toString(), it.neshanLink
             )
         }
         CsvStore.overwriteAll(context, CSV, rows)
@@ -178,6 +184,26 @@ object ProjectStore {
         val sessions: List<ProjectEntry>
     )
 
+    /** ثبت/تغییر موقعیت برای همه ردیف‌های یک نام پروژه */
+    fun updateLocationByProjectName(
+        context: Context,
+        projectName: String,
+        lat: Double,
+        lon: Double,
+        neshanLink: String = ""
+    ) {
+        val nm = projectName.trim()
+        if (nm.isBlank()) return
+        val list = all(context).map { e ->
+            if (e.name.trim() == nm) e.copy(
+                lat = lat,
+                lon = lon,
+                neshanLink = neshanLink.ifBlank { e.neshanLink }
+            ) else e
+        }
+        writeAll(context, list)
+    }
+
     fun employerProfiles(context: Context, query: String = ""): List<EmployerProfile> {
         val q = query.trim()
         val grouped = all(context)
@@ -221,20 +247,30 @@ object ProjectStore {
 }
 
 
-/** باز کردن مسیریاب نشان برای مختصات */
-fun openNeshanNav(context: Context, lat: Double, lon: Double) {
-    if (lat == 0.0 && lon == 0.0) return
-    val url = String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+/** باز کردن مسیریاب نشان برای مختصات یا لینک */
+fun openNeshanNav(context: Context, lat: Double, lon: Double, link: String = "") {
+    val url = when {
+        link.isNotBlank() -> link.trim()
+        lat != 0.0 || lon != 0.0 ->
+            String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+        else -> return
+    }
     try {
         context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
     } catch (_: Exception) {
-        try {
-            context.startActivity(
-                android.content.Intent(
-                    android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse("geo:$lat,$lon?q=$lat,$lon")
+        if (lat != 0.0 || lon != 0.0) {
+            try {
+                context.startActivity(
+                    android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("geo:$lat,$lon?q=$lat,$lon")
+                    )
                 )
-            )
-        } catch (_: Exception) { }
+            } catch (_: Exception) { }
+        }
     }
+}
+
+fun openNeshanNav(context: Context, entry: ProjectEntry) {
+    openNeshanNav(context, entry.lat, entry.lon, entry.neshanLink)
 }

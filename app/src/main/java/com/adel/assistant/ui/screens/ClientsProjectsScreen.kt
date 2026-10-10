@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material3.*
@@ -24,14 +25,13 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.openNeshanNav
-import com.adel.assistant.data.formatMoney
+import com.adel.assistant.ui.PendingProjectEdit
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 
-/** مبلغ در پایگاه از قبل به «میلیون تومان» ذخیره می‌شود — دوباره تقسیم نشود */
 private fun moneyM(v: Double): String {
     return if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9)
         String.format(java.util.Locale.US, "%,.0f م", v)
@@ -39,26 +39,27 @@ private fun moneyM(v: Double): String {
         String.format(java.util.Locale.US, "%,.1f م", v)
 }
 
-/**
- * کارفرمایان و پروژه‌ها — پروفایل از پایگاه ثبت پروژه
- */
 @Composable
-fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
+fun ClientsProjectsScreen(
+    color: Color,
+    onBack: () -> Unit,
+    onEditProject: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     var searchProject by remember { mutableStateOf("") }
     var searchEmployer by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(0) } // 0 پروژه 1 کارفرما
-    var showList by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(0) }
     var tick by remember { mutableStateOf(0) }
 
     var editEmployerOld by remember { mutableStateOf<String?>(null) }
     var editEmpName by remember { mutableStateOf("") }
     var editEmpPhone by remember { mutableStateOf("") }
-    var locEditProject by remember { mutableStateOf<ProjectEntry?>(null) }
+
+    var manageProject by remember { mutableStateOf<ProjectStore.ProjectProfile?>(null) }
+    var showLocFor by remember { mutableStateOf<String?>(null) } // project name for location
 
     fun refresh() { tick++ }
 
-    // با زدن سربرگ همه موارد همان سربرگ نمایش داده شود (جستجو فقط فیلتر)
     val employers = remember(tick, searchEmployer, tab) {
         if (tab == 1) ProjectStore.employerProfiles(context, searchEmployer) else emptyList()
     }
@@ -66,120 +67,75 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
         if (tab == 0) ProjectStore.projectProfiles(context, searchProject) else emptyList()
     }
 
-    fun doSearch() {
-        showList = true
-        refresh()
-    }
-
     fun call(phone: String) {
         if (phone.isBlank()) return
         try {
             context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) { }
     }
 
     Column(
         Modifier
             .fillMaxSize()
             .background(Background)
-            .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "کارفرمایان و پروژه‌ها", color = color, onBack = onBack)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = searchProject,
-                onValueChange = { searchProject = it },
-                label = { Text("جستجو پروژه") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
-            OutlinedTextField(
-                value = searchEmployer,
-                onValueChange = { searchEmployer = it },
-                label = { Text("جستجو کارفرما") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
+        TabRow(selectedTabIndex = tab, containerColor = SurfaceColor) {
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("پروژه‌ها") })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("کارفرمایان") })
         }
-        Spacer(Modifier.height(6.dp))
-        Button(
-            onClick = { doSearch() },
-            colors = ButtonDefaults.buttonColors(containerColor = color),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("جستجو") }
 
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            listOf("پروژه", "کارفرمایان").forEachIndexed { i, label ->
-                val selected = tab == i
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            tab = i
-                            showList = true
-                            refresh()
-                        },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (selected) color.copy(alpha = 0.2f) else Color.Transparent
-                ) {
-                    Text(
-                        label,
-                        modifier = Modifier
-                            .padding(vertical = 12.dp)
-                            .fillMaxWidth(),
-                        color = if (selected) color else TextSecondary,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+        Row(
+            Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (tab == 0) {
+                OutlinedTextField(
+                    value = searchProject,
+                    onValueChange = { searchProject = it },
+                    label = { Text("جستجوی پروژه") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                OutlinedTextField(
+                    value = searchEmployer,
+                    onValueChange = { searchEmployer = it },
+                    label = { Text("جستجوی کارفرما") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-        if (!showList) {
-            Text(
-                "سربرگ را بزن یا جستجو کن تا لیست نمایش داده شود",
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
         LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             if (tab == 1) {
                 items(employers, key = { it.employer }) { e ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = SurfaceColor,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    e.employer,
-                                    modifier = Modifier.weight(1f),
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
+                                Text(e.employer, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = TextPrimary)
                                 IconButton(onClick = { call(e.phone) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
+                                    Icon(Icons.Filled.Call, "تماس", tint = color)
                                 }
                                 IconButton(onClick = {
                                     editEmployerOld = e.employer
                                     editEmpName = e.employer
                                     editEmpPhone = e.phone
                                 }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = TextSecondary)
+                                    Icon(Icons.Filled.Edit, "ویرایش", tint = TextSecondary)
                                 }
                             }
                             Text(
                                 "پروژه: ${e.projectCount} | درآمد: ${moneyM(e.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(e.totalReceived)} | مانده: ${moneyM(e.totalClaims)}",
-                                color = TextSecondary,
-                                fontSize = 12.sp
+                                color = TextSecondary, fontSize = 12.sp
                             )
                             e.sessions.take(8).forEach { s ->
                                 Text(
@@ -187,24 +143,24 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                     color = if (s.hasLocation) color else TextPrimary,
                                     fontSize = 12.sp,
                                     modifier = Modifier.clickable {
-                                        if (s.hasLocation) openNeshanNav(context, s.lat, s.lon)
-                                        else locEditProject = s
+                                        if (s.hasLocation) openNeshanNav(context, s)
+                                        else {
+                                            manageProject = ProjectStore.projectProfiles(context)
+                                                .firstOrNull { it.name == s.name }
+                                            showLocFor = s.name
+                                        }
                                     }
                                 )
                             }
                             if (e.sessions.size > 8) {
-                                Text("… و ${e.sessions.size - 8} مورد دیگر", color = TextSecondary, fontSize = 11.sp)
+                                Text("+ ${e.sessions.size - 8} مورد دیگر", color = TextSecondary, fontSize = 11.sp)
                             }
                         }
                     }
                 }
             } else {
                 items(projects, key = { it.name }) { p ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = SurfaceColor,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Row(
@@ -217,23 +173,31 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
                                     Text(p.employer, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
                                 }
                                 IconButton(onClick = { call(p.phone) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Filled.Call, contentDescription = "تماس", tint = color)
+                                    Icon(Icons.Filled.Call, "تماس", tint = color)
                                 }
                                 IconButton(
                                     onClick = {
                                         val withLoc = p.sessions.firstOrNull { it.hasLocation }
-                                        if (withLoc != null) openNeshanNav(context, withLoc.lat, withLoc.lon)
-                                        else locEditProject = p.sessions.firstOrNull()
+                                        if (withLoc != null) openNeshanNav(context, withLoc)
+                                        else {
+                                            manageProject = p
+                                            showLocFor = p.name
+                                        }
                                     },
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(Icons.Filled.NearMe, contentDescription = "مسیریاب", tint = color)
+                                    Icon(Icons.Filled.NearMe, "مسیریاب", tint = color)
+                                }
+                                IconButton(
+                                    onClick = { manageProject = p },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Filled.Edit, "ویرایش", tint = TextSecondary)
                                 }
                             }
                             Text(
                                 "جلسات: ${p.sessionCount} | درآمد: ${moneyM(p.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(p.totalReceived)} | مانده: ${moneyM(p.totalClaims)}",
-                                color = TextSecondary,
-                                fontSize = 12.sp
+                                color = TextSecondary, fontSize = 12.sp
                             )
                             p.sessions.forEach { s ->
                                 SessionSettleRow(s, color) {
@@ -252,16 +216,95 @@ fun ClientsProjectsScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    locEditProject?.let { pe ->
+    // مدیریت پروژه: موقعیت + لیست جلسات
+    manageProject?.let { profile ->
+        val sessions = remember(tick, profile.name) {
+            ProjectStore.all(context).filter { it.name.trim() == profile.name.trim() }
+                .sortedByDescending { it.dateSortKey }
+        }
+        AlertDialog(
+            onDismissRequest = {
+                manageProject = null
+                showLocFor = null
+            },
+            title = { Text("مدیریت: ${profile.name}") },
+            text = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val locSample = sessions.firstOrNull { it.hasLocation }
+                    Text(
+                        if (locSample != null) {
+                            if (locSample.neshanLink.isNotBlank()) "آدرس/لینک ثبت شده"
+                            else String.format(java.util.Locale.US, "مختصات: %.5f , %.5f", locSample.lat, locSample.lon)
+                        } else "موقعیت ثبت نشده",
+                        color = TextSecondary, fontSize = 12.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { showLocFor = profile.name }) {
+                            Text(if (locSample != null) "تغییر موقعیت" else "ثبت موقعیت")
+                        }
+                        if (locSample != null) {
+                            OutlinedButton(onClick = { openNeshanNav(context, locSample) }) {
+                                Text("مسیریاب")
+                            }
+                        }
+                    }
+                    Divider()
+                    Text("جلسات پروژه", fontWeight = FontWeight.Bold)
+                    sessions.forEach { s ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "${s.day}/${s.month}/${s.year} ${s.hour}:${s.minute.padStart(2, '0')} — ${moneyM(s.amount)}",
+                                    fontSize = 13.sp, color = TextPrimary
+                                )
+                                if (s.hasLocation) {
+                                    Text("موقعیت ✓", fontSize = 11.sp, color = color)
+                                }
+                            }
+                            IconButton(onClick = {
+                                PendingProjectEdit.rowId = s.row
+                                manageProject = null
+                                onEditProject?.invoke()
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Edit, "ویرایش", tint = TextSecondary)
+                            }
+                            IconButton(onClick = {
+                                ProjectStore.delete(context, s.row)
+                                refresh()
+                                if (ProjectStore.all(context).none { it.name.trim() == profile.name.trim() }) {
+                                    manageProject = null
+                                }
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Delete, "حذف", tint = Color(0xFFC62828))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    manageProject = null
+                    showLocFor = null
+                }) { Text("بستن") }
+            }
+        )
+    }
+
+    showLocFor?.let { projectName ->
+        val sample = ProjectStore.all(context).firstOrNull { it.name.trim() == projectName.trim() }
         ProjectLocationPickerDialog(
-            initialLat = pe.lat,
-            initialLon = pe.lon,
-            onConfirm = { la, lo ->
-                ProjectStore.save(context, pe.copy(lat = la, lon = lo))
-                locEditProject = null
+            initialLat = sample?.lat ?: 0.0,
+            initialLon = sample?.lon ?: 0.0,
+            initialLink = sample?.neshanLink.orEmpty(),
+            onConfirm = { la, lo, link ->
+                ProjectStore.updateLocationByProjectName(context, projectName, la, lo, link)
+                showLocFor = null
                 refresh()
             },
-            onDismiss = { locEditProject = null }
+            onDismiss = { showLocFor = null }
         )
     }
 

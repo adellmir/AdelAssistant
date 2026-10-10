@@ -41,7 +41,8 @@ import kotlinx.coroutines.withContext
 fun ProjectLocationPickerDialog(
     initialLat: Double = 0.0,
     initialLon: Double = 0.0,
-    onConfirm: (lat: Double, lon: Double) -> Unit,
+    initialLink: String = "",
+    onConfirm: (lat: Double, lon: Double, link: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -50,12 +51,12 @@ fun ProjectLocationPickerDialog(
     var pendingLat by remember { mutableStateOf<Double?>(if (initialLat != 0.0) initialLat else null) }
     var pendingLon by remember { mutableStateOf<Double?>(if (initialLon != 0.0) initialLon else null) }
     var showConfirm by remember { mutableStateOf(false) }
-    var isUpdate by remember { mutableStateOf(initialLat != 0.0 || initialLon != 0.0) }
+    var isUpdate by remember { mutableStateOf(initialLat != 0.0 || initialLon != 0.0 || initialLink.isNotBlank()) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var status by remember {
         mutableStateOf("۱.۵ثانیه روی نقشه نگه دارید یا لینک نشان را بچسبانید")
     }
-    var linkText by remember { mutableStateOf("") }
+    var linkText by remember { mutableStateOf(initialLink) }
     var resolving by remember { mutableStateOf(false) }
 
     val startLat = if (initialLat != 0.0) initialLat else 36.2970
@@ -279,7 +280,7 @@ function getCenter(cb){
                     if (linkText.isNotBlank() && (pendingLat == null || pendingLon == null)) {
                         resolveLinkAndRegister()
                     } else if (pendingLat != null && pendingLon != null) {
-                        onConfirm(pendingLat!!, pendingLon!!)
+                        onConfirm(pendingLat ?: 0.0, pendingLon ?: 0.0, linkText.trim())
                         onDismiss()
                     } else if (linkText.isNotBlank()) {
                         resolveLinkAndRegister()
@@ -312,7 +313,7 @@ function getCenter(cb){
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onConfirm(pendingLat!!, pendingLon!!)
+                    onConfirm(pendingLat ?: 0.0, pendingLon ?: 0.0, linkText.trim())
                     showConfirm = false
                     onDismiss()
                 }) { Text(if (isUpdate) "بله، تغییر بده" else "ثبت") }

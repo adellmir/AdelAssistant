@@ -74,7 +74,9 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 }
                 .take(3)
                 .map { p ->
-                    val label = "${p.name} — ${p.year}/${p.month}/${p.day}"
+                    val hh = (p.hour.toIntOrNullFa() ?: 9).toString().padStart(2, '0')
+                    val mm = (p.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+                    val label = "${p.name} — ${p.year}/${p.month}/${p.day} $hh:$mm"
                     label to (if (p.hasLocation) p.neshanUrl else null)
                 }
         }

@@ -35,6 +35,7 @@ import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.ui.PendingProjectEdit
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
@@ -64,6 +65,7 @@ fun ProjectRegisterScreen(
     var name by remember { mutableStateOf("") }
     var locLat by remember { mutableStateOf(0.0) }
     var locLon by remember { mutableStateOf(0.0) }
+    var locLink by remember { mutableStateOf("") }
     var showLocationPicker by remember { mutableStateOf(false) }
     var employer by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
@@ -78,6 +80,24 @@ fun ProjectRegisterScreen(
     var confirmCallFor by remember { mutableStateOf<ProjectEntry?>(null) }
     var confirmDeleteFor by remember { mutableStateOf<ProjectEntry?>(null) }
 
+    LaunchedEffect(Unit) {
+        val id = PendingProjectEdit.rowId
+        if (!id.isNullOrBlank()) {
+            PendingProjectEdit.rowId = null
+            val e = ProjectStore.all(context).firstOrNull { it.row == id }
+            if (e != null) {
+                day = e.day; month = e.month; year = e.year
+                hour = e.hour; minute = e.minute
+                name = e.name; employer = e.employer; phone = e.phone
+                amount = if (e.amount == e.amount.toLong().toDouble()) e.amount.toLong().toString() else e.amount.toString()
+                description = e.description
+                locLat = e.lat; locLon = e.lon; locLink = e.neshanLink
+                editingRow = e.row
+            }
+        }
+    }
+
+
     fun clearForm() {
         day = today.third.toString()
         month = today.second.toString()
@@ -89,6 +109,9 @@ fun ProjectRegisterScreen(
         amount = ""
         description = ""
         phone = ""
+        locLat = 0.0
+        locLon = 0.0
+        locLink = ""
         editingRow = null
     }
 
@@ -128,7 +151,8 @@ fun ProjectRegisterScreen(
             hour = hour.ifBlank { "9" },
             minute = minute.ifBlank { "0" },
             lat = locLat,
-            lon = locLon
+            lon = locLon,
+            neshanLink = locLink
         )
         ProjectStore.save(context, entry)
 
@@ -288,11 +312,11 @@ fun ProjectRegisterScreen(
             modifier = Modifier.padding(top = 6.dp)
         ) {
             OutlinedButton(onClick = { showLocationPicker = true }) {
-                Text(if (locLat != 0.0 || locLon != 0.0) "موقعیت ثبت‌شده ✓" else "ثبت موقعیت روی نقشه")
+                Text(if (locLat != 0.0 || locLon != 0.0 || locLink.isNotBlank()) "موقعیت ثبت‌شده ✓" else "ثبت موقعیت روی نقشه")
             }
-            if (locLat != 0.0 || locLon != 0.0) {
+            if (locLat != 0.0 || locLon != 0.0 || locLink.isNotBlank()) {
                 TextButton(onClick = {
-                    com.adel.assistant.data.openNeshanNav(context, locLat, locLon)
+                    com.adel.assistant.data.openNeshanNav(context, locLat, locLon, locLink)
                 }) { Text("نشان") }
             }
         }
@@ -386,6 +410,8 @@ fun ProjectRegisterScreen(
                                 description = p.description
                                 phone = p.phone
                                 locLat = p.lat
+                                locLon = p.lon
+                                locLink = p.neshanLink
                                 locLon = p.lon
                                 editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
