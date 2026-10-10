@@ -15,12 +15,7 @@ data class ReportEntry(
     val z: Double = 0.0
 ) {
     val key: String get() = "$shaft-${normalizeSide(side)}"
-    val dateSortKey: String get() {
-        val yi = year.toEnglishDigits().trim()
-        val m = month.toIntOrNullFa() ?: 0
-        val d = day.toIntOrNullFa() ?: 0
-        return String.format(java.util.Locale.US, "%s%02d%02d", yi, m, d)
-    }
+    val dateSortKey: String get() = TunnelReportStore.dateKey(year, month, day)
     /** برچسب تاریخ به فرم YYMMDD مثل 050624 — همیشه ارقام لاتین */
     val dateLabel: String
         get() {
@@ -44,6 +39,30 @@ fun sideDisplayName(side: String): String {
 }
 
 object TunnelReportStore {
+
+    /** کلید یکسان تاریخ: YYYYMMDD با ارقام لاتین؛ سال ۲رقمی → ۱۴xx */
+    fun dateKey(year: String, month: String, day: String): String {
+        var y = year.toEnglishDigits().trim().toIntOrNullFa() ?: 0
+        if (y in 0..99) y += 1400
+        val m = month.toIntOrNullFa() ?: 0
+        val d = day.toIntOrNullFa() ?: 0
+        return String.format(java.util.Locale.US, "%04d%02d%02d", y, m, d)
+    }
+
+    fun sameDate(e: ReportEntry, year: String, month: String, day: String): Boolean {
+        if (e.dateSortKey == dateKey(year, month, day)) return true
+        // تطبیق مستقیم فیلدها بعد از نرمال‌سازی
+        var ey = e.year.toIntOrNullFa() ?: 0
+        if (ey in 0..99) ey += 1400
+        var qy = year.toIntOrNullFa() ?: 0
+        if (qy in 0..99) qy += 1400
+        val em = e.month.toIntOrNullFa() ?: 0
+        val ed = e.day.toIntOrNullFa() ?: 0
+        val qm = month.toIntOrNullFa() ?: 0
+        val qd = day.toIntOrNullFa() ?: 0
+        return ey == qy && em == qm && ed == qd
+    }
+
     private const val REPORT_CSV = "survey_tunnel_report"
     private const val POINTS_TXT = "tunnel_points"
 
@@ -84,7 +103,9 @@ object TunnelReportStore {
             if (row[0].contains("روز") || row[0].contains("تاریخ")) return@mapNotNull null
             try {
                 ReportEntry(
-                    year = row[2], month = row[1], day = row[0],
+                    year = row[2].toEnglishDigits().trim(),
+                    month = row[1].toEnglishDigits().trim(),
+                    day = row[0].toEnglishDigits().trim(),
                     shaft = row[3], side = row[4], pointNo = row[5],
                     lengthCm = row[6].toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     deviation = row.getOrElse(7) { "" }, collapse = row.getOrElse(8) { "" },
@@ -101,8 +122,10 @@ object TunnelReportStore {
     }
 
     fun entriesForDate(context: Context, year: String, month: String, day: String): List<ReportEntry> {
-        val key = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
-        return allEntries(context).filter { it.dateSortKey == key }
+        val key = dateKey(year, month, day)
+        return allEntries(context).filter { e ->
+            e.dateSortKey == key || sameDate(e, year, month, day)
+        }
     }
 
     /** پیدا کردن رکورد یک روز برای یک شفت-سمت مشخص، با در نظر گرفتن هم‌ارزی ۰/start */
@@ -111,7 +134,7 @@ object TunnelReportStore {
     }
 
     fun replaceEntriesForDate(context: Context, year: String, month: String, day: String, newEntries: List<ReportEntry>) {
-        val dateKey = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
+        val dateKey = dateKey(year, month, day)
         // مختصات را برای هر ردیف از روی کیلومتراژ درون‌یابی کن اگر خالی بود
         val filled = newEntries.map { e ->
             if (e.hasCoords) e else {
@@ -164,8 +187,8 @@ object TunnelReportStore {
         fromYear: String, fromMonth: String, fromDay: String,
         toYear: String, toMonth: String, toDay: String
     ): List<ReportEntry> {
-        val from = "%s%02d%02d".format(fromYear, fromMonth.toIntOrNullFa() ?: 0, fromDay.toIntOrNullFa() ?: 0)
-        val to = "%s%02d%02d".format(toYear, toMonth.toIntOrNullFa() ?: 0, toDay.toIntOrNullFa() ?: 0)
+        val from = dateKey(fromYear, fromMonth, fromDay)
+        val to = dateKey(toYear, toMonth, toDay)
         return allEntries(context)
             .filter { it.dateSortKey >= from && it.dateSortKey <= to }
             .map { ensureCoords(context, it) }

@@ -108,9 +108,16 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    fun todayDateKey() = "%s%02d%02d".format(year, month.toIntOrNullFa() ?: 0, day.toIntOrNullFa() ?: 0)
+    fun todayDateKey() = TunnelReportStore.dateKey(year, month, day)
 
     fun loadDay() {
+        // نرمال‌سازی ارقام فارسی و سال ۲رقمی قبل از جستجو
+        day = day.toEnglishDigits().trim()
+        month = month.toEnglishDigits().trim()
+        year = year.toEnglishDigits().trim().let { y ->
+            val yi = y.toIntOrNullFa() ?: 0
+            if (yi in 0..99) (1400 + yi).toString() else y
+        }
         val existing = TunnelReportStore.entriesForDate(context, year, month, day)
         rows = existing.map { e ->
             PreviewRow(
@@ -118,7 +125,22 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 e.remaining, e.deviation, e.collapse
             )
         }
-        statusMsg = if (rows.isEmpty()) "برای این تاریخ رکوردی ثبت نشده" else "${rows.size} ردیف بارگذاری شد"
+        // اگر هنوز خالی بود، یک‌بار با همه رکوردها تطبیق نرم بده (سال ۲رقمی ذخیره‌شده)
+        if (rows.isEmpty()) {
+            val all = TunnelReportStore.allEntries(context)
+            val soft = all.filter { TunnelReportStore.sameDate(it, year, month, day) }
+            rows = soft.map { e ->
+                PreviewRow(
+                    e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.shaftProgress,
+                    e.remaining, e.deviation, e.collapse
+                )
+            }
+        }
+        statusMsg = if (rows.isEmpty()) {
+            "برای این تاریخ رکوردی ثبت نشده (کل: ${TunnelReportStore.allEntries(context).size})"
+        } else {
+            "${rows.size} ردیف بارگذاری شد"
+        }
     }
 
     fun addOrUpdateRow() {
