@@ -10,7 +10,6 @@ import com.adel.assistant.data.ProfileSession
 import com.adel.assistant.data.TopographySession
 import com.adel.assistant.data.DxfLayerInfo
 import com.adel.assistant.data.Map2PointCategory
-import com.adel.assistant.data.Map2Session
 import com.adel.assistant.data.PendingMapOpen
 import com.adel.assistant.ui.PointsSpreadsheet
 import com.adel.assistant.data.GsiPoint
@@ -2993,7 +2992,7 @@ if (showSaveDxfDialog) {
                                             "csv" -> "text/csv"
                                             else -> "text/plain"
                                         }
-                                        val safe = Map2Session.projectName.replace(Regex("[^\w\u0600-\u06FF\-]+"), "_").ifBlank { "map2" }
+                                        val safe = Map2Session.projectName.replace(Regex("""[^A-Za-z0-9_\u0600-\u06FF-]+"""), "_").ifBlank { "map2" }
                                         val name = "${safe}_points.$fmt"
                                         val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
                                         message = if (ok) "ذخیره شد: $name (${survey.size} نقطه)" else "خطا در ذخیره"
