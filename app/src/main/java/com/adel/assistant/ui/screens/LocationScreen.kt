@@ -44,6 +44,8 @@ import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.CoordFormats
+import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
@@ -69,6 +71,8 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var status by remember { mutableStateOf("") }
     var zoneText by remember { mutableStateOf(UtmGeo.DEFAULT_ZONE.toString()) }
     var autoZone by remember { mutableStateOf(true) }
+    var northernHemi by remember { mutableStateOf(true) }
+    var fmtPreview by remember { mutableStateOf("") }
 
     // live GPS
     var liveLat by remember { mutableStateOf<Double?>(null) }
@@ -241,14 +245,29 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         }, avgSeconds * 1000L)
     }
 
+    fun updateFmtPreview(lat: Double, lon: Double, e: Double, n: Double, z: Int) {
+        fmtPreview = buildString {
+            appendLine("اعشاری: ${CoordFormats.formatDecimal(lat, 8)} , ${CoordFormats.formatDecimal(lon, 8)}")
+            appendLine("DM: ${CoordFormats.toDm(lat, true)}  ${CoordFormats.toDm(lon, false)}")
+            appendLine("DMS: ${CoordFormats.toDms(lat, true)}  ${CoordFormats.toDms(lon, false)}")
+            append("MGRS: ${CoordFormats.toMgrs(e, n, z, northernHemi)}")
+        }
+    }
+
     fun convertGeoToUtm() {
-        val lat = manLat.toDoubleOrNullFa() ?: run { status = "عرض نامعتبر"; return }
-        val lon = manLon.toDoubleOrNullFa() ?: run { status = "طول نامعتبر"; return }
+        val lat = CoordFormats.parseDegrees(manLat) ?: manLat.toDoubleOrNullFa()
+            ?: run { status = "عرض نامعتبر"; return }
+        val lon = CoordFormats.parseDegrees(manLon) ?: manLon.toDoubleOrNullFa()
+            ?: run { status = "طول نامعتبر"; return }
         val z = if (autoZone) UtmGeo.zoneFromLon(lon) else zone()
         zoneText = z.toString()
+        northernHemi = lat >= 0
         val (e, n) = UtmGeo.fromLatLon(lat, lon, z)
+        manLat = formatEn("%.8f", lat)
+        manLon = formatEn("%.8f", lon)
         manE = formatEn("%.3f", e)
         manN = formatEn("%.3f", n)
+        updateFmtPreview(lat, lon, e, n, z)
         status = "تبدیل شد → Zone $z"
     }
 
@@ -256,10 +275,11 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         val e = manE.toDoubleOrNullFa() ?: run { status = "Easting نامعتبر"; return }
         val n = manN.toDoubleOrNullFa() ?: run { status = "Northing نامعتبر"; return }
         val z = zone()
-        val (lat, lon) = UtmGeo.toLatLon(e, n, z)
+        val (lat, lon) = UtmGeo.toLatLon(e, n, z, northernHemi)
         manLat = formatEn("%.8f", lat)
         manLon = formatEn("%.8f", lon)
-        status = "تبدیل شد ← Zone $z"
+        updateFmtPreview(lat, lon, e, n, z)
+        status = "تبدیل شد ← Zone $z ${if (northernHemi) "N" else "S"}"
     }
 
     fun addManualPoint() {
@@ -289,6 +309,44 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             status = "مختصات دستی کامل نیست"
         }
     }
+
+
+    val batchOpen = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return@rememberLauncherForActivityResult
+            val pts = PointConverter.readBytes(bytes, name)
+            if (pts.isEmpty()) {
+                status = "نقطه‌ای از فایل خوانده نشد"
+                return@rememberLauncherForActivityResult
+            }
+            val z = zone()
+            val added = pts.map { sp ->
+                val isGeo = kotlin.math.abs(sp.x) <= 180.0 && kotlin.math.abs(sp.y) <= 90.0
+                if (isGeo) {
+                    val lo = sp.x
+                    val la = sp.y
+                    val useZ = if (autoZone) UtmGeo.zoneFromLon(lo) else z
+                    val (ee, nn) = UtmGeo.fromLatLon(la, lo, useZ)
+                    makePoint(la, lo, sp.z, -1f, sp.id.ifBlank { "P" }, sp.code).copy(
+                        zone = useZ, easting = ee, northing = nn
+                    )
+                } else {
+                    val (la, lo) = UtmGeo.toLatLon(sp.x, sp.y, z, northernHemi)
+                    makePoint(la, lo, sp.z, -1f, sp.id.ifBlank { "P" }, sp.code).copy(
+                        zone = z, easting = sp.x, northing = sp.y
+                    )
+                }
+            }
+            persist(points + added)
+            status = "${added.size} نقطه از فایل اضافه و تبدیل شد"
+        } catch (ex: Exception) {
+            status = "خطای فایل: ${ex.message}"
+        }
+    }
+
 
     fun export(ext: String) {
         if (points.isEmpty()) {
@@ -505,8 +563,17 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("تبدیل مختصات / ورود دستی", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(selected = northernHemi, onClick = { northernHemi = true }, label = { Text("شمال N") })
+                        FilterChip(selected = !northernHemi, onClick = { northernHemi = false }, label = { Text("جنوب S") })
+                        Text("نیمکره برای UTM→Geo", fontSize = 11.sp, color = TextSecondary)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(manLat, { manLat = it }, label = { Text("Lat") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        OutlinedTextField(
+                            manLat, { manLat = it }, label = { Text("Lat") },
+                            modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb,
+                            supportingText = { Text("اعشاری یا درجه دقیقه ثانیه", fontSize = 10.sp) }
+                        )
                         OutlinedTextField(manLon, { manLon = it }, label = { Text("Lon") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -523,6 +590,13 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             modifier = Modifier.weight(1f)
                         ) { Text("افزودن") }
                     }
+                    if (fmtPreview.isNotBlank()) {
+                        Text(fmtPreview, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
+                        TextButton(onClick = {
+                            clipboard.setText(AnnotatedString(fmtPreview))
+                            status = "فرمت‌ها کپی شد"
+                        }) { Text("کپی فرمت‌ها") }
+                    }
                     if (liveLat != null && liveLon != null) {
                         TextButton(onClick = {
                             manLat = formatEn("%.8f", liveLat!!)
@@ -530,6 +604,10 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             convertGeoToUtm()
                         }) { Text("پر کردن از GPS زنده") }
                     }
+                    OutlinedButton(
+                        onClick = { batchOpen.launch(arrayOf("*/*", "text/*", "application/*")) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("ورود فایل نقاط (Batch تبدیل)") }
                 }
             }
 
