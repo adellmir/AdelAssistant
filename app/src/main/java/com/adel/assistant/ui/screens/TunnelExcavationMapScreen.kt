@@ -23,6 +23,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -422,10 +424,12 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 if (!lm.isProviderEnabled(pr)) continue
                 @Suppress("MissingPermission")
                 val loc = lm.getLastKnownLocation(pr) ?: continue
-                if (best == null || loc.accuracy < best!!.accuracy) best = loc
+                val cur = best
+                if (cur == null || loc.accuracy < cur.accuracy) best = loc
             }
-            if (best == null) { status = "موقعیت GPS در دسترس نیست"; return }
-            val (e, n) = UtmGeo.fromLatLon(best.latitude, best.longitude, zone)
+            val locBest = best
+            if (locBest == null) { status = "موقعیت GPS در دسترس نیست"; return }
+            val (e, n) = UtmGeo.fromLatLon(locBest.latitude, locBest.longitude, zone)
             myLoc = e to n
             needFit = false
             // مرکز نقشه را نزدیک موقعیت نبریم مگر کاربر بخواهد — فقط نشان بده
@@ -504,60 +508,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
                 
-            // —— تارگت مرکزی ثبت نقطه ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
-                val inv = if (baseMap != TunnelBaseMap.NONE) Color.White else Color.Black
-                Canvas(Modifier.fillMaxSize()) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 18f
-                    val gap = 6f
-                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
-                }
-                Surface(
-                    color = Color(0xCC111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            onClick = { registerFromCrosshair() },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
-                        TextButton(
-                            onClick = {
-                                if (editHintId != null) {
-                                    crosshairEditOverlayId = editHintId
-                                    crosshairDimId = editHintId
-                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairDimId = null
-                                    crosshairEditOverlayId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
-                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-
             AnimatedVisibility(
                     visible = menuOpen,
                     enter = fadeIn() + expandVertically(),
@@ -671,6 +621,61 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             }
+            // —— تارگت مرکزی ثبت نقطه ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
+                val inv = if (baseMap != TunnelBaseMap.NONE) Color.White else Color.Black
+                Canvas(Modifier.fillMaxSize()) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { registerFromCrosshair() },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
+                        TextButton(
+                            onClick = {
+                                if (editHintId != null) {
+                                    crosshairEditOverlayId = editHintId
+                                    crosshairDimId = editHintId
+                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairDimId = null
+                                    crosshairEditOverlayId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
+                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+
             dimMsg?.let { msg ->
                 Surface(
                     shape = RoundedCornerShape(12.dp),
