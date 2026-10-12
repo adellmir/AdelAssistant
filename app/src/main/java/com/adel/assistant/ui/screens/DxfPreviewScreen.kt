@@ -82,7 +82,17 @@ private data class ViewerDrawing(
 )
 
 @Composable
-fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = null, onOpenTopography: () -> Unit = {}) {
+fun DxfPreviewScreen(
+    color: Color,
+    onBack: () -> Unit,
+    profileMode: String? = null,
+    onOpenTopography: () -> Unit = {},
+    map2Mode: Boolean = false,
+    onOpenProfile: () -> Unit = {},
+    onOpenVolume: () -> Unit = {},
+    onOpenAlign: () -> Unit = {},
+    onOpenArea: () -> Unit = {}
+) {
     val context = LocalContext.current
     var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
     var nextDrawingId by remember { mutableStateOf(1) }
