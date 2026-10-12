@@ -22,6 +22,7 @@ import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.ExcavationPointsScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.DxfPreviewScreen
+import com.adel.assistant.ui.screens.Map2Screen
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
@@ -42,7 +43,6 @@ import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.VolumeScreen
-import com.adel.assistant.ui.screens.Map2Screen
 import com.adel.assistant.ui.screens.TopographyScreen
 import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
@@ -143,12 +143,29 @@ fun AppNavigation() {
 composable(Routes.SURVEY_PROJECT_EVENTS) {
             ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
+        composable(
+            route = "${Routes.SURVEY_PROJECT_REGISTER}/edit/{rowId}",
+            arguments = listOf(navArgument("rowId") { type = NavType.StringType })
+        ) { entry ->
+            ProjectRegisterScreen(
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() },
+                initialRow = entry.arguments?.getString("rowId"),
+                onInvoice = { list ->
+                    InvoiceLaunch.preselected = list
+                    navController.navigate(Routes.FIN_PROJECT_INVOICE)
+                }
+            )
+        }
         composable(Routes.SURVEY_PROJECT_CALENDAR) {
             WorkCalendarScreen(
                 color = WorkPrimary,
                 onBack = { navController.popBackStack() },
                 onAddProject = { d, m, y ->
                     navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}/$d/$m/$y")
+                },
+                onEditProject = { row ->
+                    navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}/edit/$row")
                 }
             )
         }
