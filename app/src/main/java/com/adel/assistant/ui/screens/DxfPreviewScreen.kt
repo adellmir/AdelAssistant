@@ -981,7 +981,7 @@ fun DxfPreviewScreen(
                                         }
                                         // ابزار CAD
                                         if (cadTool != CadTool.None) {
-                                            applyCadTap(p)
+                                            processCadPoint(p)
                                             return@detectTapGestures
                                         }
                                         if (measureMode) {
@@ -1562,44 +1562,26 @@ if (zoomWindowMode) {
                     drawCircle(Color.White, 5f, s)
                 }
 
-                // ذره‌بین دقیق (لمس طولانی)
+                // ذره‌بین دقیق (لمس طولانی) — بدون clipPath برای سازگاری کامپایلر
                 if (loupeActive && loupeWorld != null) {
                     val finger = loupeScreen
                     val r = 56f
                     val c = Offset(finger.x, (finger.y - 100f).coerceAtLeast(r + 8f))
-                    val zoom = 2.6f
-                    val path = androidx.compose.ui.graphics.Path().apply {
-                        addOval(androidx.compose.ui.geometry.Rect(c.x - r, c.y - r, c.x + r, c.y + r))
-                    }
-                    clipPath(path) {
-                        // بزرگنمایی اطراف نقطه لمس
-                        withTransform({
-                            translate(c.x - finger.x * zoom, c.y - finger.y * zoom)
-                            scale(zoom, zoom, pivot = Offset.Zero)
-                        }) {
-                            // شبکه راهنما
-                            drawCircle(Color.White.copy(alpha = 0.08f), r * 3f, finger)
-                            activeDrawings.forEach { drawing ->
-                                drawing.model.lines.take(400).forEach { ln ->
-                                    val a = worldToScreen(ln.x1, ln.y1)
-                                    val b = worldToScreen(ln.x2, ln.y2)
-                                    drawLine(Color(0xFF90CAF9), a, b, 1.2f)
-                                }
-                                drawing.model.circles.take(200).forEach { cir ->
-                                    val ctr = worldToScreen(cir.x, cir.y)
-                                    drawCircle(Color(0xFFA5D6A7), (cir.r * scale).toFloat().coerceIn(1f, 40f), ctr, style = Stroke(1f))
-                                }
-                            }
-                        }
-                    }
+                    // حلقه و پس‌زمینه نیمه‌شفاف
+                    drawCircle(Color.Black.copy(alpha = 0.35f), r, c)
                     drawCircle(Color.White, r, c, style = Stroke(2.5f))
-                    drawLine(Color(0xFFFF5252), Offset(c.x - r, c.y), Offset(c.x + r, c.y), 1.5f)
-                    drawLine(Color(0xFFFF5252), Offset(c.x, c.y - r), Offset(c.x, c.y + r), 1.5f)
-                    // صلیب نقطه ثبت‌شونده
+                    // صلیب مرکز ذره‌بین
+                    drawLine(Color(0xFFFF5252), Offset(c.x - r + 6f, c.y), Offset(c.x + r - 6f, c.y), 1.5f)
+                    drawLine(Color(0xFFFF5252), Offset(c.x, c.y - r + 6f), Offset(c.x, c.y + r - 6f), 1.5f)
+                    // نقطهٔ اسنپ‌شده در مختصات واقعی نقشه
                     val wp = worldToScreen(loupeWorld!!.first, loupeWorld!!.second)
-                    drawCircle(Color(0xFFFFEB3B), 5f, wp)
-                    drawLine(Color(0xFFFFEB3B), Offset(wp.x - 12f, wp.y), Offset(wp.x + 12f, wp.y), 2f)
-                    drawLine(Color(0xFFFFEB3B), Offset(wp.x, wp.y - 12f), Offset(wp.x, wp.y + 12f), 2f)
+                    drawCircle(Color(0xFFFFEB3B), 6f, wp)
+                    drawLine(Color(0xFFFFEB3B), Offset(wp.x - 14f, wp.y), Offset(wp.x + 14f, wp.y), 2f)
+                    drawLine(Color(0xFFFFEB3B), Offset(wp.x, wp.y - 14f), Offset(wp.x, wp.y + 14f), 2f)
+                    // خط راهنما از انگشت به نقطه
+                    drawLine(Color.White.copy(alpha = 0.4f), finger, wp, 1f)
+                    // دایره کوچک روی انگشت
+                    drawCircle(Color.White.copy(alpha = 0.5f), 8f, finger, style = Stroke(1.5f))
                 }
             }
         }
