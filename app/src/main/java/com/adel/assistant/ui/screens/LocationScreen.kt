@@ -44,6 +44,10 @@ import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.CoordGoto
+import com.adel.assistant.data.PendingMapGoto
+import com.adel.assistant.data.DeepLinkHolder
+import com.adel.assistant.navigation.Routes
 import com.adel.assistant.data.GeoidHeight
 import com.adel.assistant.data.CompassMath
 import com.adel.assistant.data.rememberCompassHeading
@@ -73,6 +77,8 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var pointName by remember { mutableStateOf("") }
     var pointCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var gotoCoordLine by remember { mutableStateOf("") }
+    var gotoZoneText by remember { mutableStateOf("40") }
     var geoidNText by remember { mutableStateOf(GeoidHeight.IRAN_DEFAULT_N.toString()) }
     val compassHeading = rememberCompassHeading()
     var zoneText by remember { mutableStateOf(UtmGeo.DEFAULT_ZONE.toString()) }
@@ -562,6 +568,47 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             Text(if (averaging) "…${avgSamples.size}" else "میانگین‌گیری")
                         }
                     }
+                }
+            }
+
+            // —— برو به روی نقشه ——
+            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("برو به روی نقشه", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    OutlinedTextField(
+                        gotoCoordLine, { gotoCoordLine = it },
+                        label = { Text("مختصات (یک خط)") },
+                        placeholder = { Text("E N   یا   Lat Lon") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    val parsed = CoordGoto.parse(gotoCoordLine)
+                    if (parsed?.isUtm == true) {
+                        OutlinedTextField(
+                            gotoZoneText, { gotoZoneText = it },
+                            label = { Text("زون UTM") },
+                            singleLine = true,
+                            modifier = Modifier.width(120.dp),
+                            keyboardOptions = numKb
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            val pr = CoordGoto.parse(gotoCoordLine)
+                            if (pr == null) {
+                                status = "مختصات را با فاصله یا ویرگول وارد کنید"
+                                return@Button
+                            }
+                            val z = gotoZoneText.toIntOrNull() ?: UtmGeo.DEFAULT_ZONE
+                            val (e, n, zz) = CoordGoto.toUtm(pr, z)
+                            PendingMapGoto.set(e, n, zz)
+                            DeepLinkHolder.setRoute(Routes.TOOL_MAP2)
+                            status = "در حال باز کردن نقشه…"
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("برو به نقشه") }
+                    Text("تشخیص خودکار: UTM (رقم≥۴) یا جغرافیایی (رقم≤۳)", fontSize = 10.sp, color = TextSecondary)
                 }
             }
 

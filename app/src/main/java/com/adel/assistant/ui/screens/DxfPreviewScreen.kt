@@ -38,6 +38,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -453,6 +454,15 @@ LaunchedEffect(profileMode) {
         centerOnUtm(e, n, zoom)
     }
 
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(350)
+        PendingMapGoto.consume()?.let { (e, n, z) ->
+            zoneText = z.toString()
+            centerOnUtm(e, n, 17)
+            message = "برو به: E=${"%.3f".format(java.util.Locale.US, e)} N=${"%.3f".format(java.util.Locale.US, n)}"
+        }
+    }
+
     fun readGps() {
         try {
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -566,9 +576,84 @@ LaunchedEffect(profileMode) {
         offset = Offset(w / 2f - ((minX + maxX) / 2.0 * scale).toFloat(),
                         h / 2f + ((minY + maxY) / 2.0 * scale).toFloat())
     }
-    fun worldToScreen(x: Double, y: Double) = Offset((x * scale + offset.x).toFloat(), (-y * scale + offset.y).toFloat())
-    fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
-        ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
+    fun worldToScreen(x: Double, y: Double): Offset {
+        val sx0 = (x * scale + offset.x).toFloat()
+        val sy0 = (-y * scale + offset.y).toFloat()
+        if (mapRotationDeg == 0f || canvasSize.x <= 0f) return Offset(sx0, sy0)
+        val cx = canvasSize.x / 2f
+        val cy = canvasSize.y / 2f
+        val rad = Math.toRadians(mapRotationDeg.toDouble())
+        val cos = kotlin.math.cos(rad).toFloat()
+        val sin = kotlin.math.sin(rad).toFloat()
+        val dx = sx0 - cx
+        val dy = sy0 - cy
+        return Offset(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
+    }
+    fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> {
+        var sx0 = sx
+        var sy0 = sy
+        if (mapRotationDeg != 0f && canvasSize.x > 0f) {
+            val cx = canvasSize.x / 2f
+            val cy = canvasSize.y / 2f
+            val rad = Math.toRadians(-mapRotationDeg.toDouble())
+            val cos = kotlin.math.cos(rad).toFloat()
+            val sin = kotlin.math.sin(rad).toFloat()
+            val dx = sx - cx
+            val dy = sy - cy
+            sx0 = cx + dx * cos - dy * sin
+            sy0 = cy + dx * sin + dy * cos
+        }
+        return ((sx0 - offset.x) / scale).toDouble() to (-((sy0 - offset.y) / scale)).toDouble()
+    }
+    /** مختصات مرکز صفحه (تارگت) با اسنپ ۱ سانتی‌متری به نقاط موجود */
+    fun centerWorldSnapped(): Pair<Double, Double> {
+        if (canvasSize.x <= 0f) return 0.0 to 0.0
+        val raw = screenToWorld(canvasSize.x / 2f, canvasSize.y / 2f)
+        // اسنپ ۱cm به picked / map2 / موجودیت‌ها
+        val snapCm = 0.01
+        var best = raw
+        var bestD = snapCm
+        fun consider(x: Double, y: Double) {
+            val d = kotlin.math.hypot(x - raw.first, y - raw.second)
+            if (d <= bestD) { bestD = d; best = x to y }
+        }
+        pickedPoints.forEach { consider(it.easting, it.northing) }
+        try {
+            Map2Session.allPoints().forEach { consider(it.x, it.y) }
+        } catch (_: Throwable) { }
+        // osnap موجود با آستانه ۱cm برای عارضه
+        val models = activeDrawings.map { it.id to it.model }
+        val snapped = CadEngine.snap(raw.first, raw.second, models, osnap, snapCm.coerceAtLeast(0.01), null)
+        consider(snapped.first, snapped.second)
+        return best
+    }
+    fun nearestPickedId(wx: Double, wy: Double, tol: Double = 0.01): Int? {
+        var bestId: Int? = null
+        var bestD = tol
+        pickedPoints.forEach { p ->
+            val d = kotlin.math.hypot(p.easting - wx, p.northing - wy)
+            if (d <= bestD) { bestD = d; bestId = p.id }
+        }
+        return bestId
+    }
+    fun registerCrosshairPoint() {
+        val p = centerWorldSnapped()
+        val ll = UtmGeo.toLatLon(p.first, p.second, zone)
+        val editId = crosshairEditId
+        if (editId != null) {
+            pickedPoints = pickedPoints.map {
+                if (it.id == editId) it.copy(easting = p.first, northing = p.second, lat = ll.first, lon = ll.second)
+                else it
+            }
+            message = "نقطه $editId ویرایش شد"
+            crosshairEditId = null
+        } else {
+            val id = nextPointId
+            nextPointId++
+            pickedPoints = pickedPoints + PickedPoint(id, p.first, p.second, ll.first, ll.second)
+            message = "نقطه $id ثبت شد"
+        }
+    }
 
     fun pickedAsGsi(): List<GsiPoint> = pickedPoints.map { p ->
         GsiPoint(id = p.id.toLong(), name = "P${p.id}", e = p.easting, n = p.northing, z = 0.0, code = "")
@@ -1110,6 +1195,93 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
 
     Box(Modifier.fillMaxSize().background(Background)) {
 
+            // —— تارگت مرکزی + نوار ثبت ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
+                // علامت تارگت وسط صفحه
+                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
+                            Text("ثبت", color = color, fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = {
+                                if (crosshairEditId != null) {
+                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
+                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairEditId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(
+                                String.format(java.util.Locale.US, "E %.3f", cw.first),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                            Text(
+                                String.format(java.util.Locale.US, "N %.3f", cw.second),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+            // —— قطب‌نمای چرخش نقشه ——
+            if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color(0xCC222222),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 90.dp)
+                        .size(44.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .clickable { mapRotationDeg = 0f; message = "چرخش نقشه صفر شد" },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("N", color = Color.Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        // نشان زاویه
+                        Text(
+                            String.format(java.util.Locale.US, "%.0f°", mapRotationDeg),
+                            color = Color.White.copy(0.7f),
+                            fontSize = 8.sp,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp)
+                        )
+                    }
+                }
+            }
+
+
             if (showCompass) {
                 val hdg = compassHeading.value
                 val targetBearing: Float? = run {
@@ -1168,12 +1340,14 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     .fillMaxSize()
                     .padding(bottom = 76.dp)
                     .pointerInput(Unit) {
-                        detectTransformGestures { centroid, pan, zoom, _ ->
+                        detectTransformGestures { centroid, pan, zoom, rotation ->
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
-                            // Keep the original smooth map gesture. While editing a point,
-                            // the map must stay still so the point can move independently.
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
+                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
+                            if (kotlin.math.abs(rotation) > 1e-4f) {
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
+                            }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -1184,6 +1358,11 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                 )
                                 scale = newScale
                             } else offset += pan
+                            // به‌روز تارگت روی نقطه موجود
+                            if (crosshairMode) {
+                                val c = centerWorldSnapped()
+                                crosshairEditId = nearestPickedId(c.first, c.second, 0.01)
+                            }
                         }
                     }
                     .pointerInput(editingPointId, scale) {
@@ -1918,6 +2097,14 @@ if (zoomWindowMode) {
                                         }
                                     }
                                     10 -> { // نقاط (نقشه ۲)
+                                        GlassIcon(Icons.Filled.NearMe, "برو به") {
+                                            showGotoDialog = true; closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
+                                            crosshairMode = !crosshairMode
+                                            message = if (crosshairMode) "تارگت مرکزی فعال — ثبت از مرکز" else "تارگت خاموش"
+                                            closeMenus()
+                                        }
                                         GlassIcon(Icons.Filled.FileOpen, "ورود نقاط") {
                                             showMap2Points = true; closeMenus()
                                         }
@@ -2020,6 +2207,14 @@ if (zoomWindowMode) {
                                             GlassIcon(Icons.Filled.Redo, "جلو") { doRedo(); closeMenus() }
                                             IconSep()
                                             GlassIcon(Icons.Filled.Transform, "الاین") { onOpenAlign(); closeMenus() }
+                                        }
+                                        GlassIcon(Icons.Filled.NearMe, "برو به") {
+                                            showGotoDialog = true; closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
+                                            crosshairMode = !crosshairMode
+                                            message = if (crosshairMode) "تارگت مرکزی فعال" else "تارگت خاموش"
+                                            closeMenus()
                                         }
                                         GlassIcon(Icons.Filled.NearMe, "انتخاب") {
                                             cadTool = CadTool.Select; draftPts = emptyList()
@@ -3068,6 +3263,91 @@ if (showSaveDxfDialog) {
         )
     }
 
+    if (showGotoDialog) {
+        val map2pts = try { Map2Session.allPoints() } catch (_: Throwable) { emptyList() }
+        val merged = buildList {
+            pickedPoints.forEach { add(SurveyPoint("P${it.id}", it.easting, it.northing, 0.0, "")) }
+            map2pts.forEach { add(it.toSurvey()) }
+        }
+        val sorted = when (gotoSort) {
+            1 -> merged.sortedBy { it.code }
+            2 -> merged.sortedBy { it.z }
+            else -> merged.sortedBy { it.id }
+        }
+        val parsed = CoordGoto.parse(gotoLine)
+        val needZone = parsed?.isUtm == true
+        AlertDialog(
+            onDismissRequest = { showGotoDialog = false },
+            title = { Text("برو به") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        gotoLine, { gotoLine = it },
+                        label = { Text("مختصات (یک خط)") },
+                        placeholder = { Text("E N یا Lat Lon") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (needZone || (parsed == null && gotoLine.isNotBlank())) {
+                        // اگر UTM تشخیص داده شد زون بپرس
+                    }
+                    if (parsed?.isUtm == true) {
+                        OutlinedTextField(
+                            gotoZone, { gotoZone = it },
+                            label = { Text("زون UTM") },
+                            singleLine = true,
+                            modifier = Modifier.width(120.dp)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("مرتب:", fontSize = 11.sp)
+                        listOf("شماره" to 0, "کد" to 1, "ارتفاع" to 2).forEach { (lab, v) ->
+                            FilterChip(selected = gotoSort == v, onClick = { gotoSort = v }, label = { Text(lab, fontSize = 10.sp) })
+                        }
+                    }
+                    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 240.dp)) {
+                        items(sorted.size) { i ->
+                            val sp = sorted[i]
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(onClick = {
+                                    centerOnUtm(sp.x, sp.y, 17)
+                                    showGotoDialog = false
+                                    message = "برو به ${sp.id}"
+                                }, contentPadding = PaddingValues(4.dp)) {
+                                    Text("برو به", fontSize = 11.sp, color = color)
+                                }
+                                Text(
+                                    "${sp.id}  ${"%.2f".format(java.util.Locale.US, sp.x)}  ${"%.2f".format(java.util.Locale.US, sp.y)}  Z=${"%.2f".format(java.util.Locale.US, sp.z)}  ${sp.code}",
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val pr = CoordGoto.parse(gotoLine) ?: run {
+                        message = "مختصات نامعتبر"
+                        return@TextButton
+                    }
+                    val z = gotoZone.toIntOrNull() ?: zone
+                    val (e, n, zz) = CoordGoto.toUtm(pr, z)
+                    zoneText = zz.toString()
+                    centerOnUtm(e, n, 17)
+                    showGotoDialog = false
+                    message = "برو به مختصات"
+                }) { Text("برو") }
+            },
+            dismissButton = { TextButton(onClick = { showGotoDialog = false }) { Text("بستن") } }
+        )
+    }
+
+
     if (showMapAlignDialog) {
         AlertDialog(
             onDismissRequest = { showMapAlignDialog = false },
@@ -3247,6 +3527,7 @@ private val emptyBackgroundPalette = listOf(
     Color(0xFF101820), Color(0xFF1B263B), Color(0xFF263238), Color(0xFF37474F), Color(0xFF455A64),
     Color(0xFF546E7A), Color(0xFFECEFF1), Color(0xFFD7CCC8), Color(0xFFE8F5E9), Color(0xFFFFF8E1)
 )
+
 
 private data class PickedPoint(
     val id: Int,
