@@ -129,6 +129,10 @@ fun DxfPreviewScreen(
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
+    var loupeActive by remember { mutableStateOf(false) }
+    var loupeScreen by remember { mutableStateOf(Offset.Zero) }
+    var loupeWorld by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var liveCoordMsg by remember { mutableStateOf<String?>(null) }
 
     // —— CAD حرفه‌ای (منوی کرکره‌ای، نه آیکن زیاد) ——
     var showCadPanel by remember { mutableStateOf(false) }
@@ -476,6 +480,13 @@ fun DxfPreviewScreen(
             val ll = UtmGeo.toLatLon(g.e, g.n, zone)
             p.copy(easting = g.e, northing = g.n, lat = ll.first, lon = ll.second)
         }
+    }
+
+    fun preciseSnapWorld(rawX: Double, rawY: Double): Pair<Double, Double> {
+        // اسنپ دقیق‌تر برای ذره‌بین (~۱ سانتی‌متر در مختصات نقشه در زوم معمولی)
+        val models = activeDrawings.map { it.id to it.model }
+        val maxW = (0.02 / scale.coerceAtLeast(1e-6f)).toDouble().coerceIn(0.005, 0.5)
+        return CadEngine.snap(rawX, rawY, models, osnap, maxW, null)
     }
 
     fun snapWorld(rawX: Double, rawY: Double, ref: Pair<Double, Double>? = null): Pair<Double, Double> {
@@ -858,6 +869,16 @@ fun DxfPreviewScreen(
                     .padding(bottom = 76.dp)
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
+                            if (loupeActive) {
+                                val np = Offset(loupeScreen.x + pan.x, loupeScreen.y + pan.y)
+                                loupeScreen = np
+                                val raw = screenToWorld(np.x, np.y)
+                                val p = preciseSnapWorld(raw.first, raw.second)
+                                loupeWorld = p
+                                liveCoordMsg = String.format(java.util.Locale.US, "E=%.3f  N=%.3f  (ذره‌بین)", p.first, p.second)
+                                return@detectTransformGestures
+                            }
+
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
                             // Keep the original smooth map gesture. While editing a point,
@@ -908,7 +929,75 @@ fun DxfPreviewScreen(
                                     offset = Offset(tap.x - (tap.x - offset.x) * ns / scale, tap.y - (tap.y - offset.y) * ns / scale)
                                     scale = ns
                                 },
+                                onLongPress = { tap ->
+                                    val raw = screenToWorld(tap.x, tap.y)
+                                    val p = preciseSnapWorld(raw.first, raw.second)
+                                    loupeActive = true
+                                    loupeScreen = tap
+                                    loupeWorld = p
+                                    val zNear = activeDrawings.asSequence()
+                                        .flatMap { it.model.points.asSequence() }
+                                        .minByOrNull { (it.x - p.first) * (it.x - p.first) + (it.y - p.second) * (it.y - p.second) }
+                                    val zStr = if (zNear != null &&
+                                        hypot(zNear.x - p.first, zNear.y - p.second) < 0.5
+                                    ) String.format(java.util.Locale.US, "  Z=%.3f", zNear.z) else ""
+                                    liveCoordMsg = String.format(
+                                        java.util.Locale.US,
+                                        "E=%.3f  N=%.3f%s  (ذره‌بین — برای ثبت ضربه بزن)",
+                                        p.first, p.second, zStr
+                                    )
+                                    message = "ذره‌بین فعال — نقشه را بکش یا ضربه برای ثبت"
+                                },
                                 onTap = { tap ->
+                                    if (loupeActive && loupeWorld != null) {
+                                        // ثبت نقطهٔ ذره‌بین به‌جای زیر انگشت
+                                        val forced = loupeWorld!!
+                                        loupeActive = false
+                                        liveCoordMsg = String.format(java.util.Locale.US, "ثبت: E=%.3f N=%.3f", forced.first, forced.second)
+                                        // با تقلید tap در مختصات صفحه‌ای همان نقطه
+                                        val scr = worldToScreen(forced.first, forced.second)
+                                        // ادامه با همان منطق؛ مختصات را با جابجایی موقت offset شبیه‌سازی نمی‌کنیم —
+                                        // مستقیم همان p را در شاخه‌های پایین جایگزین می‌کنیم از طریق متغیر محلی
+                                        val raw = forced
+                                        val p = forced
+                                        if (profilePlacementActive) {
+                                            placeProfileAt(p.first, p.second)
+                                            return@detectTapGestures
+                                        }
+                                        if (profileAlignmentMode && profileDrawMode) {
+                                            val last = profileDraftVertices.lastOrNull()
+                                            if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.01 / scale.coerceAtLeast(1e-6f))) {
+                                                profileDraftVertices = profileDraftVertices + AlignmentVertex(p.first, p.second)
+                                                message = "الایمنت: ${profileDraftVertices.size} رأس"
+                                            }
+                                            return@detectTapGestures
+                                        }
+                                        if (pickCoordinateMode) {
+                                            val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
+                                            pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
+                                            nextPointId++
+                                            message = "نقطه ثبت شد"
+                                            return@detectTapGestures
+                                        }
+                                        // ابزار CAD
+                                        if (cadTool != CadTool.None) {
+                                            applyCadTap(p)
+                                            return@detectTapGestures
+                                        }
+                                        if (measureMode) {
+                                            // همان منطق اندازه
+                                            if (measureA == null || (measureB != null)) {
+                                                measureA = p; measureB = null; measureDragTarget = null
+                                                distanceMsg = "نقطه اول (ذره‌بین)؛ نقطه دوم را لمس کن"
+                                            } else {
+                                                measureB = p
+                                                updateMeasureDistance()
+                                            }
+                                            return@detectTapGestures
+                                        }
+                                        message = String.format(java.util.Locale.US, "E=%.3f N=%.3f", p.first, p.second)
+                                        return@detectTapGestures
+                                    }
                                     if (profilePlacementActive) {
                                         val raw = screenToWorld(tap.x, tap.y)
                                         placeProfileAt(raw.first, raw.second)
@@ -1472,6 +1561,46 @@ if (zoomWindowMode) {
                     drawCircle(Color(0xFF2196F3), 12f, s)
                     drawCircle(Color.White, 5f, s)
                 }
+
+                // ذره‌بین دقیق (لمس طولانی)
+                if (loupeActive && loupeWorld != null) {
+                    val finger = loupeScreen
+                    val r = 56f
+                    val c = Offset(finger.x, (finger.y - 100f).coerceAtLeast(r + 8f))
+                    val zoom = 2.6f
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        addOval(androidx.compose.ui.geometry.Rect(c.x - r, c.y - r, c.x + r, c.y + r))
+                    }
+                    clipPath(path) {
+                        // بزرگنمایی اطراف نقطه لمس
+                        withTransform({
+                            translate(c.x - finger.x * zoom, c.y - finger.y * zoom)
+                            scale(zoom, zoom, pivot = Offset.Zero)
+                        }) {
+                            // شبکه راهنما
+                            drawCircle(Color.White.copy(alpha = 0.08f), r * 3f, finger)
+                            activeDrawings.forEach { drawing ->
+                                drawing.model.lines.take(400).forEach { ln ->
+                                    val a = worldToScreen(ln.x1, ln.y1)
+                                    val b = worldToScreen(ln.x2, ln.y2)
+                                    drawLine(Color(0xFF90CAF9), a, b, 1.2f)
+                                }
+                                drawing.model.circles.take(200).forEach { cir ->
+                                    val ctr = worldToScreen(cir.x, cir.y)
+                                    drawCircle(Color(0xFFA5D6A7), (cir.r * scale).toFloat().coerceIn(1f, 40f), ctr, style = Stroke(1f))
+                                }
+                            }
+                        }
+                    }
+                    drawCircle(Color.White, r, c, style = Stroke(2.5f))
+                    drawLine(Color(0xFFFF5252), Offset(c.x - r, c.y), Offset(c.x + r, c.y), 1.5f)
+                    drawLine(Color(0xFFFF5252), Offset(c.x, c.y - r), Offset(c.x, c.y + r), 1.5f)
+                    // صلیب نقطه ثبت‌شونده
+                    val wp = worldToScreen(loupeWorld!!.first, loupeWorld!!.second)
+                    drawCircle(Color(0xFFFFEB3B), 5f, wp)
+                    drawLine(Color(0xFFFFEB3B), Offset(wp.x - 12f, wp.y), Offset(wp.x + 12f, wp.y), 2f)
+                    drawLine(Color(0xFFFFEB3B), Offset(wp.x, wp.y - 12f), Offset(wp.x, wp.y + 12f), 2f)
+                }
             }
         }
 
@@ -1487,6 +1616,17 @@ if (zoomWindowMode) {
         distanceMsg?.let {
             Surface(shape = RoundedCornerShape(16.dp), color = color, modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)) {
                 Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+            }
+        }
+
+        liveCoordMsg?.let {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Black.copy(alpha = 0.75f),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp, start = 12.dp, end = 12.dp)
+            ) {
+                Text(it, color = Color(0xFFE0E0E0), style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             }
         }
 
