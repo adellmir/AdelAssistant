@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
     private fun captureOpenFile(intent: Intent?) {
         if (intent == null) return
         val action = intent.action ?: return
-        val uri: Uri? = when (action) {
+        val uriNullable: Uri? = when (action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> {
                 @Suppress("DEPRECATION")
@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
                     ?: intent.clipData?.getItemAt(0)?.uri
             }
             else -> null
-        } ?: return
+        }
+        val uri = uriNullable ?: return
 
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: "opened.dxf"
         val lower = name.lowercase()
