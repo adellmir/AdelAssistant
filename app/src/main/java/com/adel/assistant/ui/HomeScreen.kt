@@ -46,6 +46,8 @@ import com.adel.assistant.data.AppMenu
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
+import com.adel.assistant.data.WeatherStore
+import com.adel.assistant.data.WeatherIconKind
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.openNeshanNav
 import com.adel.assistant.ui.screens.ProjectLocationPickerDialog
@@ -65,6 +67,13 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Locale
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Grain
+import androidx.compose.material.icons.outlined.AcUnit
+import androidx.compose.material.icons.outlined.Thunderstorm
+import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Build
@@ -134,6 +143,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
     var clock by remember { mutableStateOf(currentTimeString()) }
     var greeting by remember { mutableStateOf(timeBasedGreeting()) }
+    var weatherSnap by remember { mutableStateOf(WeatherStore.cached()) }
+    var weatherLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        weatherLoading = true
+        weatherSnap = WeatherStore.fetch(context)
+        weatherLoading = false
+    }
+
     var jalali by remember { mutableStateOf(jalaliDateWithWeekday()) }
 
     LaunchedEffect(Unit) {
@@ -238,7 +255,57 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // هواشناسی مینی‌مال — ضربه = گوگل آب‌وهوا
+                    val snap = weatherSnap
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable {
+                                val url = if (snap != null)
+                                    WeatherStore.googleWeatherUrl(snap.lat, snap.lon)
+                                else
+                                    WeatherStore.googleWeatherUrlFallback()
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                } catch (_: Exception) {}
+                            }
+                            .padding(horizontal = 4.dp)
+                    ) {
+                        val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
+                        val icon = when (kind) {
+                            WeatherIconKind.Clear -> Icons.Outlined.WbSunny
+                            WeatherIconKind.Clouds -> Icons.Outlined.Cloud
+                            WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
+                            WeatherIconKind.Snow -> Icons.Outlined.AcUnit
+                            WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
+                            WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
+                            WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
+                        }
+                        val iconTint = when (kind) {
+                            WeatherIconKind.Clear -> Color(0xFFFFB74D)
+                            WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
+                            WeatherIconKind.Snow -> Color(0xFFE0E0E0)
+                            WeatherIconKind.Thunder -> Color(0xFFBA68C8)
+                            else -> TextSecondary
+                        }
+                        Icon(
+                            icon,
+                            contentDescription = snap?.description ?: "هواشناسی",
+                            tint = iconTint,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            when {
+                                snap != null -> String.format(java.util.Locale.US, "%.0f°", snap.tempC)
+                                weatherLoading -> "…"
+                                else -> "—"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     // foreground امن‌تر از adaptive icon است
                     Image(
                         painter = painterResource(id = R.mipmap.ic_launcher_foreground),
