@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.data.SurveyUnits
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -38,7 +40,6 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
-import com.adel.assistant.data.PointConverter
 
 private data class Pt(val name: String, val x: Double, val y: Double, val key: Long = System.nanoTime())
 
@@ -80,7 +81,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
         if (uri != null) {
             runCatching {
                 val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
-                val imported = parsePoints(text, uri.lastPathSegment.orEmpty())
+                val imported = parsePoints(text)
                 if (imported.isEmpty()) throw IllegalArgumentException("هیچ نقطه قابل تشخیصی پیدا نشد")
                 points = imported
                 selectedKeys = imported.map { it.key }.toSet()
@@ -327,7 +328,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                     }
                     val area = abs(signed) / 2.0
                     result =
-                        "مساحت: ${"%.3f".format(area)} مترمربع\nهکتار: ${"%.6f".format(area / 10000.0)} هکتار\nمحیط: ${"%.3f".format(perimeter)} متر"
+                        "${SurveyUnits.formatArea(area)}\nمحیط: ${"%.3f".format(perimeter)} متر"
                 }
             },
             colors = ButtonDefaults.buttonColors(containerColor = color),
@@ -376,12 +377,25 @@ private fun PolygonPreview(points: List<Pt>, color: Color, modifier: Modifier = 
     }
 }
 
-private fun parsePoints(text: String, fileName: String = ""): List<Pt> {
-    val datOrder = fileName.lowercase().endsWith(".dat")
-    var auto = 1
+private fun parsePoints(text: String): List<Pt> {
     return text.lineSequence().mapNotNull { raw ->
-        val sp = PointConverter.parseSurveyLine(raw, datOrder) ?: return@mapNotNull null
-        val name = if (sp.id.isBlank() || sp.id == "P") (auto++).toString() else sp.id
-        Pt(name, sp.x, sp.y)
-    }.toList()
+        val line = raw.trim().replace("\uFEFF", "")
+        if (line.isBlank() || line.startsWith("#") || line.startsWith("//")) return@mapNotNull null
+        val tokens = line.split(Regex("[\\s;]+|,(?=\\s)|,(?=[A-Za-zآ-ی])")).filter { it.isNotBlank() }
+        fun num(s: String) = s.trim().replace(',', '.').toDoubleOrNull()
+        when {
+            tokens.size >= 3 && num(tokens[1]) != null && num(tokens[2]) != null ->
+                Pt(tokens[0], num(tokens[1])!!, num(tokens[2])!!)
+            tokens.size >= 2 && num(tokens[0]) != null && num(tokens[1]) != null ->
+                Pt("", num(tokens[0])!!, num(tokens[1])!!)
+            else -> {
+                val nums = Regex("[-+]?\\d+(?:[.,]\\d+)?")
+                    .findAll(line)
+                    .map { it.value.replace(',', '.').toDoubleOrNull() }
+                    .filterNotNull()
+                    .toList()
+                if (nums.size >= 2) Pt("", nums[0], nums[1]) else null
+            }
+        }
+    }.mapIndexed { i, p -> if (p.name.isBlank()) p.copy(name = (i + 1).toString()) else p }.toList()
 }

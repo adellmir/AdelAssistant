@@ -1,19 +1,8 @@
 package com.adel.assistant.ui.screens
 
 import com.adel.assistant.data.FileExport
-import com.adel.assistant.data.CompassMath
-import com.adel.assistant.data.LocationStore
-import com.adel.assistant.data.rememberCompassHeading
-import com.adel.assistant.ui.CompassDial
-import com.adel.assistant.data.GeoExport
-import com.adel.assistant.data.PointConverter
-import com.adel.assistant.data.Map2Session
-import com.adel.assistant.data.SurveyPoint
-import com.adel.assistant.data.ProfileSurfaceSlot
-import com.adel.assistant.data.ProfileSession
-import com.adel.assistant.data.TopographySession
-import com.adel.assistant.data.DxfLayerInfo
-import com.adel.assistant.data.Map2PointCategory
+import com.adel.assistant.data.SurveyUnits
+import com.adel.assistant.data.DxfPdfExport
 import com.adel.assistant.data.PendingMapOpen
 import com.adel.assistant.ui.PointsSpreadsheet
 import com.adel.assistant.data.GsiPoint
@@ -28,7 +17,6 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -38,7 +26,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -95,61 +82,21 @@ private data class ViewerDrawing(
 )
 
 @Composable
-fun DxfPreviewScreen(
-    color: Color,
-    onBack: () -> Unit,
-    profileMode: String? = null,
-    onOpenTopography: () -> Unit = {},
-    map2Mode: Boolean = false,
-    onOpenProfile: () -> Unit = {},
-    onOpenVolume: () -> Unit = {},
-    onOpenAlign: () -> Unit = {},
-    onOpenArea: () -> Unit = {}
-) {
+fun DxfPreviewScreen(color: Color, onBack: () -> Unit, profileMode: String? = null, onOpenTopography: () -> Unit = {}) {
     val context = LocalContext.current
     var drawings by remember { mutableStateOf<List<ViewerDrawing>>(emptyList()) }
     var nextDrawingId by remember { mutableStateOf(1) }
-    // بازیابی امن ترسیم‌های پروژه — خارج از remember تا کرش نکند
-    LaunchedEffect(Unit) {
-        if (drawings.isNotEmpty()) return@LaunchedEffect
-        val parts = try {
-            Map2Session.projectDxfParts.toList()
-        } catch (_: Exception) {
-            emptyList()
-        }
-        if (parts.isEmpty()) return@LaunchedEffect
-        val restored = mutableListOf<ViewerDrawing>()
-        parts.forEachIndexed { i, (name, dxf) ->
-            try {
-                if (dxf.isBlank()) return@forEachIndexed
-                val model = DxfParser.parse(dxf)
-                if (!model.isEmpty) {
-                    restored += ViewerDrawing(i + 1, name, model)
-                }
-            } catch (_: Throwable) {
-                // نادیده — یک بخش خراب کل نقشه را نخواباند
-            }
-        }
-        if (restored.isNotEmpty()) {
-            drawings = restored
-            nextDrawingId = (restored.maxOfOrNull { it.id } ?: 0) + 1
-        }
-    }
     var message by remember { mutableStateOf("") }
     var profilePlacementModel by remember { mutableStateOf<DxfModel?>(null) }
     var profilePlacementName by remember { mutableStateOf("پروفیل.dxf") }
     var profilePlacementActive by remember { mutableStateOf(false) }
     val profileAlignmentMode = profileMode == "alignment"
     var zoneText by remember { mutableStateOf("40") }
-    val compassHeading = rememberCompassHeading()
-    var showCompass by remember { mutableStateOf(true) }
     var baseMap by remember { mutableStateOf(BaseMap.NONE) }
     var emptyMapColor by remember { mutableStateOf(Color(0xFF202124)) }
     var showEmptyColorPalette by remember { mutableStateOf(false) }
     var showBaseMapDialog by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    var showMap2Points by remember { mutableStateOf(false) }
-    var showMap2Area by remember { mutableStateOf(false) }
     var menuGroup by remember { mutableStateOf<Int?>(null) } // 0..8
     var showOsnapPanel by remember { mutableStateOf(false) }
     var showMyLocPanel by remember { mutableStateOf(false) }
@@ -176,15 +123,9 @@ fun DxfPreviewScreen(
     // —— CAD حرفه‌ای (منوی کرکره‌ای، نه آیکن زیاد) ——
     var showCadPanel by remember { mutableStateOf(false) }
     var showSaveDxfDialog by remember { mutableStateOf(false) }
+    var showPdfExportDialog by remember { mutableStateOf(false) }
+    var pdfScaleText by remember { mutableStateOf("500") }
     var saveDxfName by remember { mutableStateOf("map_edit") }
-    var openedDxfName by remember { mutableStateOf<String?>(null) }
-    var docDirty by remember { mutableStateOf(false) }
-    var showExitSaveDialog by remember { mutableStateOf(false) }
-    var gridCornerBr by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var gridCornerTl by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var showGridParamsDialog by remember { mutableStateOf(false) }
-    var gridStepText by remember { mutableStateOf("10") }
-    var gridTextHeight by remember { mutableStateOf("1") }
     var cadTool by remember { mutableStateOf(CadTool.None) }
     var orthoOn by remember { mutableStateOf(false) }
     var gridOn by remember { mutableStateOf(false) }
@@ -236,13 +177,6 @@ fun DxfPreviewScreen(
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var mapRotationDeg by remember { mutableStateOf(0f) }
-    var crosshairMode by remember { mutableStateOf(false) }
-    var crosshairEditId by remember { mutableStateOf<Int?>(null) }
-    var showGotoDialog by remember { mutableStateOf(false) }
-    var gotoLine by remember { mutableStateOf("") }
-    var gotoZone by remember { mutableStateOf("40") }
-    var gotoSort by remember { mutableStateOf(0) }
     var canvasSize by remember { mutableStateOf(Offset.Zero) }
     var tiles by remember { mutableStateOf<List<TileBmp>>(emptyList()) }
     var fitTrigger by remember { mutableStateOf(0) }
@@ -273,63 +207,16 @@ fun DxfPreviewScreen(
     val activeDrawings = drawings.filter { it.visible }
     val allModels = activeDrawings.map { it.model }
 
-    
-    // همگام‌سازی ترسیم‌ها با پروژهٔ مشترک نقشه
-    LaunchedEffect(drawings) {
-        try {
-            val parts = drawings
-                .filter { !it.name.startsWith("_") }
-                .mapNotNull { dr ->
-                    try {
-                        dr.name to dr.model.toDxfText()
-                    } catch (_: Throwable) {
-                        null
-                    }
-                }
-            Map2Session.projectDxfParts = parts
-            Map2Session.dirty = drawings.isNotEmpty()
-        } catch (_: Throwable) {
-        }
-    }
-
-LaunchedEffect(profileMode) {
+    LaunchedEffect(profileMode) {
         if (profileMode == "placement") {
             ProfileSession.consumePlacement()?.let { (text, name) ->
                 try {
                     val model = DxfParser.parse(text)
                     if (!model.isEmpty) {
+                        profilePlacementModel = model
                         profilePlacementName = name
-                        val center = Map2Session.projectBoundsCenter()
-                        if (center != null) {
-                            val dx = center.first - model.minX
-                            val dy = center.second - model.minY
-                            val placed = model.copy(
-                                lines = model.lines.map {
-                                    it.copy(x1 = it.x1 + dx, y1 = it.y1 + dy, x2 = it.x2 + dx, y2 = it.y2 + dy)
-                                },
-                                circles = model.circles.map {
-                                    it.copy(x = it.x + dx, y = it.y + dy)
-                                },
-                                texts = model.texts.map {
-                                    it.copy(x = it.x + dx, y = it.y + dy)
-                                },
-                                minX = model.minX + dx,
-                                minY = model.minY + dy,
-                                maxX = model.maxX + dx,
-                                maxY = model.maxY + dy
-                            )
-                            drawings = drawings + ViewerDrawing(nextDrawingId, name, placed)
-                            nextDrawingId++
-                            profilePlacementModel = null
-                            profilePlacementActive = false
-                            fitTrigger++
-                            message = "پروفیل نزدیک نقاط پروژه قرار گرفت (ترسیم‌های قبلی حفظ شد)"
-                        } else {
-                            profilePlacementModel = model
-                            profilePlacementActive = true
-                            fitTrigger++
-                            message = "محل قرارگیری پروفیل را روی نقشه انتخاب کن"
-                        }
+                        profilePlacementActive = true
+                        message = "محل قرارگیری پروفیل را روی نقشه انتخاب کن"
                     }
                 } catch (e: Exception) {
                     message = "خطا در آماده‌سازی پروفیل: ${e.message}"
@@ -394,10 +281,6 @@ LaunchedEffect(profileMode) {
                 if (!model.isEmpty) {
                     drawings = drawings + ViewerDrawing(nextDrawingId, name, model)
                     nextDrawingId++
-                    if (openedDxfName == null) {
-                        openedDxfName = name
-                        saveDxfName = name.removeSuffix(".dxf").removeSuffix(".DXF")
-                    }
                     fitTrigger++
                     message = "از خروجی: $name بارگذاری شد"
                 } else {
@@ -429,11 +312,6 @@ LaunchedEffect(profileMode) {
             if (added.isEmpty()) message = "موجودیتی قابل نمایش پیدا نشد"
             else {
                 drawings = drawings + added
-                if (openedDxfName == null && added.isNotEmpty()) {
-                    openedDxfName = added.first().name
-                    saveDxfName = added.first().name.removeSuffix(".dxf").removeSuffix(".DXF")
-                }
-                docDirty = false
                 nextDrawingId += added.size
                 measureA = null; measureB = null; distanceMsg = null
                 fitTrigger++
@@ -459,15 +337,6 @@ LaunchedEffect(profileMode) {
     fun centerOnLatLon(lat: Double, lon: Double, zoom: Int = 12) {
         val (e, n) = UtmGeo.fromLatLon(lat, lon, zone)
         centerOnUtm(e, n, zoom)
-    }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(350)
-        PendingMapGoto.consume()?.let { (e, n, z) ->
-            zoneText = z.toString()
-            centerOnUtm(e, n, 17)
-            message = "برو به: E=${"%.3f".format(java.util.Locale.US, e)} N=${"%.3f".format(java.util.Locale.US, n)}"
-        }
     }
 
     fun readGps() {
@@ -583,84 +452,9 @@ LaunchedEffect(profileMode) {
         offset = Offset(w / 2f - ((minX + maxX) / 2.0 * scale).toFloat(),
                         h / 2f + ((minY + maxY) / 2.0 * scale).toFloat())
     }
-    fun worldToScreen(x: Double, y: Double): Offset {
-        val sx0 = (x * scale + offset.x).toFloat()
-        val sy0 = (-y * scale + offset.y).toFloat()
-        if (mapRotationDeg == 0f || canvasSize.x <= 0f) return Offset(sx0, sy0)
-        val cx = canvasSize.x / 2f
-        val cy = canvasSize.y / 2f
-        val rad = Math.toRadians(mapRotationDeg.toDouble())
-        val cos = kotlin.math.cos(rad).toFloat()
-        val sin = kotlin.math.sin(rad).toFloat()
-        val dx = sx0 - cx
-        val dy = sy0 - cy
-        return Offset(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
-    }
-    fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> {
-        var sx0 = sx
-        var sy0 = sy
-        if (mapRotationDeg != 0f && canvasSize.x > 0f) {
-            val cx = canvasSize.x / 2f
-            val cy = canvasSize.y / 2f
-            val rad = Math.toRadians(-mapRotationDeg.toDouble())
-            val cos = kotlin.math.cos(rad).toFloat()
-            val sin = kotlin.math.sin(rad).toFloat()
-            val dx = sx - cx
-            val dy = sy - cy
-            sx0 = cx + dx * cos - dy * sin
-            sy0 = cy + dx * sin + dy * cos
-        }
-        return ((sx0 - offset.x) / scale).toDouble() to (-((sy0 - offset.y) / scale)).toDouble()
-    }
-    /** مختصات مرکز صفحه (تارگت) با اسنپ ۱ سانتی‌متری به نقاط موجود */
-    fun centerWorldSnapped(): Pair<Double, Double> {
-        if (canvasSize.x <= 0f) return 0.0 to 0.0
-        val raw = screenToWorld(canvasSize.x / 2f, canvasSize.y / 2f)
-        // اسنپ ۱cm به picked / map2 / موجودیت‌ها
-        val snapCm = 0.01
-        var best = raw
-        var bestD = snapCm
-        fun consider(x: Double, y: Double) {
-            val d = kotlin.math.hypot(x - raw.first, y - raw.second)
-            if (d <= bestD) { bestD = d; best = x to y }
-        }
-        pickedPoints.forEach { consider(it.easting, it.northing) }
-        try {
-            Map2Session.allPoints().forEach { consider(it.x, it.y) }
-        } catch (_: Throwable) { }
-        // osnap موجود با آستانه ۱cm برای عارضه
-        val models = activeDrawings.map { it.id to it.model }
-        val snapped = CadEngine.snap(raw.first, raw.second, models, osnap, snapCm.coerceAtLeast(0.01), null)
-        consider(snapped.first, snapped.second)
-        return best
-    }
-    fun nearestPickedId(wx: Double, wy: Double, tol: Double = 0.01): Int? {
-        var bestId: Int? = null
-        var bestD = tol
-        pickedPoints.forEach { p ->
-            val d = kotlin.math.hypot(p.easting - wx, p.northing - wy)
-            if (d <= bestD) { bestD = d; bestId = p.id }
-        }
-        return bestId
-    }
-    fun registerCrosshairPoint() {
-        val p = centerWorldSnapped()
-        val ll = UtmGeo.toLatLon(p.first, p.second, zone)
-        val editId = crosshairEditId
-        if (editId != null) {
-            pickedPoints = pickedPoints.map {
-                if (it.id == editId) it.copy(easting = p.first, northing = p.second, lat = ll.first, lon = ll.second)
-                else it
-            }
-            message = "نقطه $editId ویرایش شد"
-            crosshairEditId = null
-        } else {
-            val id = nextPointId
-            nextPointId++
-            pickedPoints = pickedPoints + PickedPoint(id, p.first, p.second, ll.first, ll.second)
-            message = "نقطه $id ثبت شد"
-        }
-    }
+    fun worldToScreen(x: Double, y: Double) = Offset((x * scale + offset.x).toFloat(), (-y * scale + offset.y).toFloat())
+    fun screenToWorld(sx: Float, sy: Float): Pair<Double, Double> =
+        ((sx - offset.x) / scale).toDouble() to (-((sy - offset.y) / scale)).toDouble()
 
     fun pickedAsGsi(): List<GsiPoint> = pickedPoints.map { p ->
         GsiPoint(id = p.id.toLong(), name = "P${p.id}", e = p.easting, n = p.northing, z = 0.0, code = "")
@@ -714,165 +508,19 @@ LaunchedEffect(profileMode) {
         redoStack = redoStack.dropLast(1)
         message = "Redo"
     }
-
-    fun buildCombinedDxf(): String =
-        drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
-
-    fun saveCombined(nameIn: String): Boolean {
-        val name = nameIn.trim().ifBlank { "map_edit" }.let {
-            if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
-        }
-        val body = buildCombinedDxf()
-        val uri = FileExport.exportTextToDocuments(context, name, body, "application/dxf")
-        if (uri != null) {
-            docDirty = false
-            openedDxfName = name
-            saveDxfName = name.removeSuffix(".dxf").removeSuffix(".DXF")
-            message = "ذخیره شد: $name"
-            return true
-        }
-        message = "خطا در ذخیره DXF"
-        return false
-    }
-
-    fun requestExit() {
-showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیره
-    }
-
-    BackHandler { requestExit() }
-
     fun ensureCadDrawing(): Int {
         val existing = drawings.find { it.name == "_CAD" }
-        if (existing != null) {
-            // لایه GRID را در مدل موجود تضمین کن
-            val m = existing.model
-            if (!m.layers.containsKey("GRID")) {
-                drawings = drawings.map {
-                    if (it.id == existing.id) it.copy(
-                        model = m.copy(layers = (m.layers.toMutableMap().apply {
-                            put("GRID", com.adel.assistant.data.DxfLayerInfo("GRID", 8, true))
-                        }))
-                    ) else it
-                }
-            }
-            return existing.id
-        }
+        if (existing != null) return existing.id
         val empty = DxfModel(emptyList(), emptyList(), emptyList(), linkedMapOf(
-            "CAD" to com.adel.assistant.data.DxfLayerInfo("CAD", 1, true),
-            "GRID" to com.adel.assistant.data.DxfLayerInfo("GRID", 8, true)
+            "CAD" to com.adel.assistant.data.DxfLayerInfo("CAD", 1, true)
         ), 0.0, 0.0, 1.0, 1.0)
         val id = nextDrawingId
         drawings = drawings + ViewerDrawing(id, "_CAD", empty)
         nextDrawingId++
         return id
     }
-    
-    /** ترسیم نقاط دسته‌های نقشه ۲ روی لایهٔ هم‌نام دسته */
-
-    fun placeMap2PointDraw(pts: List<Map2Point>, opts: PointDrawOptions) {
-        if (pts.isEmpty()) {
-            message = "نقطه‌ای برای ترسیم نیست"
-            return
-        }
-        pushUndo()
-        docDirty = true
-        val id = ensureCadDrawing()
-        val h = opts.textSize.coerceAtLeast(0.05)
-        val cross = h * 0.35
-        val aci = opts.colorAci
-        drawings = drawings.map { dr ->
-            if (dr.id != id) return@map dr
-            var m = dr.model
-            val layers = m.layers.toMutableMap()
-            layers["point"] = DxfLayerInfo("point", aci, true)
-            layers["cod"] = DxfLayerInfo("cod", aci, true)
-            layers["high"] = DxfLayerInfo("high", aci, true)
-            layers["POINTS"] = DxfLayerInfo("POINTS", aci, true)
-            val newLines = m.lines.toMutableList()
-            val newTexts = m.texts.toMutableList()
-            pts.forEach { pt ->
-                if (opts.showSymbol) {
-                    newLines += DxfLine(pt.x - cross, pt.y, pt.x + cross, pt.y, "POINTS", aci)
-                    newLines += DxfLine(pt.x, pt.y - cross, pt.x, pt.y + cross, "POINTS", aci)
-                }
-                var row = 0
-                if (opts.showName) {
-                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, pt.name, "point", aci)
-                    row++
-                }
-                if (opts.showCode && pt.code.isNotBlank()) {
-                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, pt.code, "cod", aci)
-                    row++
-                }
-                if (opts.showElev) {
-                    val elev = String.format(java.util.Locale.US, "%.3f", pt.z)
-                    newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * row), h, elev, "high", aci)
-                }
-            }
-            m = m.copy(lines = newLines, texts = newTexts, layers = layers)
-            dr.copy(model = m.recalculatedBounds())
-        }
-        fitTrigger++
-        message = "${pts.size} نقطه ترسیم شد (لایه‌های point/cod/high)"
-    }
-
-    fun placeMap2LineDxf(dxfText: String) {
-        try {
-            val model = DxfParser.parse(dxfText)
-            if (model.isEmpty) {
-                message = "ترسیم خطی خالی بود"
-                return
-            }
-            pushUndo()
-            docDirty = true
-            drawings = drawings + ViewerDrawing(nextDrawingId, "line_codes.dxf", model)
-            nextDrawingId++
-            fitTrigger++
-            message = "ترسیم خطی بر اساس کد ثبت شد"
-        } catch (e: Exception) {
-            message = "خطای ترسیم خطی: ${e.message}"
-        }
-    }
-
-    fun placeMap2CategoriesOnMap(cats: List<Map2PointCategory>) {
-        pushUndo()
-        docDirty = true
-        val id = ensureCadDrawing()
-        drawings = drawings.map { dr ->
-            if (dr.id != id) return@map dr
-            var m = dr.model
-            val layers = m.layers.toMutableMap()
-            val newLines = m.lines.toMutableList()
-            val newTexts = m.texts.toMutableList()
-            // حذف قبلی لایهٔ این دسته‌ها (ساده‌سازی: فقط اضافه می‌کنیم)
-            cats.filter { it.visible && it.points.isNotEmpty() }.forEach { cat ->
-                layers[cat.name] = DxfLayerInfo(cat.name, 3, true)
-                val h = cat.textSize.coerceAtLeast(0.1)
-                val cross = h * 0.35
-                cat.points.forEach { pt ->
-                    if (cat.showSymbol) {
-                        newLines += DxfLine(pt.x - cross, pt.y, pt.x + cross, pt.y, cat.name, 3)
-                        newLines += DxfLine(pt.x, pt.y - cross, pt.x, pt.y + cross, cat.name, 3)
-                    }
-                    val linesTxt = mutableListOf<String>()
-                    if (cat.showName) linesTxt += pt.name
-                    if (cat.showCode && pt.code.isNotBlank()) linesTxt += pt.code
-                    if (cat.showElev) linesTxt += String.format(java.util.Locale.US, "%.3f", pt.z)
-                    linesTxt.forEachIndexed { i, s ->
-                        newTexts += DxfText(pt.x + cross * 1.2, pt.y + h * (1.2 * i), h, s, cat.name, 7)
-                    }
-                }
-            }
-            m = m.copy(lines = newLines, texts = newTexts, layers = layers)
-            dr.copy(model = m.recalculatedBounds())
-        }
-        fitTrigger++
-        message = "نقاط دسته‌ها روی نقشه ثبت شد"
-    }
-
     fun mutateCad(block: (DxfModel) -> DxfModel) {
         pushUndo()
-        docDirty = true
         val id = ensureCadDrawing()
         drawings = drawings.map {
             if (it.id == id) {
@@ -924,8 +572,12 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     distanceMsg = "نقطه دوم فاصله"
                 } else {
                     val a = draftPts[0]
-                    val d = CadEngine.hypot(p.first - a.first, p.second - a.second)
-                    distanceMsg = "فاصله: ${"%.3f".format(java.util.Locale.US, d)} m"
+                    val dE = p.first - a.first
+                    val dN = p.second - a.second
+                    val d = CadEngine.hypot(dE, dN)
+                    val brg = SurveyUnits.bearing(dE, dN)
+                    val az = SurveyUnits.azimuthDeg(dE, dN)
+                    distanceMsg = "فاصله: ${"%.3f".format(java.util.Locale.US, d)} m  |  $brg  |  Az ${"%.2f".format(java.util.Locale.US, az)}°"
                     draftPts = emptyList()
                 }
             }
@@ -933,7 +585,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                 draftPts = draftPts + p
                 if (draftPts.size >= 3) {
                     val ang = CadEngine.angleDeg(draftPts[0], draftPts[1], draftPts[2])
-                    distanceMsg = "زاویه: ${"%.2f".format(java.util.Locale.US, ang)}°"
+                    distanceMsg = "زاویه: ${SurveyUnits.dms(ang)}  (${"%.2f".format(java.util.Locale.US, ang)}°)"
                     draftPts = emptyList()
                 } else distanceMsg = "نقطه ${draftPts.size + 1} از ۳ (رأس وسط)"
             }
@@ -941,7 +593,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                 draftPts = draftPts + p
                 if (draftPts.size >= 3) {
                     val ar = CadEngine.polygonArea(draftPts)
-                    distanceMsg = "مساحت موقت: ${"%.3f".format(java.util.Locale.US, ar)} m² — دوباره بزن برای بستن"
+                    distanceMsg = "مساحت: ${SurveyUnits.formatArea(ar)} — دوباره بزن برای بستن"
                 } else distanceMsg = "رأس ${draftPts.size} — حداقل ۳"
             }
             CadTool.DrawLine -> {
@@ -988,24 +640,6 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     draftPts = emptyList()
                     message = "قوس تقریبی (دو پاره)"
                 } else message = "نقطه ${draftPts.size} از ۳ قوس"
-            }
-            CadTool.DrawGrid -> {
-                when {
-                    gridCornerBr == null -> {
-                        gridCornerBr = p
-                        message = "گوشه راست‌پایین ثبت شد — حالا گوشه چپ‌بالا را لمس کن"
-                    }
-                    gridCornerTl == null -> {
-                        gridCornerTl = p
-                        showGridParamsDialog = true
-                        message = "محدوده گرید مشخص شد — فاصله و اندازه متن را وارد کن"
-                    }
-                    else -> {
-                        gridCornerBr = p
-                        gridCornerTl = null
-                        message = "گوشه راست‌پایین جدید — سپس چپ‌بالا"
-                    }
-                }
             }
             CadTool.DrawText -> {
                 draftPts = listOf(p)
@@ -1166,7 +800,10 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
         val a = measureA; val b = measureB
         if (a != null && b != null) {
             val d = DxfParser.horizontalDistance(a.first, a.second, b.first, b.second)
-            distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر — لمس نزدیک نقطه = کشیدن"
+            val dE = b.first - a.first
+            val dN = b.second - a.second
+            val brg = SurveyUnits.bearing(dE, dN)
+            distanceMsg = "فاصله: ${"%.3f".format(java.util.Locale.US, d)} m | $brg — لمس نزدیک نقطه = کشیدن"
         }
     }
 
@@ -1201,143 +838,6 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
     }
 
     Box(Modifier.fillMaxSize().background(Background)) {
-
-            // —— تارگت مرکزی + نوار ثبت ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
-                // علامت تارگت وسط صفحه
-                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 18f
-                    val gap = 6f
-                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
-                }
-                Surface(
-                    color = Color(0xCC111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
-                            Text("ثبت", color = color, fontSize = 12.sp)
-                        }
-                        TextButton(
-                            onClick = {
-                                if (crosshairEditId != null) {
-                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
-                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairEditId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(
-                                String.format(java.util.Locale.US, "E %.3f", cw.first),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                            Text(
-                                String.format(java.util.Locale.US, "N %.3f", cw.second),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
-            // —— قطب‌نمای چرخش نقشه ——
-            if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color(0xCC222222),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 90.dp)
-                        .size(44.dp)
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .clickable { mapRotationDeg = 0f; message = "چرخش نقشه صفر شد" },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("N", color = Color.Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        // نشان زاویه
-                        Text(
-                            String.format(java.util.Locale.US, "%.0f°", mapRotationDeg),
-                            color = Color.White.copy(0.7f),
-                            fontSize = 8.sp,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp)
-                        )
-                    }
-                }
-            }
-
-
-            if (showCompass) {
-                val hdg = compassHeading.value
-                val targetBearing: Float? = run {
-                    val gps = myLoc
-                    if (gps != null && pickedPoints.isNotEmpty()) {
-                        val (la, lo) = UtmGeo.toLatLon(gps.first, gps.second, zone)
-                        val tp = pickedPoints.last()
-                        LocationStore.distanceAndAzimuth(la, lo, tp.lat, tp.lon).second.toFloat()
-                    } else if (pickedPoints.size >= 2) {
-                        val a = pickedPoints[pickedPoints.size - 2]
-                        val b = pickedPoints.last()
-                        LocationStore.distanceAndAzimuth(a.lat, a.lon, b.lat, b.lon).second.toFloat()
-                    } else null
-                }
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xCC111111),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 56.dp, end = 8.dp)
-                ) {
-                    Column(
-                        Modifier.padding(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CompassDial(
-                            headingDeg = hdg,
-                            targetBearingDeg = targetBearing,
-                            size = 72.dp,
-                            accent = color
-                        )
-                        Text(
-                            String.format(java.util.Locale.US, "%.0f°", hdg),
-                            color = Color.White,
-                            fontSize = 11.sp
-                        )
-                        if (targetBearing != null) {
-                            val turn = CompassMath.turnToTarget(hdg.toDouble(), targetBearing.toDouble())
-                            val t = when {
-                                kotlin.math.abs(turn) < 5 -> "رو به هدف"
-                                turn > 0 -> String.format(java.util.Locale.US, "%.0f° راست", turn)
-                                else -> String.format(java.util.Locale.US, "%.0f° چپ", -turn)
-                            }
-                            Text(t, color = color, fontSize = 10.sp)
-                        }
-                    }
-                }
-            }
-
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = if (baseMap == BaseMap.SATELLITE) Color(0xFF111111) else if (baseMap == BaseMap.NONE) emptyMapColor else Color(0xFF202124)
@@ -1347,14 +847,12 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     .fillMaxSize()
                     .padding(bottom = 76.dp)
                     .pointerInput(Unit) {
-                        detectTransformGestures { centroid, pan, zoom, rotation ->
+                        detectTransformGestures { centroid, pan, zoom, _ ->
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
+                            // Keep the original smooth map gesture. While editing a point,
+                            // the map must stay still so the point can move independently.
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
-                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
-                            if (kotlin.math.abs(rotation) > 1e-4f) {
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
-                            }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -1365,11 +863,6 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                 )
                                 scale = newScale
                             } else offset += pan
-                            // به‌روز تارگت روی نقطه موجود
-                            if (crosshairMode) {
-                                val c = centerWorldSnapped()
-                                crosshairEditId = nearestPickedId(c.first, c.second, 0.01)
-                            }
                         }
                     }
                     .pointerInput(editingPointId, scale) {
@@ -2021,16 +1514,12 @@ if (zoomWindowMode) {
         val glassDark = Color(0xCC1A1F18)
         @Composable
         fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = Color.White, onClick: () -> Unit) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(34.dp).padding(horizontal = 0.dp)) {
-                IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
-                    Icon(icon, label, tint = tint, modifier = Modifier.size(18.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).padding(horizontal = 2.dp)) {
+                IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(22.dp))
                 }
-                Text(label, color = tint.copy(alpha = 0.9f), fontSize = 8.sp, maxLines = 1)
+                Text(label, color = tint.copy(alpha = 0.9f), fontSize = 9.sp, maxLines = 1)
             }
-        }
-        @Composable
-        fun IconSep() {
-            Text("|", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, modifier = Modifier.padding(horizontal = 1.dp))
         }
         fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
         fun exitAllTools() {
@@ -2093,69 +1582,19 @@ if (zoomWindowMode) {
                                 when (menuGroup) {
                                     0 -> { // فایل
                                         GlassIcon(Icons.Filled.FolderOpen, "ورود") { openFile.launch(arrayOf("*/*", "application/dxf", "text/*")); closeMenus() }
-                                        IconSep()
+                                        GlassIcon(Icons.Filled.Terrain, "توپوگرافی") { onOpenTopography(); closeMenus() }
+                                        GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
+                                        GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
                                         GlassIcon(Icons.Filled.Save, "ذخیره") { showSaveDxfDialog = true; closeMenus() }
-                                        if (!map2Mode) {
-                                            GlassIcon(Icons.Filled.Terrain, "توپوگرافی") { onOpenTopography(); closeMenus() }
-                                            IconSep()
-                                            GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
-                                            IconSep()
-                                            GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
-                                        }
+                                        GlassIcon(Icons.Filled.PictureAsPdf, "PDF") { showPdfExportDialog = true; closeMenus() }
                                     }
-                                    10 -> { // نقاط (نقشه ۲)
-                                        GlassIcon(Icons.Filled.NearMe, "برو به") {
-                                            showGotoDialog = true; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
-                                            crosshairMode = !crosshairMode
-                                            message = if (crosshairMode) "تارگت مرکزی فعال — ثبت از مرکز" else "تارگت خاموش"
-                                            closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.FileOpen, "ورود نقاط") {
-                                            showMap2Points = true; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.MyLocation, "مختصات") {
-                                            pickCoordinateMode = true
-                                            message = "نقطه را روی نقشه لمس کن"
-                                            closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.UploadFile, "خروجی") {
-                                            showExportPickedDialog = true; closeMenus()
-                                        }
-                                    }
-                                    11 -> { // سه‌بعدی (نقشه ۲)
-                                        GlassIcon(Icons.Filled.Terrain, "توپوگرافی") {
-                                            // همگام‌سازی نقاط visible به توپو
-                                            val vols = Map2Session.toVolPoints()
-                                            if (vols.size >= 3) TopographySession.updatePoints(vols)
-                                            onOpenTopography(); closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.ShowChart, "پروفیل") {
-                                            run {
-                                            val vols = Map2Session.toVolPoints()
-                                            if (vols.size >= 3) {
-                                                ProfileSession.updateSurfaces(listOf(ProfileSurfaceSlot("سطح", vols)))
-                                            }
-                                        }
-                                            onOpenProfile(); closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.ViewInAr, "احجام") {
-                                            onOpenVolume(); closeMenus()
-                                        }
-                                    }
-                                    1 -> { // مشاهده / نمایش
+                                    1 -> { // مشاهده
                                         GlassIcon(Icons.Filled.ZoomOutMap, "فیت") { fitTrigger++; closeMenus() }
-                                        if (map2Mode) {
-                                            GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
-                                            IconSep()
-                                            GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
-                                        }
                                         GlassIcon(Icons.Filled.Crop, "پنجره") {
                                             zoomWindowMode = true; zoomWindowFirst = null
                                             message = "زوم پنجره: دو گوشه"; closeMenus()
                                         }
-                                        GlassIcon(Icons.Filled.Apps, "گرید", if (gridOn) Color(0xFF81C995) else Color.White) {
+                                        GlassIcon(Icons.Filled.GridOn, "گرید", if (gridOn) Color(0xFF81C995) else Color.White) {
                                             gridOn = !gridOn; message = if (gridOn) "گرید روشن" else "گرید خاموش"; closeMenus()
                                         }
                                         GlassIcon(Icons.Filled.MyLocation, "موقعیت") {
@@ -2184,7 +1623,6 @@ if (zoomWindowMode) {
                                             message = "خطوط را لمس کن"; closeMenus()
                                         }
                                         GlassIcon(Icons.Filled.CropSquare, "مساحت") { showAreaSub = true }
-                                        IconSep()
                                         GlassIcon(Icons.Filled.Place, "مختصات") { showCoordSub = true }
                                     }
                                     3 -> { // ترسیم
@@ -2200,29 +1638,8 @@ if (zoomWindowMode) {
                                         GlassIcon(Icons.Filled.Title, "متن") {
                                             cadTool = CadTool.DrawText; draftPts = emptyList(); measureMode = false; closeMenus(); message = "متن"
                                         }
-                                        GlassIcon(Icons.Filled.Apps, "گرید") {
-                                            cadTool = CadTool.DrawGrid
-                                            gridCornerBr = null; gridCornerTl = null
-                                            draftPts = emptyList(); measureMode = false; closeMenus()
-                                            message = "گرید: اول گوشه راست‌پایین محدوده را لمس کن"
-                                        }
                                     }
                                     4 -> { // ویرایش
-                                        if (map2Mode) {
-                                            GlassIcon(Icons.Filled.Undo, "عقب") { doUndo(); closeMenus() }
-                                            IconSep()
-                                            GlassIcon(Icons.Filled.Redo, "جلو") { doRedo(); closeMenus() }
-                                            IconSep()
-                                            GlassIcon(Icons.Filled.Transform, "الاین") { onOpenAlign(); closeMenus() }
-                                        }
-                                        GlassIcon(Icons.Filled.NearMe, "برو به") {
-                                            showGotoDialog = true; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
-                                            crosshairMode = !crosshairMode
-                                            message = if (crosshairMode) "تارگت مرکزی فعال" else "تارگت خاموش"
-                                            closeMenus()
-                                        }
                                         GlassIcon(Icons.Filled.NearMe, "انتخاب") {
                                             cadTool = CadTool.Select; draftPts = emptyList()
                                             measureMode = false; pathMode = false; areaMode = false; linePickMode = false
@@ -2359,15 +1776,7 @@ if (zoomWindowMode) {
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                     ) {
                         Column(Modifier.padding(4.dp)) {
-                            val mainIcons = if (map2Mode) listOf(
-                                Triple(Icons.Filled.Folder, 0, "فایل"),
-                                Triple(Icons.Filled.Place, 10, "نقاط"),
-                                Triple(Icons.Filled.Create, 3, "ترسیم"),
-                                Triple(Icons.Filled.Straighten, 2, "اندازه"),
-                                Triple(Icons.Filled.Build, 4, "ویرایش"),
-                                Triple(Icons.Filled.ViewInAr, 11, "سه‌بعدی"),
-                                Triple(Icons.Filled.Map, 1, "نمایش")
-                            ) else listOf(
+                            val mainIcons = listOf(
                                 Triple(Icons.Filled.Folder, 0, "فایل"),
                                 Triple(Icons.Filled.Map, 1, "نمایش"),
                                 Triple(Icons.Filled.Straighten, 2, "اندازه"),
@@ -2508,7 +1917,7 @@ if (zoomWindowMode) {
             }
         }
 
-        IconButton(onClick = { requestExit() }, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
+        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
             Icon(Icons.Filled.ArrowBack, "بازگشت", tint = Color.White)
         }
     }
@@ -2845,138 +2254,7 @@ if (zoomWindowMode) {
     }
 
 
-    
-    if (showGridParamsDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showGridParamsDialog = false
-                gridCornerBr = null; gridCornerTl = null
-                cadTool = CadTool.None
-            },
-            title = { Text("پارامتر گرید") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("محورها موازی X/Y و روی مختصات رُند (مضرب فاصله) رسم می‌شوند. لایه: GRID", fontSize = 12.sp)
-                    OutlinedTextField(
-                        gridStepText, { gridStepText = it },
-                        label = { Text("فاصله خطوط گرید (متر)") },
-                        singleLine = true, modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        gridTextHeight, { gridTextHeight = it },
-                        label = { Text("اندازه متن مختصات") },
-                        singleLine = true, modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val br = gridCornerBr; val tl = gridCornerTl
-                    val step = gridStepText.replace(',', '.').toDoubleOrNull() ?: 10.0
-                    val th = gridTextHeight.replace(',', '.').toDoubleOrNull() ?: 1.0
-                    if (br == null || tl == null) {
-                        message = "گوشه‌ها ناقص است"
-                    } else if (step <= 0 || th <= 0) {
-                        message = "فاصله و اندازه متن باید مثبت باشند"
-                    } else {
-                        val (glines, gtexts) = GridBuilder.build(br.first, br.second, tl.first, tl.second, step, th)
-                        mutateCad { m ->
-                            val layers = m.layers.toMutableMap()
-                            layers.putIfAbsent("GRID", com.adel.assistant.data.DxfLayerInfo("GRID", 8, true))
-                            m.copy(
-                                lines = m.lines + glines,
-                                texts = m.texts + gtexts,
-                                layers = layers
-                            )
-                        }
-                        message = "گرید: ${glines.size} خط، ${gtexts.size} متن روی لایه GRID"
-                        cadTool = CadTool.None
-                    }
-                    showGridParamsDialog = false
-                    gridCornerBr = null; gridCornerTl = null
-                }) { Text("اعمال گرید") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showGridParamsDialog = false
-                    gridCornerBr = null; gridCornerTl = null
-                    cadTool = CadTool.None
-                }) { Text("لغو") }
-            }
-        )
-    }
-
-    if (showExitSaveDialog) {
-        AlertDialog(
-            onDismissRequest = { showExitSaveDialog = false },
-            title = { Text("نقشه حفظ شود؟") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("با خروج از نقشه چه کار شود؟", fontSize = 13.sp)
-                    if (openedDxfName != null) {
-                        Text("فایل: $openedDxfName", fontSize = 11.sp, color = Color.Gray)
-                    }
-                }
-            },
-            confirmButton = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = {
-                        // ۱. بله — نقشه در حافظه بماند
-                        showExitSaveDialog = false
-                        docDirty = false
-                        Map2Session.openProject = true
-                        Map2Session.dirty = drawings.isNotEmpty()
-                        onBack()
-                    }) { Text("۱. بله — نقشه بماند") }
-                    TextButton(onClick = {
-                        // ۲. خیر — همه پاک
-                        showExitSaveDialog = false
-                        drawings = emptyList()
-                        docDirty = false
-                        try {
-                            Map2Session.discardProject(context)
-                        } catch (_: Exception) {
-                            Map2Session.projectDxfParts = emptyList()
-                            Map2Session.categories = emptyList()
-                            Map2Session.dirty = false
-                            Map2Session.openProject = false
-                        }
-                        onBack()
-                    }) { Text("۲. خیر — همه چیز پاک شود", color = Color(0xFFC62828)) }
-                    TextButton(onClick = {
-                        // ۳. ذخیره
-                        showExitSaveDialog = false
-                        if (openedDxfName != null) {
-                            if (saveCombined(openedDxfName!!)) onBack()
-                            else showSaveDxfDialog = true
-                        } else {
-                            showSaveDxfDialog = true
-                        }
-                    }) { Text("۳. ذخیره شود") }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExitSaveDialog = false }) { Text("انصراف") }
-            }
-        )
-    }
-
-
-    if (showMap2Points) {
-        Map2PointsDialog(
-            color = color,
-            onDismiss = { showMap2Points = false },
-            onCommitPointDraw = { pts, opts ->
-                placeMap2PointDraw(pts, opts)
-                showMap2Points = false
-            },
-            onCommitLineDraw = { dxf ->
-                placeMap2LineDxf(dxf)
-                showMap2Points = false
-            }
-        )
-    }
-if (showSaveDxfDialog) {
+    if (showSaveDxfDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDxfDialog = false },
             title = { Text("ذخیره DXF") },
@@ -2995,7 +2273,9 @@ if (showSaveDxfDialog) {
                             val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
                                 if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
                             }
-                            saveCombined(name)
+                            val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+                            FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+                            message = "ذخیره شد: $name"
                         } catch (e: Exception) {
                             message = "خطا ذخیره: ${e.message}"
                         }
@@ -3006,10 +2286,10 @@ if (showSaveDxfDialog) {
                             val name = saveDxfName.trim().ifBlank { "map_edit" }.let {
                                 if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
                             }
-                            if (saveCombined(name)) {
-                                PendingMapOpen.setDxf(buildCombinedDxf(), name)
-                                message = "ذخیره و آماده نمایش: $name"
-                            }
+                            val body = drawings.filter { it.visible }.joinToString("") { it.model.toDxfText() }
+                            FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+                            PendingMapOpen.setDxf(body, name)
+                            message = "ذخیره و آماده نمایش: $name"
                         } catch (e: Exception) {
                             message = "خطا: ${e.message}"
                         }
@@ -3021,6 +2301,59 @@ if (showSaveDxfDialog) {
         )
     }
 
+    if (showPdfExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showPdfExportDialog = false },
+            title = { Text("خروجی PDF") },
+            text = {
+                Column {
+                    Text("مقیاس کاغذی 1:N (خالی = جا شدن در صفحه)", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = pdfScaleText,
+                        onValueChange = { pdfScaleText = it },
+                        label = { Text("N مثلاً 500") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        val visible = drawings.filter { it.visible }
+                        if (visible.isEmpty()) {
+                            message = "نقشه‌ای برای PDF نیست"
+                        } else {
+                            val lines = visible.flatMap { it.model.lines }
+                            val circles = visible.flatMap { it.model.circles }
+                            val texts = visible.flatMap { it.model.texts }
+                            val points = visible.flatMap { it.model.points }
+                            val layers = linkedMapOf<String, com.adel.assistant.data.DxfLayerInfo>()
+                            visible.forEach { layers.putAll(it.model.layers) }
+                            val m = com.adel.assistant.data.DxfModel(
+                                lines, circles, texts, layers, 0.0, 0.0, 1.0, 1.0, points
+                            ).recalculatedBounds()
+                            val n = pdfScaleText.trim().toDoubleOrNull()
+                            val name = "map_${System.currentTimeMillis()}.pdf"
+                            val bytes = java.io.ByteArrayOutputStream().use { bos ->
+                                DxfPdfExport.export(m, bos, scaleN = n)
+                                bos.toByteArray()
+                            }
+                            val ok = FileExport.exportBytesToDocuments(context, name, bytes, "application/pdf") != null
+                            message = if (ok) "PDF ذخیره شد: $name" else "خطا ذخیره PDF"
+                        }
+                    } catch (e: Exception) {
+                        message = "خطا PDF: ${e.message}"
+                    }
+                    showPdfExportDialog = false
+                }) { Text("ذخیره PDF") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPdfExportDialog = false }) { Text("لغو") }
+            }
+        )
+    }
+
     if (showCadPanel) {
         AlertDialog(
             onDismissRequest = { showCadPanel = false },
@@ -3029,7 +2362,7 @@ if (showSaveDxfDialog) {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ترسیم", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن", CadTool.DrawGrid to "گرید").forEach { (tool, label) ->
+                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن").forEach { (tool, label) ->
                             FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = label }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
@@ -3165,103 +2498,47 @@ if (showSaveDxfDialog) {
     if (showExportPickedDialog) {
         AlertDialog(
             onDismissRequest = { showExportPickedDialog = false },
-            title = { Text("خروجی مختصات / GIS") },
+            title = { Text("خروجی مختصات") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val map2Count = Map2Session.allPoints().size
-                    Text("انتخابی: ${pickedPoints.size}  |  نقشه۲: $map2Count", fontSize = 12.sp)
-                    Text("فرمت خروجی:", fontSize = 12.sp)
-                    listOf("txt", "gsi", "dxf", "csv", "kml", "gpx").forEach { fmt ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                            Button(
-                                onClick = {
-                                    try {
-                                        if (pickedPoints.isEmpty()) {
-                                            message = "نقطه انتخابی نیست"
-                                            return@Button
-                                        }
-                                        val gsiPts = pickedPoints.map { p ->
-                                            GsiPoint(
-                                                id = p.id.toLong(),
-                                                name = "P${p.id}",
-                                                e = p.easting,
-                                                n = p.northing,
-                                                z = 0.0,
-                                                code = ""
-                                            )
-                                        }
-                                        val survey = GeoExport.surveyFromGsi(gsiPts)
-                                        val z = zone
-                                        val body = when (fmt) {
-                                            "txt" -> GsiParser.toTxt(gsiPts)
-                                            "gsi" -> GsiParser.toGsi(gsiPts)
-                                            "dxf" -> GsiParser.toDxf(gsiPts)
-                                            "csv" -> PointConverter.write(survey, "csv")
-                                            "kml" -> GeoExport.toKml(survey, "picked", z)
-                                            "gpx" -> GeoExport.toGpx(survey, "picked", z)
-                                            else -> GsiParser.toTxt(gsiPts)
-                                        }
-                                        val mime = when (fmt) {
-                                            "dxf" -> "application/dxf"
-                                            "kml" -> "application/vnd.google-earth.kml+xml"
-                                            "gpx" -> "application/gpx+xml"
-                                            "csv" -> "text/csv"
-                                            else -> "text/plain"
-                                        }
-                                        val name = "picked_coords.$fmt"
-                                        val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
-                                        message = if (ok) "ذخیره شد: $name" else "خطا در ذخیره"
-                                    } catch (e: Exception) {
-                                        message = "خطا خروجی: ${e.message}"
+                    Text("${pickedPoints.size} نقطه — فرمت را انتخاب کن")
+                    listOf("txt", "gsi", "dxf", "kml").forEach { fmt ->
+                        Button(
+                            onClick = {
+                                try {
+                                    val gsiPts = pickedPoints.mapIndexed { i, p ->
+                                        GsiPoint(
+                                            id = p.id.toLong(),
+                                            name = "P${p.id}",
+                                            e = p.easting,
+                                            n = p.northing,
+                                            z = 0.0,
+                                            code = ""
+                                        )
                                     }
-                                    showExportPickedDialog = false
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = color)
-                            ) { Text("${fmt.uppercase()} انتخابی", fontSize = 11.sp) }
-
-                            OutlinedButton(
-                                onClick = {
-                                    try {
-                                        val survey = Map2Session.toSurveyPoints()
-                                        if (survey.isEmpty()) {
-                                            message = "نقطه‌ای در نقشه ۲ نیست"
-                                            return@OutlinedButton
-                                        }
-                                        val z = Map2Session.zone
-                                        val alignTrack = if (Map2Session.alignment.size >= 2) {
-                                            listOf(Map2Session.alignment.map {
-                                                SurveyPoint("A", it.x, it.y, 0.0, "alignment")
-                                            })
-                                        } else emptyList()
-                                        val body = when (fmt) {
-                                            "txt" -> PointConverter.write(survey, "txt")
-                                            "gsi" -> PointConverter.write(survey, "gsi")
-                                            "dxf" -> PointConverter.write(survey, "dxf")
-                                            "csv" -> PointConverter.write(survey, "csv")
-                                            "kml" -> GeoExport.toKml(survey, Map2Session.projectName, z, lines = alignTrack)
-                                            "gpx" -> GeoExport.toGpx(survey, Map2Session.projectName, z, tracks = alignTrack)
-                                            else -> PointConverter.write(survey, "txt")
-                                        }
-                                        val mime = when (fmt) {
-                                            "dxf" -> "application/dxf"
-                                            "kml" -> "application/vnd.google-earth.kml+xml"
-                                            "gpx" -> "application/gpx+xml"
-                                            "csv" -> "text/csv"
-                                            else -> "text/plain"
-                                        }
-                                        val safe = Map2Session.projectName.replace(Regex("""[^A-Za-z0-9_\u0600-\u06FF-]+"""), "_").ifBlank { "map2" }
-                                        val name = "${safe}_points.$fmt"
-                                        val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
-                                        message = if (ok) "ذخیره شد: $name (${survey.size} نقطه)" else "خطا در ذخیره"
-                                    } catch (e: Exception) {
-                                        message = "خطا خروجی نقشه۲: ${e.message}"
+                                    val body = when (fmt) {
+                                        "txt" -> GsiParser.toTxt(gsiPts)
+                                        "gsi" -> GsiParser.toGsi(gsiPts)
+                                        "dxf" -> GsiParser.toDxf(gsiPts)
+                                        "kml" -> GsiParser.toKml(gsiPts, "picked")
+                                        else -> GsiParser.toTxt(gsiPts)
                                     }
-                                    showExportPickedDialog = false
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) { Text("${fmt.uppercase()} نقشه۲", fontSize = 11.sp) }
-                        }
+                                    val mime = when (fmt) {
+                                        "dxf" -> "application/dxf"
+                                        "kml" -> "application/vnd.google-earth.kml+xml"
+                                        else -> "text/plain"
+                                    }
+                                    val name = "picked_coords.$fmt"
+                                    val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
+                                    message = if (ok) "ذخیره شد: Documents/AdelAssistant/…/$name" else "خطا در ذخیره"
+                                } catch (e: Exception) {
+                                    message = "خطا خروجی: ${e.message}"
+                                }
+                                showExportPickedDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = color)
+                        ) { Text(fmt.uppercase()) }
                     }
                 }
             },
@@ -3269,91 +2546,6 @@ if (showSaveDxfDialog) {
             dismissButton = { TextButton(onClick = { showExportPickedDialog = false }) { Text("بستن") } }
         )
     }
-
-    if (showGotoDialog) {
-        val map2pts = try { Map2Session.allPoints() } catch (_: Throwable) { emptyList() }
-        val merged = buildList {
-            pickedPoints.forEach { add(SurveyPoint("P${it.id}", it.easting, it.northing, 0.0, "")) }
-            map2pts.forEach { add(it.toSurvey()) }
-        }
-        val sorted = when (gotoSort) {
-            1 -> merged.sortedBy { it.code }
-            2 -> merged.sortedBy { it.z }
-            else -> merged.sortedBy { it.id }
-        }
-        val parsed = CoordGoto.parse(gotoLine)
-        val needZone = parsed?.isUtm == true
-        AlertDialog(
-            onDismissRequest = { showGotoDialog = false },
-            title = { Text("برو به") },
-            text = {
-                Column(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        gotoLine, { gotoLine = it },
-                        label = { Text("مختصات (یک خط)") },
-                        placeholder = { Text("E N یا Lat Lon") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (needZone || (parsed == null && gotoLine.isNotBlank())) {
-                        // اگر UTM تشخیص داده شد زون بپرس
-                    }
-                    if (parsed?.isUtm == true) {
-                        OutlinedTextField(
-                            gotoZone, { gotoZone = it },
-                            label = { Text("زون UTM") },
-                            singleLine = true,
-                            modifier = Modifier.width(120.dp)
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("مرتب:", fontSize = 11.sp)
-                        listOf("شماره" to 0, "کد" to 1, "ارتفاع" to 2).forEach { (lab, v) ->
-                            FilterChip(selected = gotoSort == v, onClick = { gotoSort = v }, label = { Text(lab, fontSize = 10.sp) })
-                        }
-                    }
-                    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                        items(sorted.size) { i ->
-                            val sp = sorted[i]
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(onClick = {
-                                    centerOnUtm(sp.x, sp.y, 17)
-                                    showGotoDialog = false
-                                    message = "برو به ${sp.id}"
-                                }, contentPadding = PaddingValues(4.dp)) {
-                                    Text("برو به", fontSize = 11.sp, color = color)
-                                }
-                                Text(
-                                    "${sp.id}  ${"%.2f".format(java.util.Locale.US, sp.x)}  ${"%.2f".format(java.util.Locale.US, sp.y)}  Z=${"%.2f".format(java.util.Locale.US, sp.z)}  ${sp.code}",
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val pr = CoordGoto.parse(gotoLine) ?: run {
-                        message = "مختصات نامعتبر"
-                        return@TextButton
-                    }
-                    val z = gotoZone.toIntOrNull() ?: zone
-                    val (e, n, zz) = CoordGoto.toUtm(pr, z)
-                    zoneText = zz.toString()
-                    centerOnUtm(e, n, 17)
-                    showGotoDialog = false
-                    message = "برو به مختصات"
-                }) { Text("برو") }
-            },
-            dismissButton = { TextButton(onClick = { showGotoDialog = false }) { Text("بستن") } }
-        )
-    }
-
 
     if (showMapAlignDialog) {
         AlertDialog(
@@ -3534,7 +2726,6 @@ private val emptyBackgroundPalette = listOf(
     Color(0xFF101820), Color(0xFF1B263B), Color(0xFF263238), Color(0xFF37474F), Color(0xFF455A64),
     Color(0xFF546E7A), Color(0xFFECEFF1), Color(0xFFD7CCC8), Color(0xFFE8F5E9), Color(0xFFFFF8E1)
 )
-
 
 private data class PickedPoint(
     val id: Int,
