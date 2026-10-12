@@ -65,6 +65,7 @@ fun ProjectRegisterScreen(
     var name by remember { mutableStateOf("") }
     var locLat by remember { mutableStateOf(0.0) }
     var locLon by remember { mutableStateOf(0.0) }
+    var locLink by remember { mutableStateOf("") }
     var showLocationPicker by remember { mutableStateOf(false) }
     var employer by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
@@ -90,6 +91,9 @@ fun ProjectRegisterScreen(
         amount = ""
         description = ""
         phone = ""
+        locLat = 0.0
+        locLon = 0.0
+        locLink = ""
         editingRow = null
     }
 
@@ -112,6 +116,7 @@ fun ProjectRegisterScreen(
         try {
             locLat = p.lat
             locLon = p.lon
+            locLink = p.neshanLink
         } catch (_: Throwable) {}
         statusMsg = "ویرایش پروژه ردیف ${p.row}"
     }
@@ -151,7 +156,8 @@ fun ProjectRegisterScreen(
             hour = hour.ifBlank { "9" },
             minute = minute.ifBlank { "0" },
             lat = locLat,
-            lon = locLon
+            lon = locLon,
+            neshanLink = locLink
         )
         ProjectStore.save(context, entry)
 
@@ -431,10 +437,13 @@ fun ProjectRegisterScreen(
         ProjectLocationPickerDialog(
             initialLat = locLat,
             initialLon = locLon,
-            onConfirm = { la, lo ->
+            initialLink = locLink,
+            onConfirm = { la, lo, link ->
                 locLat = la
                 locLon = lo
+                if (link.isNotBlank()) locLink = link
                 statusMsg = "موقعیت ثبت شد"
+                showLocationPicker = false
             },
             onDismiss = { showLocationPicker = false }
         )
