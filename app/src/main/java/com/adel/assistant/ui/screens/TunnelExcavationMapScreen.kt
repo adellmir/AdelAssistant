@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -98,6 +100,7 @@ import kotlin.math.tan
 @Composable
 fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     var tunnelPts by remember { mutableStateOf(TunnelReportStore.allPoints(context)) }
@@ -121,6 +124,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showOverlay by remember { mutableStateOf(true) }
     var showEvents by remember { mutableStateOf(TunnelLayerPrefs.showEvents(context)) }
     var infoTunnelPt by remember { mutableStateOf<TunnelReportStore.TunnelPoint?>(null) }
+    var crosshairMode by remember { mutableStateOf(false) }
+    var crosshairEditOverlayId by remember { mutableStateOf<String?>(null) }
+    var crosshairDimId by remember { mutableStateOf<String?>(null) }
     var layerColors by remember { mutableStateOf(TunnelLayerPrefs.loadColors(context)) }
     var colorEditLayer by remember { mutableStateOf<String?>(null) }
     var showBenchmarkDialog by remember { mutableStateOf(false) }
@@ -271,6 +277,105 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         showAddDialog = true
     }
 
+    fun centerWorldRaw(): Pair<Double, Double> {
+        if (canvasSize.x <= 0f) return 0.0 to 0.0
+        return screenToWorld(canvasSize.x / 2f, canvasSize.y / 2f)
+    }
+
+    fun centerWorldSnapped(): Pair<Double, Double> {
+        val raw = centerWorldRaw()
+        var best = raw
+        var bestD = 0.01
+        fun consider(x: Double, y: Double) {
+            val d = kotlin.math.hypot(x - raw.first, y - raw.second)
+            if (d <= bestD) { bestD = d; best = x to y }
+        }
+        tunnelPts.forEach { consider(it.x, it.y) }
+        overlays.forEach { consider(it.x, it.y) }
+        reportPts.forEach { consider(it.x, it.y) }
+        return best
+    }
+
+    fun nearestOverlayId(wx: Double, wy: Double, tol: Double = 0.01): String? {
+        var id: String? = null
+        var best = tol
+        overlays.forEach { o ->
+            val d = kotlin.math.hypot(o.x - wx, o.y - wy)
+            if (d <= best) { best = d; id = o.id }
+        }
+        return id
+    }
+
+    fun registerFromCrosshair() {
+        val (x, y) = centerWorldSnapped()
+        val editId = crosshairEditOverlayId
+        if (editId != null) {
+            MapOverlayStore.delete(context, editId)
+            overlays = MapOverlayStore.all(context)
+            crosshairEditOverlayId = null
+            crosshairDimId = null
+            draftId = null
+        }
+        fillFromNearest(x, y)
+        draftX = formatEn("%.3f", x)
+        draftY = formatEn("%.3f", y)
+        draftD = ""
+        showAddDialog = true
+    }
+
+    fun copyReportText() {
+        val x = draftX.toDoubleOrNullFa() ?: return
+        val y = draftY.toDoubleOrNullFa() ?: return
+        val z = draftZ
+        val km = draftKm
+        val text = buildString {
+            append("موقعیت\n")
+            append(formatEn("X = %.3f\n", x))
+            append(formatEn("Y = %.3f\n", y))
+            append("کیلومتر ")
+            append(km)
+            append("\nعمق ")
+            append(z)
+        }
+        clipboard.setText(AnnotatedString(text))
+        status = "متن گزارش در کلیپ‌بورد کپی شد"
+    }
+
+    fun saveDraftAsEvent() {
+        val x = draftX.toDoubleOrNullFa() ?: return
+        val y = draftY.toDoubleOrNullFa() ?: return
+        val z = draftZ.toDoubleOrNullFa() ?: 0.0
+        val km = draftKm.toDoubleOrNullFa() ?: 0.0
+        val d = draftD.trim()
+        if (d.isBlank()) {
+            status = "مشخصات نقطه الزامی است"; return
+        }
+        val id = draftId ?: MapOverlayStore.nextId(context)
+        MapOverlayStore.upsert(context, MapOverlayPoint(id, x, y, z, d, km, "manual"))
+        overlays = MapOverlayStore.all(context)
+        try {
+            val nearest = TunnelReportStore.findNearestByXy(context, x, y)
+            val baseNo = nearest?.pointNo?.substringBefore(".") ?: km.toString()
+            val no = try {
+                TunnelReportStore.nextSubPointNo(context, baseNo)
+            } catch (_: Throwable) {
+                formatEn("%.0f", km * 1000)
+            }
+            TunnelReportStore.savePoint(
+                context,
+                TunnelReportStore.TunnelPoint(no, x, y, z, km, draftZ, "", d)
+            )
+            tunnelPts = TunnelReportStore.allPoints(context)
+        } catch (e: Exception) {
+            status = "ذخیره جزئی: ${e.message}"
+        }
+        selectedId = id
+        showAddDialog = false
+        crosshairMode = false
+        crosshairDimId = null
+        status = "در اتفاقات تونل ثبت شد"
+    }
+
     fun saveDraft() {
         val x = draftX.toDoubleOrNullFa() ?: return
         val y = draftY.toDoubleOrNullFa() ?: return
@@ -398,7 +503,62 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         )
                     }
                 }
-                AnimatedVisibility(
+                
+            // —— تارگت مرکزی ثبت نقطه ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
+                val inv = if (baseMap != TunnelBaseMap.NONE) Color.White else Color.Black
+                Canvas(Modifier.fillMaxSize()) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { registerFromCrosshair() },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
+                        TextButton(
+                            onClick = {
+                                if (editHintId != null) {
+                                    crosshairEditOverlayId = editHintId
+                                    crosshairDimId = editHintId
+                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairDimId = null
+                                    crosshairEditOverlayId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
+                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+            AnimatedVisibility(
                     visible = menuOpen,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
@@ -443,13 +603,15 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(
                                     onClick = {
-                                        val (cx, cy) = if (canvasSize.x > 0) screenToWorld(canvasSize.x / 2, canvasSize.y / 2)
-                                        else 0.0 to 0.0
-                                        openAddAt(cx, cy)
+                                        crosshairMode = !crosshairMode
+                                        crosshairEditOverlayId = null
+                                        crosshairDimId = null
+                                        menuOpen = false
+                                        status = if (crosshairMode) "تارگت فعال — نقشه را جابجا کنید و ثبت بزنید" else "تارگت خاموش"
                                     },
                                     modifier = Modifier.size(40.dp)
                                 ) {
-                                    Icon(Icons.Outlined.Add, "نقطه دستی", tint = Color.White, modifier = Modifier.size(22.dp))
+                                    Icon(Icons.Outlined.Add, "نقطه", tint = if (crosshairMode) color else Color.White, modifier = Modifier.size(22.dp))
                                 }
                                 Text("نقطه", color = Color.White, fontSize = 9.sp)
                             }
@@ -740,9 +902,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 if (showOverlay) {
                     overlays.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
-                        val col = if (p.id == selectedId) color else Color(0xFFFFB74D)
+                        val base = if (p.id == selectedId) color else Color(0xFFFFB74D)
+                        val col = if (p.id == crosshairDimId) base.copy(alpha = 0.3f) else base
                         drawCircle(col, radius = 10f, center = c)
-                        drawCircle(Color.White, radius = 4f, center = c)
+                        drawCircle(Color.White.copy(alpha = if (p.id == crosshairDimId) 0.3f else 1f), radius = 4f, center = c)
                         if (p.id == selectedId) {
                             drawCircle(col.copy(alpha = 0.35f), radius = 18f, center = c, style = Stroke(width = 2f))
                         }
@@ -759,20 +922,30 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         textAlign = Paint.Align.RIGHT
                     }
                     // نقاط تونل که فیلد type (کد/توضیح) دارند
+                    val codedPx = (0.07f * scale).coerceIn(18f, 56f)
+                    val codedPaint = Paint().apply {
+                        this.color = android.graphics.Color.rgb(0xAB, 0x47, 0xBC)
+                        textSize = codedPx
+                        isAntiAlias = true
+                        typeface = Typeface.DEFAULT_BOLD
+                        textAlign = Paint.Align.RIGHT
+                    }
                     tunnelPts.filter { it.type.isNotBlank() }.forEach { p ->
                         val c = worldToScreen(p.x, p.y)
-                        drawCircle(Color(0xFF43A047), radius = 6f, center = c)
+                        drawCircle(Color(0xFFAB47BC), radius = 6f, center = c)
                         val tx = c.x - 10f
-                        val ty = c.y + hPx * 0.35f
-                        drawContext.canvas.nativeCanvas.drawText(p.type.trim(), tx, ty, eventPaint)
+                        val ty = c.y + codedPx * 0.35f
+                        drawContext.canvas.nativeCanvas.drawText(p.type.trim(), tx, ty, codedPaint)
                     }
-                    // نقاط دستی با فیلد D
                     overlays.filter { it.d.isNotBlank() }.forEach { p ->
+                        val alpha = if (p.id == crosshairDimId) 0.35f else 1f
                         val c = worldToScreen(p.x, p.y)
-                        drawCircle(Color(0xFF43A047), radius = 6f, center = c)
+                        drawCircle(Color(0xFFAB47BC).copy(alpha = alpha), radius = 6f, center = c)
                         val tx = c.x - 10f
-                        val ty = c.y + hPx * 0.35f
-                        drawContext.canvas.nativeCanvas.drawText(p.d.trim(), tx, ty, eventPaint)
+                        val ty = c.y + codedPx * 0.35f
+                        codedPaint.alpha = (255 * alpha).toInt()
+                        drawContext.canvas.nativeCanvas.drawText(p.d.trim(), tx, ty, codedPaint)
+                        codedPaint.alpha = 255
                     }
                     // گزارش روزانه: ریزش / انحراف اگر متن داشته باشند
                     reportPts.forEach { p ->
@@ -1023,24 +1196,59 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     if (showAddDialog) {
+        val x0 = draftX.toDoubleOrNullFa() ?: 0.0
+        val y0 = draftY.toDoubleOrNullFa() ?: 0.0
+        val km0 = draftKm.toDoubleOrNullFa() ?: 0.0
+        val ctxInfo = remember(km0) { TunnelReportStore.kmContext(context, km0) }
+        val nearestEv = tunnelPts.filter { it.type.isNotBlank() }
+            .minByOrNull { kotlin.math.hypot(it.x - x0, it.y - y0) }
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text(if (draftId != null) "ویرایش نقطه" else "نقطه جدید") },
+            title = { Text(if (crosshairDimId != null) "ویرایش اتفاق" else "ثبت نقطه / اتفاق") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(draftX, { draftX = filterNumericInput(it) }, label = { Text("X") }, keyboardOptions = numKb, singleLine = true)
-                    OutlinedTextField(draftY, { draftY = filterNumericInput(it) }, label = { Text("Y") }, keyboardOptions = numKb, singleLine = true)
-                    OutlinedTextField(draftZ, { draftZ = filterNumericInput(it) }, label = { Text("Z (اختلاف تراز)") }, keyboardOptions = numKb, singleLine = true)
-                    OutlinedTextField(draftKm, { draftKm = filterNumericInput(it) }, label = { Text("KM") }, keyboardOptions = numKb, singleLine = true)
-                    OutlinedTextField(draftD, { draftD = it }, label = { Text("D (توضیح — الزامی)") }, singleLine = true)
+                Column(
+                    Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(draftX, { draftX = filterNumericInput(it) }, label = { Text("X") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(draftY, { draftY = filterNumericInput(it) }, label = { Text("Y") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(draftZ, { draftZ = filterNumericInput(it) }, label = { Text("اختلاف تراز") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(draftKm, { draftKm = filterNumericInput(it) }, label = { Text("کیلومتراژ") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                    }
+                    OutlinedTextField(draftD, { draftD = it }, label = { Text("مشخصات نقطه (دستی)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     TextButton(onClick = {
                         val x = draftX.toDoubleOrNullFa() ?: return@TextButton
                         val y = draftY.toDoubleOrNullFa() ?: return@TextButton
                         fillFromNearest(x, y)
-                    }) { Text("محاسبه Z و KM از نزدیک‌ترین نقطه تونل") }
+                    }) { Text("پر کردن از نزدیک‌ترین نقطه تونل") }
+                    val prevS = ctxInfo.prevShaft
+                    val nextS = ctxInfo.nextShaft
+                    val face = ctxInfo.prevReport ?: ctxInfo.nextReport
+                    Text(
+                        buildString {
+                            append("شفت قبل: ")
+                            append(prevS?.let { "${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
+                            append("\nشفت بعد: ")
+                            append(nextS?.let { "${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
+                            append("\nسینه کار: ")
+                            append(face?.let { "${it.extra.ifBlank { it.pointNo }} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
+                            append("\nنزدیک‌ترین اتفاق: ")
+                            append(nearestEv?.let { "${it.type} (نقطه ${it.pointNo})" } ?: "—")
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFFB0BEC5)
+                    )
                 }
             },
-            confirmButton = { TextButton(onClick = { saveDraft() }) { Text("ذخیره") } },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { saveDraftAsEvent() }) { Text("ثبت", color = color) }
+                    TextButton(onClick = { copyReportText() }) { Text("گزارش", color = color) }
+                }
+            },
             dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("انصراف") } }
         )
     }
