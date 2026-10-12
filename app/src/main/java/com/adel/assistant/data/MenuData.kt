@@ -37,10 +37,10 @@ object AppMenu {
         color = WorkPrimary,
         tabs = listOf(
             MenuTab("تونل", listOf(
-                MenuItem("گزارش روزانه", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
-                MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
+                MenuItem("گزارش حفاری", Icons.Filled.Assignment, Routes.SURVEY_TUNNEL_REPORT),
                 MenuItem("نقشه تونل", Icons.Filled.Map, Routes.SURVEY_TUNNEL_MAP),
                 MenuItem("نقاط تونل", Icons.Filled.EventNote, Routes.SURVEY_TUNNEL_EVENTS),
+                MenuItem("نقاط حفاری", Icons.Filled.Place, Routes.SURVEY_TUNNEL_EXCAVATION),
                 MenuItem("پیشرفت", Icons.Filled.Insights, Routes.SURVEY_TUNNEL_STATUS),
                 MenuItem("تسک‌ها", Icons.Filled.CheckCircle, Routes.SURVEY_TUNNEL_TASKS)
             )),

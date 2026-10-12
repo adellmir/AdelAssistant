@@ -1,6 +1,8 @@
 package com.adel.assistant.ui.screens
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Paint
@@ -118,6 +120,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showReport by remember { mutableStateOf(true) }
     var showOverlay by remember { mutableStateOf(true) }
     var showEvents by remember { mutableStateOf(TunnelLayerPrefs.showEvents(context)) }
+    var infoTunnelPt by remember { mutableStateOf<TunnelReportStore.TunnelPoint?>(null) }
     var layerColors by remember { mutableStateOf(TunnelLayerPrefs.loadColors(context)) }
     var colorEditLayer by remember { mutableStateOf<String?>(null) }
     var showBenchmarkDialog by remember { mutableStateOf(false) }
@@ -581,9 +584,20 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                         draftZ = formatEn("%.3f", best!!.z)
                                         draftKm = formatEn("%.3f", best!!.km)
                                     }
-                                } else if (editMode) {
+                                } else {
                                     val (wx, wy) = screenToWorld(pos.x, pos.y)
-                                    openAddAt(wx, wy)
+                                    // لمس نزدیک نقطه تونل (۵۰ سانتی‌متر)
+                                    val near = TunnelReportStore.findNearestByXy(context, wx, wy)
+                                    if (near != null) {
+                                        val dist = kotlin.math.hypot(near.x - wx, near.y - wy)
+                                        if (dist <= 0.50) {
+                                            infoTunnelPt = near
+                                            return@detectTapGestures
+                                        }
+                                    }
+                                    if (editMode) {
+                                        openAddAt(wx, wy)
+                                    }
                                 }
                             }
                         )
@@ -734,7 +748,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                 }
-                // لایه «اتفاقات تونل»: توضیح نقطه سمت چپ — سبز، ۲۰ سانتی‌متر
+                // لایه «اتفاقات تونل»: نقاط کددار/توضیح‌دار + دستی + گزارش
                 if (showEvents) {
                     val hPx = (0.20f * scale).coerceIn(14f, 72f)
                     val eventPaint = Paint().apply {
@@ -743,6 +757,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         isAntiAlias = true
                         typeface = Typeface.DEFAULT_BOLD
                         textAlign = Paint.Align.RIGHT
+                    }
+                    // نقاط تونل که فیلد type (کد/توضیح) دارند
+                    tunnelPts.filter { it.type.isNotBlank() }.forEach { p ->
+                        val c = worldToScreen(p.x, p.y)
+                        drawCircle(Color(0xFF43A047), radius = 6f, center = c)
+                        val tx = c.x - 10f
+                        val ty = c.y + hPx * 0.35f
+                        drawContext.canvas.nativeCanvas.drawText(p.type.trim(), tx, ty, eventPaint)
                     }
                     // نقاط دستی با فیلد D
                     overlays.filter { it.d.isNotBlank() }.forEach { p ->
@@ -1022,6 +1044,58 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("انصراف") } }
         )
     }
+    infoTunnelPt?.let { p ->
+        val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
+        val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)
+        val gmaps = UtmGeo.googleMapsUrl(lat, lon)
+        val neshan = try { UtmGeo.neshanIntentUri(lat, lon) } catch (_: Throwable) {
+            formatEn("https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+        }
+        AlertDialog(
+            onDismissRequest = { infoTunnelPt = null },
+            title = { Text("نقطه ${p.pointNo}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("کیلومتر ${formatEn("%.3f", p.km)}", fontSize = 14.sp)
+                    if (p.type.isNotBlank()) {
+                        Text(p.type, color = Color(0xFF7C8A6B), fontSize = 13.sp)
+                    }
+                    if (p.elevDiff.isNotBlank()) {
+                        Text("اختلاف‌تراز: ${p.elevDiff}", fontSize = 12.sp)
+                    }
+                    if (p.slope.isNotBlank()) {
+                        Text("شیب: ${p.slope}", fontSize = 12.sp)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF1A1A1A),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text(coordTxt, fontSize = 13.sp, color = Color.White)
+                            Text("فاصله لمس ≤ ۵۰ cm", fontSize = 10.sp, color = Color(0xFF7C8A6B))
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            try {
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(gmaps)))
+                            } catch (_: Exception) {}
+                        }) { Text("Google Maps", color = color) }
+                        TextButton(onClick = {
+                            try {
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(neshan)))
+                            } catch (_: Exception) {}
+                        }) { Text("نشان", color = color) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { infoTunnelPt = null }) { Text("بستن") }
+            }
+        )
+    }
+
 }
 
 private enum class TunnelBaseMap(val title: String) {
@@ -1029,6 +1103,7 @@ private enum class TunnelBaseMap(val title: String) {
     SATELLITE("ماهواره‌ای"),
     STREET("نقشه شهری / جاده‌ای")
 }
+
 
 private data class TunnelTileBmp(
     val image: androidx.compose.ui.graphics.ImageBitmap,
