@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference
 object WeatherStore {
 
     /** ← کلید OpenWeather خودت را اینجا بگذار */
-    const val API_KEY: String = "YOUR_OPENWEATHER_API_KEY"
+    const val API_KEY: String = "5c665d6072451330f43584e24c3218b0"
 
     data class Snapshot(
         val tempC: Double,
