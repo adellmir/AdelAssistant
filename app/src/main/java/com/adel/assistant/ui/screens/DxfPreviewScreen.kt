@@ -236,6 +236,13 @@ fun DxfPreviewScreen(
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var mapRotationDeg by remember { mutableStateOf(0f) }
+    var crosshairMode by remember { mutableStateOf(false) }
+    var crosshairEditId by remember { mutableStateOf<Int?>(null) }
+    var showGotoDialog by remember { mutableStateOf(false) }
+    var gotoLine by remember { mutableStateOf("") }
+    var gotoZone by remember { mutableStateOf("40") }
+    var gotoSort by remember { mutableStateOf(0) }
     var canvasSize by remember { mutableStateOf(Offset.Zero) }
     var tiles by remember { mutableStateOf<List<TileBmp>>(emptyList()) }
     var fitTrigger by remember { mutableStateOf(0) }

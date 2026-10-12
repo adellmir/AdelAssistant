@@ -55,19 +55,18 @@ object CoordGoto {
 
 /** صفحه‌نقشه این مختصات را مصرف می‌کند و مرکز می‌کند */
 object PendingMapGoto {
-    var easting by androidx.compose.runtime.mutableStateOf<Double?>(null)
-        private set
-    var northing by androidx.compose.runtime.mutableStateOf<Double?>(null)
-        private set
-    var zone by androidx.compose.runtime.mutableStateOf(UtmGeo.DEFAULT_ZONE)
-        private set
+    @Volatile private var easting: Double? = null
+    @Volatile private var northing: Double? = null
+    @Volatile private var zone: Int = UtmGeo.DEFAULT_ZONE
 
+    @Synchronized
     fun set(e: Double, n: Double, z: Int = UtmGeo.DEFAULT_ZONE) {
         easting = e
         northing = n
         zone = z.coerceIn(1, 60)
     }
 
+    @Synchronized
     fun consume(): Triple<Double, Double, Int>? {
         val e = easting ?: return null
         val n = northing ?: return null
