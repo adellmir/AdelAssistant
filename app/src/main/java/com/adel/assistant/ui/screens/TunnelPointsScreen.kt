@@ -75,7 +75,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
             pointNo = no
             results = TunnelReportStore.allPoints(context).filter { it.pointNo == no || it.pointNo.contains(no) }
             results.firstOrNull()?.let { p ->
-                km = formatEn(p.km); x = formatEn(p.x); y = formatEn(p.y); z = formatEn(p.z)
+                km = formatEn("%.4f", p.km); x = formatEn("%.4f", p.x); y = formatEn("%.4f", p.y); z = formatEn("%.4f", p.z)
                 elevDiff = p.elevDiff; slope = p.slope; description = p.type
                 contextKm = p.km
             }
@@ -88,7 +88,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                 if (near != null) {
                     results = listOf(near)
                     pointNo = near.pointNo
-                    x = formatEn(near.x); y = formatEn(near.y); z = formatEn(near.z)
+                    x = formatEn("%.4f", near.x); y = formatEn("%.4f", near.y); z = formatEn("%.4f", near.z)
                     elevDiff = near.elevDiff; slope = near.slope; description = near.type
                     contextKm = near.km
                 }
