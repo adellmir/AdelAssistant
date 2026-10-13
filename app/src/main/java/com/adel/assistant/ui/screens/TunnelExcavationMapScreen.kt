@@ -309,26 +309,20 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun registerFromCrosshair() {
-        try {
-            val (x, y) = centerWorldSnapped()
-            val editId = crosshairEditOverlayId
-            if (editId != null) {
-                MapOverlayStore.delete(context, editId)
-                overlays = MapOverlayStore.all(context)
-                crosshairEditOverlayId = null
-                // dim می‌ماند تا بعد از ذخیره
-                draftId = null
-            }
+        val (x, y) = centerWorldSnapped()
+        val editId = crosshairEditOverlayId
+        if (editId != null) {
+            MapOverlayStore.delete(context, editId)
+            overlays = MapOverlayStore.all(context)
+            crosshairEditOverlayId = null
+            crosshairDimId = null
             draftId = null
-            fillFromNearest(x, y)
-            draftX = formatEn("%.3f", x)
-            draftY = formatEn("%.3f", y)
-            if (draftD.isBlank()) draftD = ""
-            status = "ثبت موقعیت — مشخصات را وارد کنید"
-            showAddDialog = true
-        } catch (e: Exception) {
-            status = "خطا ثبت: ${e.message}"
         }
+        fillFromNearest(x, y)
+        draftX = formatEn("%.3f", x)
+        draftY = formatEn("%.3f", y)
+        draftD = ""
+        showAddDialog = true
     }
 
     fun copyReportText() {
@@ -631,29 +625,22 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             if (crosshairMode) {
                 val cw = centerWorldSnapped()
                 val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
-                val inv = Color.White
+                val inv = if (baseMap != TunnelBaseMap.NONE) Color.White else Color.Black
                 Canvas(Modifier.fillMaxSize()) {
                     val cx = size.width / 2f
                     val cy = size.height / 2f
-                    // ۳× نسبت به قبل + سفید
-                    val arm = 54f
-                    val gap = 18f
-                    val stroke = 4.5f
-                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke)
-                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke)
-                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke)
-                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke)
-                    drawCircle(inv, radius = 9f, center = Offset(cx, cy), style = Stroke(3.5f))
-                    // سایه ملایم برای دیده شدن روی پس‌زمینه روشن
-                    drawCircle(Color.Black.copy(alpha = 0.25f), radius = 11f, center = Offset(cx, cy), style = Stroke(1.5f))
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
                 }
                 Surface(
                     color = Color(0xCC111111),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp, start = 8.dp, end = 8.dp)
-                        .zIndex(20f)
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp)
                 ) {
                     Row(
                         Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -738,7 +725,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                 if (dimMode) {
                                     val w = screenToWorld(pos.x, pos.y)
                                     if (dimA == null || dimB != null) {
-                                        // شروع دوباره
                                         dimA = w
                                         dimB = null
                                         dimMsg = "نقطه دوم را بزن"
@@ -747,7 +733,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                         val a = dimA!!
                                         val dist = kotlin.math.hypot(w.first - a.first, w.second - a.second)
                                         dimMsg = String.format(java.util.Locale.US, "طول = %.3f m", dist)
-                                        // dimA/dimB نگه داشته می‌شوند تا خط و متن روی نقشه بمانند
+                                        // A و B نگه داشته می‌شوند تا خط و متن روی نقشه بماند
                                     }
                                     return@detectTapGestures
                                 }
@@ -932,7 +918,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
                 // لایه «اتفاقات تونل»: نقاط کددار/توضیح‌دار + دستی + گزارش
                 if (showEvents) {
-                    val hPx = (0.60f * scale).coerceIn(42f, 216f) // ۳× سایز متن اتفاقات
+                    val hPx = (0.20f * scale).coerceIn(14f, 72f)
                     val eventPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47)
                         textSize = hPx
@@ -941,7 +927,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         textAlign = Paint.Align.RIGHT
                     }
                     // نقاط تونل که فیلد type (کد/توضیح) دارند
-                    val codedPx = (0.21f * scale).coerceIn(36f, 120f) // ۳×
+                    val codedPx = (0.07f * scale).coerceIn(18f, 56f)
                     val codedPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0xAB, 0x47, 0xBC)
                         textSize = codedPx
@@ -982,7 +968,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
 
                 // بنچ‌مارک: متن سبز ۲۰؟ ۱۰ سانتی‌متر سمت راست — ردیف۱ نام، ردیف۲ تراز
-                // خط اندازه‌گذاری + متن طول روی خط
+                // خط اندازه‌گذاری + طول روی خط
                 dimA?.let { a ->
                     val sa = worldToScreen(a.first, a.second)
                     drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sa)
@@ -993,7 +979,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         val dist = kotlin.math.hypot(b.first - a.first, b.second - a.second)
                         val mid = Offset((sa.x + sb.x) / 2f, (sa.y + sb.y) / 2f)
                         val label = String.format(java.util.Locale.US, "%.3f m", dist)
-                        // پس‌زمینه متن
                         val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                             setColor(android.graphics.Color.YELLOW)
                             textSize = 34f
@@ -1299,13 +1284,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             onDismissRequest = { infoTunnelPt = null },
             title = { Text("نقطه ${p.pointNo}") },
             text = {
-                val ctxInfo = remember(p.km) { TunnelReportStore.kmContext(context, p.km) }
-                val nearestEv = tunnelPts.filter { it.type.isNotBlank() && it.pointNo != p.pointNo }
-                    .minByOrNull { kotlin.math.hypot(it.x - p.x, it.y - p.y) }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("کیلومتر ${formatEn("%.3f", p.km)}", fontSize = 14.sp)
                     if (p.type.isNotBlank()) {
-                        Text("اتفاق: ${p.type}", color = Color(0xFFCE93D8), fontSize = 13.sp)
+                        Text(p.type, color = Color(0xFF7C8A6B), fontSize = 13.sp)
                     }
                     if (p.elevDiff.isNotBlank()) {
                         Text("اختلاف‌تراز: ${p.elevDiff}", fontSize = 12.sp)
@@ -1313,23 +1295,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     if (p.slope.isNotBlank()) {
                         Text("شیب: ${p.slope}", fontSize = 12.sp)
                     }
-                    val prevS = ctxInfo.prevShaft
-                    val nextS = ctxInfo.nextShaft
-                    val face = ctxInfo.prevReport ?: ctxInfo.nextReport
-                    Text(
-                        buildString {
-                            append("شفت قبل: ")
-                            append(prevS?.let { "${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
-                            append("\nشفت بعد: ")
-                            append(nextS?.let { "${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
-                            append("\nسینه کار: ")
-                            append(face?.let { "${it.extra.ifBlank { it.pointNo }} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
-                            append("\nنزدیک‌ترین اتفاق: ")
-                            append(nearestEv?.let { "${it.type} (نقطه ${it.pointNo} · ${formatEn("%.1f", kotlin.math.hypot(it.x - p.x, it.y - p.y))} m)" } ?: "—")
-                        },
-                        fontSize = 12.sp,
-                        color = Color(0xFFB0BEC5)
-                    )
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = Color(0xFF1A1A1A),

@@ -7,6 +7,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.AcUnit
+import androidx.compose.material.icons.outlined.Thunderstorm
+import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,8 +46,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,9 +57,9 @@ import com.adel.assistant.data.AppMenu
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
+import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.WeatherStore
 import com.adel.assistant.data.WeatherIconKind
-import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.openNeshanNav
 import com.adel.assistant.ui.screens.ProjectLocationPickerDialog
 import com.adel.assistant.data.TaskItem
@@ -73,13 +78,6 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Locale
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.WbSunny
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Grain
-import androidx.compose.material.icons.outlined.AcUnit
-import androidx.compose.material.icons.outlined.Thunderstorm
-import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Build
@@ -148,7 +146,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     var tabIndex by rememberSaveable { mutableStateOf(0) }
 
     var clock by remember { mutableStateOf(currentTimeString()) }
-    var greeting by remember { mutableStateOf(timeBasedGreeting()) }
     var weatherSnap by remember { mutableStateOf(WeatherStore.cached()) }
     var weatherLoading by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -156,7 +153,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
         weatherSnap = WeatherStore.fetch(context)
         weatherLoading = false
     }
-
+    var greeting by remember { mutableStateOf(timeBasedGreeting()) }
     var jalali by remember { mutableStateOf(jalaliDateWithWeekday()) }
 
     LaunchedEffect(Unit) {
@@ -234,7 +231,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // LTR: چپ=لوگو | راست=ساعت/تاریخ/خوش‌آمد + هواشناسی
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
                         modifier = Modifier
@@ -253,7 +249,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             contentScale = ContentScale.Fit
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        // سمت راست: سه ردیف
+                        // سمت راست: ساعت / تاریخ / خوش‌آمد + هواشناسی
                         Column(modifier = Modifier.weight(1f)) {
                             // ردیف ۱: ساعت
                             Text(
@@ -269,14 +265,12 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    // ردیف ۲: تاریخ
                                     Text(
                                         jalali,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = TextSecondary
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    // ردیف ۳: خوش‌آمد
                                     Text(
                                         "$greeting مهندس پورمیر",
                                         style = MaterialTheme.typography.bodyMedium,
@@ -285,7 +279,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
-                                // هواشناسی سمت راست دو ردیف تاریخ و خوش‌آمد
                                 val snap = weatherSnap
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
