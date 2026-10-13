@@ -234,104 +234,107 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    // ساعت
+                // LTR: چپ=لوگو | راست=ساعت/تاریخ/خوش‌آمد + هواشناسی
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
+                        // سمت چپ: لوگو
                         Image(
                             painter = painterResource(id = R.mipmap.ic_launcher_foreground),
                             contentDescription = "لوگو",
                             modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(SurfaceHigh),
                             contentScale = ContentScale.Fit
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            clock,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    // تاریخ + وقت بخیر | هواشناسی در سمت راست (LTR اجباری)
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    jalali,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = TextSecondary
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    "$greeting مهندس پورمیر",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = WorkPrimary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            val snap = weatherSnap
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        val url = if (snap != null)
-                                            WeatherStore.googleWeatherUrl(snap.lat, snap.lon)
-                                        else
-                                            WeatherStore.googleWeatherUrlFallback()
-                                        try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        } catch (_: Exception) {
-                                        }
-                                    }
-                                    .padding(horizontal = 4.dp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        // سمت راست: سه ردیف
+                        Column(modifier = Modifier.weight(1f)) {
+                            // ردیف ۱: ساعت
+                            Text(
+                                clock,
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            // ردیف ۲ و ۳ + هواشناسی سمت راست
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
-                                val icon = when (kind) {
-                                    WeatherIconKind.Clear -> Icons.Outlined.WbSunny
-                                    WeatherIconKind.Clouds -> Icons.Outlined.Cloud
-                                    WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
-                                    WeatherIconKind.Snow -> Icons.Outlined.AcUnit
-                                    WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
-                                    WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
-                                    WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
+                                Column(modifier = Modifier.weight(1f)) {
+                                    // ردیف ۲: تاریخ
+                                    Text(
+                                        jalali,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = TextSecondary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    // ردیف ۳: خوش‌آمد
+                                    Text(
+                                        "$greeting مهندس پورمیر",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = WorkPrimary,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
-                                val iconTint = when (kind) {
-                                    WeatherIconKind.Clear -> Color(0xFFFFB74D)
-                                    WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
-                                    WeatherIconKind.Snow -> Color(0xFFE0E0E0)
-                                    WeatherIconKind.Thunder -> Color(0xFFBA68C8)
-                                    else -> TextSecondary
+                                Spacer(modifier = Modifier.width(8.dp))
+                                // هواشناسی سمت راست دو ردیف تاریخ و خوش‌آمد
+                                val snap = weatherSnap
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .clickable {
+                                            val url = if (snap != null)
+                                                WeatherStore.googleWeatherUrl(snap.lat, snap.lon)
+                                            else
+                                                WeatherStore.googleWeatherUrlFallback()
+                                            try {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                            } catch (_: Exception) {
+                                            }
+                                        }
+                                        .padding(horizontal = 4.dp)
+                                ) {
+                                    val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
+                                    val icon = when (kind) {
+                                        WeatherIconKind.Clear -> Icons.Outlined.WbSunny
+                                        WeatherIconKind.Clouds -> Icons.Outlined.Cloud
+                                        WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
+                                        WeatherIconKind.Snow -> Icons.Outlined.AcUnit
+                                        WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
+                                        WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
+                                        WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
+                                    }
+                                    val iconTint = when (kind) {
+                                        WeatherIconKind.Clear -> Color(0xFFFFB74D)
+                                        WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
+                                        WeatherIconKind.Snow -> Color(0xFFE0E0E0)
+                                        WeatherIconKind.Thunder -> Color(0xFFBA68C8)
+                                        else -> TextSecondary
+                                    }
+                                    Icon(
+                                        icon,
+                                        contentDescription = snap?.description ?: "هواشناسی",
+                                        tint = iconTint,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Text(
+                                        when {
+                                            snap != null -> String.format(java.util.Locale.US, "%.0f°", snap.tempC)
+                                            weatherLoading -> "…"
+                                            else -> "—"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary
+                                    )
                                 }
-                                Icon(
-                                    icon,
-                                    contentDescription = snap?.description ?: "هواشناسی",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Text(
-                                    when {
-                                        snap != null -> String.format(java.util.Locale.US, "%.0f°", snap.tempC)
-                                        weatherLoading -> "…"
-                                        else -> "—"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary
-                                )
                             }
                         }
                     }

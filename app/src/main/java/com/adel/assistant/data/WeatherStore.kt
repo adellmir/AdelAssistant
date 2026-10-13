@@ -137,9 +137,9 @@ object WeatherStore {
     }
 
     fun googleWeatherUrl(lat: Double, lon: Double): String =
-        String.format(Locale.US, "https://openweathermap.org/weathermap?basemap=map&coords=%.5f,%.5f&zoom=10", lat, lon)
+        String.format(Locale.US, "https://www.google.com/search?q=weather+%.4f,%.4f", lat, lon)
 
-    fun googleWeatherUrlFallback(): String = "https://openweathermap.org/"
+    fun googleWeatherUrlFallback(): String = "https://www.google.com/search?q=weather"
 }
 
 enum class WeatherIconKind {

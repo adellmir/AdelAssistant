@@ -994,21 +994,19 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         val mid = Offset((sa.x + sb.x) / 2f, (sa.y + sb.y) / 2f)
                         val label = String.format(java.util.Locale.US, "%.3f m", dist)
                         // پس‌زمینه متن
-                        val paint = android.graphics.Paint().apply {
-                            color = android.graphics.Color.BLACK
+                        val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            setColor(android.graphics.Color.YELLOW)
                             textSize = 34f
-                            isAntiAlias = true
                             isFakeBoldText = true
                             textAlign = android.graphics.Paint.Align.CENTER
                         }
-                        val tw = paint.measureText(label)
+                        val tw = labelPaint.measureText(label)
                         drawRect(
                             Color.Black.copy(alpha = 0.55f),
                             topLeft = Offset(mid.x - tw / 2f - 8f, mid.y - 28f),
                             size = androidx.compose.ui.geometry.Size(tw + 16f, 36f)
                         )
-                        paint.color = android.graphics.Color.YELLOW
-                        drawContext.canvas.nativeCanvas.drawText(label, mid.x, mid.y + 4f, paint)
+                        drawContext.canvas.nativeCanvas.drawText(label, mid.x, mid.y + 4f, labelPaint)
                     }
                 }
 
