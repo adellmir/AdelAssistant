@@ -86,6 +86,11 @@ import kotlinx.coroutines.withContext
 import com.adel.assistant.data.GpsAverager
 import com.adel.assistant.data.NmeaFix
 import com.adel.assistant.data.NmeaParser
+import com.adel.assistant.data.Measure
+import com.adel.assistant.data.MeasureStore
+import com.adel.assistant.data.MeasureType
+import com.adel.assistant.data.MeasureGeometry
+import com.adel.assistant.data.TrackFilter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,6 +139,15 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var averaging by remember { mutableStateOf(false) }
     var avgSamples by remember { mutableStateOf(listOf<Location>()) }
     var avgSeconds by remember { mutableStateOf(10) }
+
+    // —— فاز ۲: ثبت مسیر / محدوده ——
+    var trackMode by remember { mutableStateOf(false) } // false=مسیر true=محدوده
+    var tracking by remember { mutableStateOf(false) }
+    var trackPaused by remember { mutableStateOf(false) }
+    var trackPts by remember { mutableStateOf(listOf<TrackFilter.Loc>()) }
+    var trackFilter by remember { mutableStateOf(TrackFilter()) }
+    var trackName by remember { mutableStateOf("") }
+    var measures by remember { mutableStateOf(MeasureStore.load(context)) }
 
     // manual convert
     var manLat by remember { mutableStateOf("") }
@@ -228,7 +242,6 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         gpsLost = false
         if (autoZone) zoneText = UtmGeo.zoneFromLon(fix.lon).toString()
         if (averaging) {
-            // نمونه ساختگی برای میانگین
             val loc = Location("nmea").apply {
                 latitude = fix.lat
                 longitude = fix.lon
@@ -236,6 +249,27 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 accuracy = fix.approxAccuracyM
             }
             avgSamples = avgSamples + loc
+        }
+        if (tracking && !trackPaused) {
+            val loc = Location("nmea").apply {
+                latitude = fix.lat
+                longitude = fix.lon
+                altitude = fix.ellipsoidalAlt
+                accuracy = fix.approxAccuracyM
+            }
+            appendTrackFromLocation(loc)
+        }
+    }
+
+
+    // روشن ماندن صفحه حین ثبت مسیر
+    DisposableEffect(tracking) {
+        val act = context as? android.app.Activity
+        if (tracking && act != null) {
+            act.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -275,6 +309,9 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 updateLiveFrom(location)
                 if (averaging) {
                     avgSamples = avgSamples + location
+                }
+                if (tracking && !trackPaused) {
+                    appendTrackFromLocation(location)
                 }
             }
             @Deprecated("Deprecated in Java")
@@ -449,6 +486,60 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         liveIsExternal = false
         extDeviceName = null
         status = "GPS خارجی قطع شد — برگشت به گوشی"
+    }
+
+    fun appendTrackFromLocation(loc: Location) {
+        val z = if (autoZone) UtmGeo.zoneFromLon(loc.longitude) else zone()
+        val (e, n) = UtmGeo.fromLatLon(loc.latitude, loc.longitude, z)
+        val acc = if (loc.hasAccuracy()) loc.accuracy else 25f
+        val sample = TrackFilter.Loc(e, n, acc, System.currentTimeMillis())
+        if (!trackFilter.accept(sample)) return
+        val next = trackPts + sample
+        trackPts = next
+        if (trackMode && trackFilter.shouldAutoClose(trackPts.dropLast(1), sample, 3.0)) {
+            finishTrack(auto = true)
+        }
+    }
+
+    fun startTrack(asField: Boolean) {
+        if (!liveIsExternal && !ensurePermission()) return
+        trackMode = asField
+        tracking = true
+        trackPaused = false
+        trackPts = emptyList()
+        trackFilter = TrackFilter()
+        status = if (asField) "ثبت محدوده — راه بروید؛ نزدیک نقطه اول = بستن خودکار" else "ثبت مسیر — راه بروید"
+    }
+
+    fun finishTrack(auto: Boolean = false) {
+        if (trackPts.size < 2) {
+            status = "نقاط مسیر کافی نیست"
+            tracking = false
+            return
+        }
+        val ring = trackPts.map { it.e to it.n }
+        val type = if (trackMode) MeasureType.FIELD else MeasureType.LINE
+        val z = zone()
+        val m = Measure(
+            id = System.nanoTime().toString(),
+            type = type,
+            name = trackName.ifBlank { if (trackMode) "محدوده${measures.size + 1}" else "مسیر${measures.size + 1}" },
+            zone = z,
+            rings = listOf(ring),
+            source = if (liveIsExternal) "gps-ext" else "gps",
+        )
+        val list = measures + m
+        measures = list
+        MeasureStore.save(context, list)
+        tracking = false
+        trackPaused = false
+        val info = if (type == MeasureType.FIELD)
+            "مساحت ${MeasureGeometry.fmtArea(m.areaM2)} · محیط ${MeasureGeometry.fmtDist(m.lengthM)}"
+        else
+            "طول ${MeasureGeometry.fmtDist(m.lengthM)}"
+        status = (if (auto) "بستن خودکار — " else "") + "ذخیره شد: ${m.name} · $info · ${trackPts.size} رأس"
+        trackPts = emptyList()
+        trackName = ""
     }
 
     fun updateFmtPreview(lat: Double, lon: Double, e: Double, n: Double, z: Int) {
@@ -825,6 +916,79 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 }
             }
 
+
+            // —— فاز ۲: ثبت مسیر / محدوده با راه رفتن ——
+            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ثبت مسیر / محدوده (فاز ۲)", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    OutlinedTextField(
+                        trackName, { trackName = it },
+                        label = { Text("نام (اختیاری)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !tracking
+                    )
+                    if (!tracking) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { startTrack(asField = false) },
+                                colors = ButtonDefaults.buttonColors(containerColor = color),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("شروع مسیر") }
+                            Button(
+                                onClick = { startTrack(asField = true) },
+                                colors = ButtonDefaults.buttonColors(containerColor = color.copy(alpha = 0.9f)),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("شروع محدوده") }
+                        }
+                    } else {
+                        Text(
+                            "${if (trackMode) "محدوده" else "مسیر"} · ${trackPts.size} نقطه · ${MeasureGeometry.fmtDist(MeasureGeometry.pathLength(trackPts.map { it.e to it.n }))}",
+                            color = color, fontWeight = FontWeight.Medium, fontSize = 13.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { trackPaused = !trackPaused }) {
+                                Text(if (trackPaused) "ادامه" else "مکث")
+                            }
+                            Button(
+                                onClick = { finishTrack() },
+                                colors = ButtonDefaults.buttonColors(containerColor = color),
+                                modifier = Modifier.weight(1f)
+                            ) { Text(if (trackMode) "بستن و ذخیره" else "پایان مسیر") }
+                            OutlinedButton(onClick = {
+                                tracking = false; trackPts = emptyList(); trackPaused = false
+                                status = "ثبت مسیر لغو شد"
+                            }) { Text("لغو") }
+                        }
+                    }
+                    if (measures.isNotEmpty()) {
+                        Text("ذخیره‌شده‌ها (${measures.size})", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextSecondary)
+                        measures.takeLast(8).reversed().forEach { m ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "${m.name} · ${m.type.name} · " +
+                                        if (m.type == MeasureType.FIELD) MeasureGeometry.fmtArea(m.areaM2)
+                                        else MeasureGeometry.fmtDist(m.lengthM),
+                                    Modifier.weight(1f),
+                                    fontSize = 12.sp, color = TextPrimary
+                                )
+                                IconButton(onClick = {
+                                    measures = measures.filter { it.id != m.id }
+                                    MeasureStore.save(context, measures)
+                                    status = "حذف شد: ${m.name}"
+                                }, modifier = Modifier.size(28.dp)) {
+                                    Icon(Icons.Filled.Delete, null, tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
             // —— برو به روی نقشه ——
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1189,6 +1353,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
 }
 
 
+@Composable
 private fun PointRow(
     p: LocationPoint,
     color: Color,

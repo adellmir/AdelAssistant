@@ -109,9 +109,10 @@ object NmeaParser {
                     .getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
                     .invoke(device, 1) as BluetoothSocket
             }
-            sock.connect()
-            BufferedReader(InputStreamReader(sock.inputStream)).use { reader ->
-                while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+            val s = sock ?: return@withContext Result.failure(IllegalStateException("socket null"))
+            s.connect()
+            BufferedReader(InputStreamReader(s.inputStream)).use { reader ->
+                while (currentCoroutineContext().isActive) {
                     val line = reader.readLine() ?: break
                     if (!onLine(line.trim())) break
                 }
