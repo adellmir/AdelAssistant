@@ -625,17 +625,19 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             if (crosshairMode) {
                 val cw = centerWorldSnapped()
                 val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
-                val inv = if (baseMap != TunnelBaseMap.NONE) Color.White else Color.Black
+                val inv = Color.White
                 Canvas(Modifier.fillMaxSize()) {
                     val cx = size.width / 2f
                     val cy = size.height / 2f
-                    val arm = 18f
-                    val gap = 6f
-                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
+                    val arm = 54f
+                    val gap = 18f
+                    val stroke = 4.5f
+                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke)
+                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke)
+                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke)
+                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke)
+                    drawCircle(inv, radius = 9f, center = Offset(cx, cy), style = Stroke(3.5f))
+                    drawCircle(Color.Black.copy(alpha = 0.25f), radius = 11f, center = Offset(cx, cy), style = Stroke(1.5f))
                 }
                 Surface(
                     color = Color(0xCC111111),
@@ -723,7 +725,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         detectTapGestures(
                             onTap = { pos ->
                                 if (dimMode) {
-                                    val w = screenToWorld(pos.x, pos.y)
+                                    val w = if (crosshairMode) centerWorldSnapped() else screenToWorld(pos.x, pos.y)
                                     if (dimA == null || dimB != null) {
                                         dimA = w
                                         dimB = null
@@ -918,7 +920,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
                 // لایه «اتفاقات تونل»: نقاط کددار/توضیح‌دار + دستی + گزارش
                 if (showEvents) {
-                    val hPx = (0.20f * scale).coerceIn(14f, 72f)
+                    val hPx = (0.60f * scale).coerceIn(42f, 216f) // ۳× متن اتفاقات بنفش
                     val eventPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47)
                         textSize = hPx
@@ -927,7 +929,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         textAlign = Paint.Align.RIGHT
                     }
                     // نقاط تونل که فیلد type (کد/توضیح) دارند
-                    val codedPx = (0.07f * scale).coerceIn(18f, 56f)
+                    val codedPx = (0.21f * scale).coerceIn(36f, 120f) // ۳×
                     val codedPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0xAB, 0x47, 0xBC)
                         textSize = codedPx

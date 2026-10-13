@@ -151,7 +151,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     var weatherLoading by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         weatherLoading = true
-        weatherSnap = WeatherStore.fetch(context)
+        weatherSnap = WeatherStore.fetch(context, force = true)
         weatherLoading = false
     }
     var greeting by remember { mutableStateOf(timeBasedGreeting()) }

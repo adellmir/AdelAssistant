@@ -87,7 +87,8 @@ object WeatherStore {
     suspend fun fetch(context: Context, force: Boolean = false): Snapshot? = withContext(Dispatchers.IO) {
         if (!force) cached()?.let { return@withContext it }
         if (API_KEY.isBlank() || API_KEY.startsWith("YOUR_")) return@withContext null
-        val ll = lastKnownLatLon(context) ?: return@withContext null
+        // اگر GPS نبود، تهران — تا دما همیشه نمایش داده شود
+        val ll = lastKnownLatLon(context) ?: (35.6892 to 51.3890)
         val (lat, lon) = ll
         val url = String.format(
             Locale.US,
@@ -118,6 +119,7 @@ object WeatherStore {
             )
             saveLastLocation(context, lat, lon)
         cache.set(snap)
+            return@withContext snap
             snap
         } catch (_: Exception) {
             null

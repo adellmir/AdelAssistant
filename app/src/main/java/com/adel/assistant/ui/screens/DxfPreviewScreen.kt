@@ -248,9 +248,10 @@ fun DxfPreviewScreen(
     var mapAlignPick by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var gotoMarker by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var mapRotationDeg by remember { mutableStateOf(0f) }
+    var mapRotationDeg by remember { mutableStateOf(0f) } // همیشه ۰ — چرخش غیرفعال
     var crosshairMode by remember { mutableStateOf(false) }
     var crosshairEditId by remember { mutableStateOf<Int?>(null) }
     var showGotoDialog by remember { mutableStateOf(false) }
@@ -468,6 +469,7 @@ LaunchedEffect(profileMode) {
         val metersPerPixel = (2.0 * Math.PI * 6378137.0 * cos(latRad)) / (256.0 * (1 shl zoom))
         scale = (1.0 / metersPerPixel).toFloat().coerceIn(0.000001f, 5000f)
         offset = Offset(canvasSize.x / 2f - (easting * scale).toFloat(), canvasSize.y / 2f + (northing * scale).toFloat())
+        gotoMarker = easting to northing
     }
 
     fun centerOnLatLon(lat: Double, lon: Double, zoom: Int = 12) {
@@ -919,7 +921,13 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
         message = "شیء حذف شد — ذخیره را فراموش نکن"
     }
 
-    fun processCadPoint(raw: Pair<Double, Double>) {
+    /** در حالت تارگت همیشه مرکز صفحه؛ وگرنه نقطه لمس */
+    fun pickWorld(sx: Float, sy: Float): Pair<Double, Double> {
+        return if (crosshairMode) centerWorldSnapped() else screenToWorld(sx, sy)
+    }
+
+    fun processCadPoint(rawIn: Pair<Double, Double>) {
+        val raw = if (crosshairMode) centerWorldSnapped() else rawIn
         val ref = draftPts.lastOrNull()
         var p = snapWorld(raw.first, raw.second, ref)
         if (orthoOn && ref != null && cadTool in listOf(CadTool.DrawLine, CadTool.DrawPoly, CadTool.Move, CadTool.Copy)) {
@@ -1351,7 +1359,8 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                 }
             }
             // —— قطب‌نمای چرخش نقشه ——
-            if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
+            if (false && kotlin.math.abs(mapRotationDeg) > 0.5f) { // چرخش حذف شد
+
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = Color(0xCC222222),
@@ -1438,13 +1447,12 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     .padding(bottom = 76.dp)
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, rotation ->
-                            val sw = screenToWorld(centroid.x, centroid.y)
+                            val sw = if (crosshairMode) centerWorldSnapped() else screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
+                            liveCoordMsg = statusXY
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
-                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
-                            if (kotlin.math.abs(rotation) > 1e-4f) {
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
-                            }
+                            // چرخش نقشه غیرفعال — تایل ماهواره با چرخش به‌هم می‌ریزد
+
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -1507,12 +1515,12 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                 },
                                 onTap = { tap ->
                                     if (profilePlacementActive) {
-                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val raw = pickWorld(tap.x, tap.y)
                                         placeProfileAt(raw.first, raw.second)
                                         return@detectTapGestures
                                     }
                                     if (profileAlignmentMode && profileDrawMode) {
-                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val raw = pickWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val last = profileDraftVertices.lastOrNull()
                                         if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.01 / scale.coerceAtLeast(1e-6f))) {
@@ -1522,7 +1530,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                         return@detectTapGestures
                                     }
                                     if (pickCoordinateMode) {
-                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val raw = pickWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
                                         pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
@@ -1536,7 +1544,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                             if (menuOpen) { menuOpen = false; menuGroup = null }
                                             return@detectTapGestures
                                         }
-                                    val raw = screenToWorld(tap.x, tap.y)
+                                    val raw = pickWorld(tap.x, tap.y)
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
                                     mapAlignPick?.let { (rowIdx, side) ->
@@ -1738,8 +1746,7 @@ if (zoomWindowMode) {
                         if (cadTool == CadTool.None) return@pointerInput
                         detectTapGestures(
                             onTap = { tap ->
-                                val raw = screenToWorld(tap.x, tap.y)
-                                processCadPoint(raw)
+                                processCadPoint(pickWorld(tap.x, tap.y))
                             }
                         )
                     }
@@ -2070,6 +2077,16 @@ if (zoomWindowMode) {
                     drawCircle(Color.White, 5f, s)
                 }
 
+                gotoMarker?.let { p ->
+                    val s = worldToScreen(p.first, p.second)
+                    // مارکر «برو به»
+                    drawCircle(Color(0xFFE53935).copy(alpha = 0.3f), 28f, s)
+                    drawCircle(Color(0xFFE53935), 12f, s)
+                    drawCircle(Color.White, 5f, s)
+                    drawLine(Color(0xFFE53935), Offset(s.x, s.y - 22f), Offset(s.x, s.y - 8f), 3f)
+                }
+
+
                 if (loupeActive && loupeWorld != null) {
                     val finger = loupeScreen
                     val r = 56f
@@ -2233,11 +2250,6 @@ if (zoomWindowMode) {
                                         GlassIcon(Icons.Filled.NearMe, "برو به") {
                                             showGotoDialog = true; closeMenus()
                                         }
-                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
-                                            crosshairMode = !crosshairMode
-                                            message = if (crosshairMode) "تارگت مرکزی فعال — ثبت از مرکز" else "تارگت خاموش"
-                                            closeMenus()
-                                        }
                                         GlassIcon(Icons.Filled.FileOpen, "ورود نقاط") {
                                             showMap2Points = true; closeMenus()
                                         }
@@ -2270,7 +2282,14 @@ if (zoomWindowMode) {
                                             onOpenVolume(); closeMenus()
                                         }
                                     }
-                                    1 -> { // مشاهده / نمایش
+                                    1 -> {
+                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
+                                            crosshairMode = !crosshairMode
+                                            message = if (crosshairMode)
+                                                "تارگت فعال: همه انتخاب‌ها روی مرکز صفحه — نقشه را جابجا کنید"
+                                            else "تارگت خاموش"
+                                        }
+ // مشاهده / نمایش
                                         GlassIcon(Icons.Filled.ZoomOutMap, "فیت") { fitTrigger++; closeMenus() }
                                         if (map2Mode) {
                                             GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
@@ -2343,11 +2362,6 @@ if (zoomWindowMode) {
                                         }
                                         GlassIcon(Icons.Filled.NearMe, "برو به") {
                                             showGotoDialog = true; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
-                                            crosshairMode = !crosshairMode
-                                            message = if (crosshairMode) "تارگت مرکزی فعال" else "تارگت خاموش"
-                                            closeMenus()
                                         }
                                         GlassIcon(Icons.Filled.NearMe, "انتخاب") {
                                             cadTool = CadTool.Select; draftPts = emptyList()
