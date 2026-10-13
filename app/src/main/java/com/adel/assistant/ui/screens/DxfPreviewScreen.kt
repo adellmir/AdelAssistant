@@ -1398,16 +1398,24 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                 val cw = centerWorldSnapped()
                 val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
                 // علامت تارگت وسط صفحه
-                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
+                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp).zIndex(30f)) {
                     val cx = size.width / 2f
                     val cy = size.height / 2f
-                    val arm = 18f
-                    val gap = 6f
-                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                    val arm = 52f
+                    val gap = 14f
+                    val stroke = 3.5f
+                    // همیشه سفید با حاشیه تیره برای دیده شدن روی ماهواره و نقشه
+                    val outer = Color.Black.copy(alpha = 0.45f)
+                    val inner = Color.White
+                    listOf(outer to stroke + 2.5f, inner to stroke).forEach { (col, sw) ->
+                        drawLine(col, Offset(cx - arm, cy), Offset(cx - gap, cy), sw)
+                        drawLine(col, Offset(cx + gap, cy), Offset(cx + arm, cy), sw)
+                        drawLine(col, Offset(cx, cy - arm), Offset(cx, cy - gap), sw)
+                        drawLine(col, Offset(cx, cy + gap), Offset(cx, cy + arm), sw)
+                    }
+                    drawCircle(Color.Black.copy(alpha = 0.4f), radius = 10f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
+                    drawCircle(Color.White, radius = 8f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f))
+                    drawCircle(Color(0xFFFF5252), radius = 3.5f, center = Offset(cx, cy))
                 }
                 Surface(
                     color = Color(0xCC111111),

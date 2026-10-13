@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.PendingDailyReport
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -60,6 +62,12 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var day by remember { mutableStateOf(today.third.toString()) }
     var month by remember { mutableStateOf(today.second.toString()) }
     var year by remember { mutableStateOf(today.first.toString()) }
+
+    LaunchedEffect(Unit) {
+        PendingDailyReport.consume()?.let { (y, m, d) ->
+            year = y; month = m; day = d
+        }
+    }
 
     var shaft by remember { mutableStateOf("") }
     var side by remember { mutableStateOf("") }

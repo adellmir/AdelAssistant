@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.PendingTunnelLookup
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -67,6 +69,33 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
     var myLocationResult by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        PendingTunnelLookup.consumePointNo()?.let { no ->
+            pointNo = no
+            results = TunnelReportStore.allPoints(context).filter { it.pointNo == no || it.pointNo.contains(no) }
+            results.firstOrNull()?.let { p ->
+                km = formatEn(p.km); x = formatEn(p.x); y = formatEn(p.y); z = formatEn(p.z)
+                elevDiff = p.elevDiff; slope = p.slope; description = p.type
+                contextKm = p.km
+            }
+        }
+        PendingTunnelLookup.consumeKm()?.let { k ->
+            km = k
+            val kd = k.replace(',', '.').toDoubleOrNull()
+            if (kd != null) {
+                val near = TunnelReportStore.allPoints(context).minByOrNull { kotlin.math.abs(it.km - kd) }
+                if (near != null) {
+                    results = listOf(near)
+                    pointNo = near.pointNo
+                    x = formatEn(near.x); y = formatEn(near.y); z = formatEn(near.z)
+                    elevDiff = near.elevDiff; slope = near.slope; description = near.type
+                    contextKm = near.km
+                }
+            }
+        }
+    }
+
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
