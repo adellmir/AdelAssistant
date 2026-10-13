@@ -11,6 +11,9 @@ enum class CadTool {
     MeasureObject,
     Offset,
     Trim,
+    Mirror,
+    Fillet,
+    Extend,
     DrawLine,
     DrawPoly,
     DrawCircle,
@@ -334,6 +337,11 @@ object CadEngine {
     }
 
     /** خط موازی به فاصله dist؛ سمت با sidePoint مشخص می‌شود */
+    fun offsetLineMultiple(l: DxfLine, dist: Double, count: Int, sidePoint: Pair<Double, Double>): List<DxfLine> {
+        if (count <= 1) return listOf(offsetLine(l, dist, sidePoint))
+        return (1..count).map { k -> offsetLine(l, dist * k, sidePoint) }
+    }
+
     fun offsetLine(l: DxfLine, dist: Double, sidePoint: Pair<Double, Double>): DxfLine {
         val dx = l.x2 - l.x1
         val dy = l.y2 - l.y1
@@ -368,6 +376,134 @@ object CadEngine {
         } else {
             l.copy(x2 = hit.first, y2 = hit.second)
         }
+    }
+
+
+    /** امتداد خط تا برخورد با boundary (در صورت وجود تقاطع خط نامحدود) */
+    fun extendLineTo(l: DxfLine, pick: Pair<Double, Double>, boundary: DxfLine): DxfLine? {
+        val hit = intersectInfinite(l, boundary) ?: return null
+        // کدام سر نزدیک‌تر به pick است و بیرون از سگمنت است؟
+        val onSeg = pointOnSegment(hit.first, hit.second, l.x1, l.y1, l.x2, l.y2, 1e-6)
+        if (onSeg) return null // از قبل روی قطعه است
+        val d1 = hypot(pick.first - l.x1, pick.second - l.y1)
+        val d2 = hypot(pick.first - l.x2, pick.second - l.y2)
+        return if (d1 <= d2) l.copy(x1 = hit.first, y1 = hit.second)
+        else l.copy(x2 = hit.first, y2 = hit.second)
+    }
+
+    fun pointOnSegment(px: Double, py: Double, x1: Double, y1: Double, x2: Double, y2: Double, eps: Double): Boolean {
+        val d = distToSegment(px, py, x1, y1, x2, y2)
+        if (d > eps) return false
+        val minX = min(x1, x2) - eps; val maxX = max(x1, x2) + eps
+        val minY = min(y1, y2) - eps; val maxY = max(y1, y2) + eps
+        return px in minX..maxX && py in minY..maxY
+    }
+
+    /** تقاطع خطوط نامحدود (نه فقط سگمنت) */
+    fun intersectInfinite(a: DxfLine, b: DxfLine): Pair<Double, Double>? {
+        val x1 = a.x1; val y1 = a.y1; val x2 = a.x2; val y2 = a.y2
+        val x3 = b.x1; val y3 = b.y1; val x4 = b.x2; val y4 = b.y2
+        val den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if (abs(den) < 1e-12) return null
+        val t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
+        return (x1 + t * (x2 - x1)) to (y1 + t * (y2 - y1))
+    }
+
+    /**
+     * فیلت ساده: دو خط را تا تقاطع کوتاه/امتداد می‌دهد و یک کمان تقریبی با چند پاره می‌گذارد.
+     * radius <= 0 → فقط گوشه تیز (وصل به تقاطع).
+     */
+    fun filletLines(a: DxfLine, b: DxfLine, radius: Double, segments: Int = 8): Triple<DxfLine, DxfLine, List<DxfLine>>? {
+        val hit = intersectInfinite(a, b) ?: return null
+        val (ix, iy) = hit
+        // نزدیک‌ترین سر هر خط به تقاطع را به تقاطع ببر
+        fun trimToward(l: DxfLine): DxfLine {
+            val d1 = hypot(l.x1 - ix, l.y1 - iy)
+            val d2 = hypot(l.x2 - ix, l.y2 - iy)
+            return if (d1 <= d2) l.copy(x1 = ix, y1 = iy) else l.copy(x2 = ix, y2 = iy)
+        }
+        val ta = trimToward(a)
+        val tb = trimToward(b)
+        if (radius <= 1e-9) return Triple(ta, tb, emptyList())
+        // بردار واحد از تقاطع به سمت سر دیگر
+        fun otherDir(l: DxfLine): Pair<Double, Double> {
+            val fromStart = hypot(l.x1 - ix, l.y1 - iy) < 1e-9
+            val ox = if (fromStart) l.x2 - ix else l.x1 - ix
+            val oy = if (fromStart) l.y2 - iy else l.y1 - iy
+            val n = hypot(ox, oy)
+            if (n < 1e-12) return 1.0 to 0.0
+            return (ox / n) to (oy / n)
+        }
+        val (ux, uy) = otherDir(ta)
+        val (vx, vy) = otherDir(tb)
+        // نقطه شروع/پایان قوس روی هر یال
+        val p1x = ix + ux * radius; val p1y = iy + uy * radius
+        val p2x = ix + vx * radius; val p2y = iy + vy * radius
+        fun setEndNearHit(l: DxfLine, px: Double, py: Double): DxfLine {
+            val d1 = hypot(l.x1 - ix, l.y1 - iy)
+            val d2 = hypot(l.x2 - ix, l.y2 - iy)
+            return if (d1 <= d2) l.copy(x1 = px, y1 = py) else l.copy(x2 = px, y2 = py)
+        }
+        val fa = setEndNearHit(ta, p1x, p1y)
+        val fb = setEndNearHit(tb, p2x, p2y)
+        // قوس تقریبی در صفحه بین p1 و p2 حول مرکز تقریبی
+        val ang1 = atan2(p1y - iy, p1x - ix) // نه دقیق — مرکز فیلت جداست
+        // مرکز فیلت: تقاطع دو خط موازی با فاصله radius
+        val aOff1 = offsetLine(a, radius, (ix + ux) to (iy + uy))
+        val aOff2 = offsetLine(a, radius, (ix - ux) to (iy - uy))
+        val bOff1 = offsetLine(b, radius, (ix + vx) to (iy + vy))
+        val bOff2 = offsetLine(b, radius, (ix - vx) to (iy - vy))
+        val candidates = listOf(
+            intersectInfinite(aOff1, bOff1),
+            intersectInfinite(aOff1, bOff2),
+            intersectInfinite(aOff2, bOff1),
+            intersectInfinite(aOff2, bOff2)
+        ).filterNotNull()
+        // مرکزی که به ix نزدیک‌تر و در زاویه داخلی است
+        val center = candidates.minByOrNull { hypot(it.first - ix, it.second - iy) } ?: return Triple(fa, fb, emptyList())
+        val (cx, cy) = center
+        val a0 = atan2(p1y - cy, p1x - cx)
+        val a1 = atan2(p2y - cy, p2x - cx)
+        var delta = a1 - a0
+        while (delta <= -PI) delta += 2 * PI
+        while (delta > PI) delta -= 2 * PI
+        val n = segments.coerceIn(4, 24)
+        val arcs = ArrayList<DxfLine>()
+        for (i in 0 until n) {
+            val t0 = a0 + delta * i / n
+            val t1 = a0 + delta * (i + 1) / n
+            arcs += DxfLine(
+                cx + radius * cos(t0), cy + radius * sin(t0),
+                cx + radius * cos(t1), cy + radius * sin(t1),
+                a.layer, a.color
+            )
+        }
+        return Triple(fa, fb, arcs)
+    }
+
+    fun mirrorLine(l: DxfLine, axis: DxfLine): DxfLine {
+        fun mir(x: Double, y: Double): Pair<Double, Double> {
+            val (px, py) = projectPointOnSegment(x, y, axis.x1, axis.y1, axis.x2, axis.y2)
+            // تصویر روی خط نامحدود محور
+            val dx = axis.x2 - axis.x1; val dy = axis.y2 - axis.y1
+            val len2 = dx * dx + dy * dy
+            if (len2 < 1e-18) return x to y
+            val t = ((x - axis.x1) * dx + (y - axis.y1) * dy) / len2
+            val qx = axis.x1 + t * dx; val qy = axis.y1 + t * dy
+            return (2 * qx - x) to (2 * qy - y)
+        }
+        val (x1, y1) = mir(l.x1, l.y1)
+        val (x2, y2) = mir(l.x2, l.y2)
+        return l.copy(x1 = x1, y1 = y1, x2 = x2, y2 = y2)
+    }
+
+    fun mirrorCircle(c: DxfCircle, axis: DxfLine): DxfCircle {
+        val dx = axis.x2 - axis.x1; val dy = axis.y2 - axis.y1
+        val len2 = dx * dx + dy * dy
+        if (len2 < 1e-18) return c
+        val t = ((c.x - axis.x1) * dx + (c.y - axis.y1) * dy) / len2
+        val qx = axis.x1 + t * dx; val qy = axis.y1 + t * dy
+        return c.copy(x = 2 * qx - c.x, y = 2 * qy - c.y)
     }
 
     fun translateLine(l: DxfLine, dx: Double, dy: Double) =

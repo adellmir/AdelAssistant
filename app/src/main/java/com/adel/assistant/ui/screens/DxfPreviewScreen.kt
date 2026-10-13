@@ -193,6 +193,12 @@ fun DxfPreviewScreen(
     var showOffsetDistDialog by remember { mutableStateOf(false) }
     var offsetPendingLine by remember { mutableStateOf<CadEntity.Line?>(null) }
     var trimPendingCut by remember { mutableStateOf<CadEntity.Line?>(null) }
+    var extendPendingBoundary by remember { mutableStateOf<CadEntity.Line?>(null) }
+    var filletFirst by remember { mutableStateOf<CadEntity.Line?>(null) }
+    var filletRadiusText by remember { mutableStateOf("0.5") }
+    var showFilletDialog by remember { mutableStateOf(false) }
+    var mirrorAxis by remember { mutableStateOf<CadEntity.Line?>(null) }
+    var offsetCountText by remember { mutableStateOf("1") }
 
     var showExportPickedDialog by remember { mutableStateOf(false) }
     // انتخاب از نقشه برای الاین: rowIndex, side "src"|"dst"
@@ -232,6 +238,9 @@ fun DxfPreviewScreen(
     androidx.compose.runtime.LaunchedEffect(cadTool) {
         if (cadTool != CadTool.Offset) offsetPendingLine = null
         if (cadTool != CadTool.Trim) trimPendingCut = null
+        if (cadTool != CadTool.Extend) extendPendingBoundary = null
+        if (cadTool != CadTool.Fillet) filletFirst = null
+        if (cadTool != CadTool.Mirror) mirrorAxis = null
     }
 
     val activeDrawings = drawings.filter { it.visible }
@@ -780,28 +789,29 @@ fun DxfPreviewScreen(
             }
             CadTool.Offset -> {
                 val dist = offsetDistText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.001) ?: 1.0
+                val count = offsetCountText.toIntOrNull()?.coerceIn(1, 50) ?: 1
                 val maxW = pickToleranceWorld()
                 if (offsetPendingLine == null) {
                     val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                     if (hit is CadEntity.Line) {
                         offsetPendingLine = hit
                         selected = hit
-                        message = "سمت آفست را لمس کن (فاصله ${"%.3f".format(dist)} m)"
+                        message = "سمت آفست را لمس کن (فاصله ${"%.3f".format(dist)} × $count)"
                         distanceMsg = CadEngine.describeEntity(hit)
                     } else {
                         message = "اول یک خط انتخاب کن"
                     }
                 } else {
                     val src = offsetPendingLine!!
-                    val neu = CadEngine.offsetLine(src.line, dist, p)
+                    val neus = CadEngine.offsetLineMultiple(src.line, dist, count, p)
                     pushUndo()
                     drawings = drawings.map { dr ->
                         if (dr.id != src.drawingId) dr
-                        else dr.copy(model = dr.model.copy(lines = dr.model.lines + neu).recalculatedBounds())
+                        else dr.copy(model = dr.model.copy(lines = dr.model.lines + neus).recalculatedBounds())
                     }
-                    message = "آفست انجام شد (${"%.3f".format(dist)} m)"
+                    message = "آفست: $count خط با فاصله ${"%.3f".format(dist)} m"
                     offsetPendingLine = null
-                    distanceMsg = String.format(java.util.Locale.US, "Offset %.3f m", dist)
+                    distanceMsg = message
                 }
             }
             CadTool.Trim -> {
@@ -834,6 +844,116 @@ fun DxfPreviewScreen(
                     }
                     trimPendingCut = null
                 } else message = "یک خط برای Trim انتخاب کن"
+            }
+            CadTool.Extend -> {
+                val maxW = pickToleranceWorld()
+                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                if (extendPendingBoundary == null) {
+                    if (hit is CadEntity.Line) {
+                        extendPendingBoundary = hit
+                        selected = hit
+                        message = "مرز انتخاب شد — خطی که باید امتداد یابد را بزن"
+                    } else message = "اول خط مرزی (Boundary) را انتخاب کن"
+                } else if (hit is CadEntity.Line) {
+                    val boundary = extendPendingBoundary!!.line
+                    val ext = CadEngine.extendLineTo(hit.line, p, boundary)
+                    if (ext == null) {
+                        message = "امتداد ممکن نیست (موازی یا از قبل رسیده)"
+                    } else {
+                        pushUndo()
+                        drawings = drawings.map { dr ->
+                            if (dr.id != hit.drawingId) dr
+                            else {
+                                val lines = dr.model.lines.mapIndexed { i, l ->
+                                    if (i == hit.index) ext else l
+                                }
+                                dr.copy(model = dr.model.copy(lines = lines).recalculatedBounds())
+                            }
+                        }
+                        message = "Extend انجام شد"
+                        distanceMsg = CadEngine.describeEntity(CadEntity.Line(hit.index, ext, hit.drawingId))
+                    }
+                    extendPendingBoundary = null
+                } else message = "یک خط برای Extend انتخاب کن"
+            }
+            CadTool.Fillet -> {
+                val maxW = pickToleranceWorld()
+                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                if (hit !is CadEntity.Line) {
+                    message = "فقط خط برای فیلت"
+                } else if (filletFirst == null) {
+                    filletFirst = hit
+                    selected = hit
+                    message = "خط دوم فیلت را بزن"
+                } else {
+                    val r = filletRadiusText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.5
+                    val a = filletFirst!!
+                    val res = CadEngine.filletLines(a.line, hit.line, r)
+                    if (res == null) {
+                        message = "فیلت ممکن نیست (موازی یا بدون تقاطع)"
+                    } else {
+                        val (fa, fb, arcs) = res
+                        pushUndo()
+                        // هر دو خط ممکن است در یک یا دو drawing باشند
+                        drawings = drawings.map { dr ->
+                            var lines = dr.model.lines
+                            var changed = false
+                            if (dr.id == a.drawingId) {
+                                lines = lines.mapIndexed { i, l -> if (i == a.index) fa else l }
+                                changed = true
+                            }
+                            if (dr.id == hit.drawingId) {
+                                lines = lines.mapIndexed { i, l -> if (i == hit.index) fb else l }
+                                if (dr.id == a.drawingId && a.index == hit.index) {
+                                    // same line picked twice - skip
+                                }
+                                changed = true
+                            }
+                            if (dr.id == a.drawingId || dr.id == hit.drawingId) {
+                                lines = lines + arcs
+                                changed = true
+                            }
+                            if (changed) dr.copy(model = dr.model.copy(lines = lines).recalculatedBounds()) else dr
+                        }
+                        message = if (r > 0) "فیلت با R=${"%.3f".format(r)}" else "گوشه تیز (وصل به تقاطع)"
+                        distanceMsg = message
+                    }
+                    filletFirst = null
+                }
+            }
+            CadTool.Mirror -> {
+                val maxW = pickToleranceWorld()
+                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                if (mirrorAxis == null) {
+                    if (hit is CadEntity.Line) {
+                        mirrorAxis = hit
+                        selected = hit
+                        message = "محور آینه انتخاب شد — شیء را برای آینه بزن"
+                    } else message = "اول محور آینه (یک خط) را انتخاب کن"
+                } else {
+                    val axis = mirrorAxis!!.line
+                    when (hit) {
+                        is CadEntity.Line -> {
+                            val neu = CadEngine.mirrorLine(hit.line, axis)
+                            pushUndo()
+                            drawings = drawings.map { dr ->
+                                if (dr.id != hit.drawingId) dr
+                                else dr.copy(model = dr.model.copy(lines = dr.model.lines + neu).recalculatedBounds())
+                            }
+                            message = "خط آینه شد"
+                        }
+                        is CadEntity.Circle -> {
+                            val neu = CadEngine.mirrorCircle(hit.circle, axis)
+                            pushUndo()
+                            drawings = drawings.map { dr ->
+                                if (dr.id != hit.drawingId) dr
+                                else dr.copy(model = dr.model.copy(circles = dr.model.circles + neu).recalculatedBounds())
+                            }
+                            message = "دایره آینه شد"
+                        }
+                        else -> message = "خط یا دایره را برای آینه انتخاب کن"
+                    }
+                }
             }
             else -> {}
         }
@@ -2532,17 +2652,52 @@ if (zoomWindowMode) {
     }
 
 
-    if (showOffsetDistDialog) {
+
+    if (showFilletDialog) {
         AlertDialog(
-            onDismissRequest = { showOffsetDistDialog = false },
-            title = { Text("فاصله آفست (متر)") },
+            onDismissRequest = { showFilletDialog = false },
+            title = { Text("شعاع فیلت (متر) — صفر = گوشه تیز") },
             text = {
                 OutlinedTextField(
-                    value = offsetDistText,
-                    onValueChange = { offsetDistText = it },
+                    value = filletRadiusText,
+                    onValueChange = { filletRadiusText = it },
                     label = { Text("مثلاً 0.5") },
                     singleLine = true
                 )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showFilletDialog = false
+                    cadTool = CadTool.Fillet
+                    filletFirst = null
+                    message = "فیلت: خط اول را بزن"
+                }) { Text("شروع") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFilletDialog = false }) { Text("لغو") }
+            }
+        )
+    }
+
+    if (showOffsetDistDialog) {
+        AlertDialog(
+            onDismissRequest = { showOffsetDistDialog = false },
+            title = { Text("تنظیم آفست") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = offsetDistText,
+                        onValueChange = { offsetDistText = it },
+                        label = { Text("فاصله (متر)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = offsetCountText,
+                        onValueChange = { offsetCountText = it },
+                        label = { Text("تعداد کپی موازی") },
+                        singleLine = true
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -2666,7 +2821,7 @@ if (zoomWindowMode) {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ترسیم", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن", CadTool.Offset to "آفست", CadTool.Trim to "Trim").forEach { (tool, label) ->
+                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن", CadTool.Offset to "آفست", CadTool.Trim to "Trim", CadTool.Extend to "Extend", CadTool.Fillet to "فیلت", CadTool.Mirror to "آینه").forEach { (tool, label) ->
                             FilterChip(selected = cadTool == tool, onClick = {
                                 draftPts = emptyList(); showCadPanel = false
                                 when (tool) {
@@ -2678,6 +2833,20 @@ if (zoomWindowMode) {
                                         cadTool = CadTool.Trim
                                         trimPendingCut = null
                                         message = "Trim: اول لبه برش را بزن"
+                                    }
+                                    CadTool.Extend -> {
+                                        cadTool = CadTool.Extend
+                                        extendPendingBoundary = null
+                                        message = "Extend: اول مرز را بزن"
+                                    }
+                                    CadTool.Fillet -> {
+                                        showFilletDialog = true
+                                        message = "شعاع فیلت"
+                                    }
+                                    CadTool.Mirror -> {
+                                        cadTool = CadTool.Mirror
+                                        mirrorAxis = null
+                                        message = "آینه: اول محور را بزن"
                                     }
                                     else -> {
                                         cadTool = tool
