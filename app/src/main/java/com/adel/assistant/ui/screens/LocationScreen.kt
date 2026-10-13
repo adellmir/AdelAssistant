@@ -17,6 +17,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +67,26 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.*
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import androidx.compose.foundation.background
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.adel.assistant.data.GpsAverager
+import com.adel.assistant.data.NmeaFix
+import com.adel.assistant.data.NmeaParser
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationScreen(color: Color, onBack: () -> Unit) {
@@ -92,6 +113,22 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var liveAlt by remember { mutableStateOf(0.0) }
     var liveAcc by remember { mutableStateOf(-1f) }
     var liveProvider by remember { mutableStateOf("") }
+    var liveFix by remember { mutableStateOf(-1) }
+    var liveSats by remember { mutableStateOf(0) }
+    var liveHdop by remember { mutableStateOf(-1.0) }
+    var liveIsExternal by remember { mutableStateOf(false) }
+    var liveIsMock by remember { mutableStateOf(false) }
+    var lastGpsMs by remember { mutableStateOf(0L) }
+    var gpsLost by remember { mutableStateOf(false) }
+    /** آستانه دقت قابل قبول (متر) — بدتر از این هشدار/تأیید */
+    var accThreshold by remember { mutableStateOf(10f) }
+    var showAccWarn by remember { mutableStateOf(false) }
+    var pendingCapture by remember { mutableStateOf(false) } // true=once false=avg handled separately
+    var showExtGps by remember { mutableStateOf(false) }
+    var extConnecting by remember { mutableStateOf(false) }
+    var extDeviceName by remember { mutableStateOf<String?>(null) }
+    var extJob by remember { mutableStateOf<Job?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     // averaging
     var averaging by remember { mutableStateOf(false) }
@@ -154,14 +191,78 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         return best
     }
 
-    fun updateLiveFrom(loc: Location) {
+    fun updateLiveFrom(loc: Location, fromExternal: Boolean = false) {
+        // وقتی گیرنده خارجی وصل است، GPS داخلی را نادیده بگیر
+        if (liveIsExternal && !fromExternal) return
         liveLat = loc.latitude
         liveLon = loc.longitude
         liveAlt = if (loc.hasAltitude()) loc.altitude else 0.0
         liveAcc = if (loc.hasAccuracy()) loc.accuracy else -1f
         liveProvider = loc.provider ?: ""
+        liveIsMock = if (Build.VERSION.SDK_INT >= 31) loc.isMock else false
+        if (!fromExternal) {
+            liveFix = -1
+            liveSats = 0
+            liveHdop = -1.0
+            liveIsExternal = false
+        }
+        lastGpsMs = System.currentTimeMillis()
+        gpsLost = false
         if (autoZone) {
             zoneText = UtmGeo.zoneFromLon(loc.longitude).toString()
+        }
+    }
+
+    fun updateLiveFromNmea(fix: NmeaFix) {
+        liveLat = fix.lat
+        liveLon = fix.lon
+        liveAlt = fix.ellipsoidalAlt
+        liveAcc = fix.approxAccuracyM
+        liveProvider = "NMEA"
+        liveFix = fix.fixQuality
+        liveSats = fix.sats
+        liveHdop = fix.hdop
+        liveIsExternal = true
+        liveIsMock = false
+        lastGpsMs = System.currentTimeMillis()
+        gpsLost = false
+        if (autoZone) zoneText = UtmGeo.zoneFromLon(fix.lon).toString()
+        if (averaging) {
+            // نمونه ساختگی برای میانگین
+            val loc = Location("nmea").apply {
+                latitude = fix.lat
+                longitude = fix.lon
+                altitude = fix.ellipsoidalAlt
+                accuracy = fix.approxAccuracyM
+            }
+            avgSamples = avgSamples + loc
+        }
+    }
+
+    // هشدار قطع سیگنال بیش از ۵ ثانیه
+    LaunchedEffect(hasPermission, liveIsExternal) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            if (lastGpsMs > 0 && System.currentTimeMillis() - lastGpsMs > 5000) {
+                if (!gpsLost) {
+                    gpsLost = true
+                    status = "سیگنال GPS قطع شد"
+                    try {
+                        val v = if (Build.VERSION.SDK_INT >= 31) {
+                            (context.getSystemService(VibratorManager::class.java))?.defaultVibrator
+                        } else {
+                            @Suppress("DEPRECATION")
+                            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                        }
+                        if (Build.VERSION.SDK_INT >= 26) {
+                            v?.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            v?.vibrate(120)
+                        }
+                    } catch (_: Exception) { }
+                }
+            }
         }
     }
 
@@ -210,34 +311,76 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             zone = z,
             easting = e,
             northing = n,
-            timeMs = System.currentTimeMillis()
+            timeMs = System.currentTimeMillis(),
+            fix = liveFix,
+            sats = liveSats,
+            hdop = liveHdop,
+            isExternal = liveIsExternal,
+            isMock = liveIsMock
         )
+    }
+
+    fun accQualityColor(): Color {
+        val acc = liveAcc
+        val argb = NmeaParser.qualityColorArgb(acc, liveFix, if (liveHdop > 0) liveHdop else 99.0)
+        return Color(argb)
+    }
+
+    fun fixLabel(): String = when (liveFix) {
+        0 -> "بدون Fix"
+        1 -> "GPS"
+        2 -> "DGPS"
+        4 -> "RTK Fixed"
+        5 -> "RTK Float"
+        -1 -> if (liveIsMock) "Mock" else if (liveIsExternal) "خارجی" else "گوشی"
+        else -> "Fix=$liveFix"
+    }
+
+    fun doCaptureOnce() {
+        val lat = liveLat
+        val lon = liveLon
+        if (lat == null || lon == null) {
+            if (!ensurePermission()) return
+            val loc = readBestLocation()
+            if (loc == null) {
+                status = "موقعیت در دسترس نیست — GPS را روشن کنید"
+                return
+            }
+            updateLiveFrom(loc)
+        }
+        val la = liveLat ?: return
+        val lo = liveLon ?: return
+        val p = makePoint(la, lo, liveAlt, liveAcc, pointName, pointCode)
+        persist(points + p)
+        status = "ثبت شد: ${p.name}  دقت≈${if (p.accuracy > 0) "%.1f m".format(Locale.US, p.accuracy) else "؟"}  ${fixLabel()}"
+        pointName = ""
+        showAccWarn = false
     }
 
     fun captureOnce() {
-        if (!ensurePermission()) return
-        val loc = readBestLocation()
-        if (loc == null) {
-            status = "موقعیت در دسترس نیست — GPS را روشن کنید"
+        if (!liveIsExternal && !ensurePermission()) return
+        if (liveLat == null || liveLon == null) {
+            val loc = readBestLocation()
+            if (loc == null) {
+                status = "موقعیت در دسترس نیست — GPS را روشن کنید"
+                return
+            }
+            updateLiveFrom(loc)
+        }
+        if (liveAcc > 0 && liveAcc > accThreshold) {
+            pendingCapture = true
+            showAccWarn = true
+            status = "دقت ${String.format(Locale.US, "%.1f", liveAcc)} m بدتر از آستانه ${String.format(Locale.US, "%.0f", accThreshold)} m"
             return
         }
-        updateLiveFrom(loc)
-        val p = makePoint(
-            loc.latitude, loc.longitude,
-            if (loc.hasAltitude()) loc.altitude else 0.0,
-            if (loc.hasAccuracy()) loc.accuracy else -1f,
-            pointName, pointCode
-        )
-        persist(points + p)
-        status = "ثبت شد: ${p.name}  دقت≈${if (p.accuracy > 0) "%.1f m".format(p.accuracy) else "؟"}"
-        pointName = ""
+        doCaptureOnce()
     }
 
     fun startAverage() {
-        if (!ensurePermission()) return
+        if (!liveIsExternal && !ensurePermission()) return
         averaging = true
         avgSamples = emptyList()
-        status = "میانگین‌گیری ${avgSeconds} ثانیه…"
+        status = "میانگین وزن‌دار ${avgSeconds} ثانیه…"
         Handler(Looper.getMainLooper()).postDelayed({
             averaging = false
             val samples = avgSamples
@@ -245,16 +388,67 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 status = "نمونه‌ای دریافت نشد"
                 return@postDelayed
             }
-            val lat = samples.map { it.latitude }.average()
-            val lon = samples.map { it.longitude }.average()
-            val alt = samples.filter { it.hasAltitude() }.map { it.altitude }.let { if (it.isEmpty()) 0.0 else it.average() }
-            val acc = samples.filter { it.hasAccuracy() }.map { it.accuracy }.minOrNull() ?: -1f
-            val p = makePoint(lat, lon, alt, acc, pointName.ifBlank { "AVG${points.size + 1}" }, pointCode)
+            val avgIn = samples.map {
+                GpsAverager.Sample(
+                    it.latitude, it.longitude,
+                    if (it.hasAltitude()) it.altitude else 0.0,
+                    if (it.hasAccuracy()) it.accuracy else 25f
+                )
+            }
+            val res = GpsAverager.weighted(avgIn)
+            if (res == null) {
+                status = "محاسبه میانگین ناموفق"
+                return@postDelayed
+            }
+            val p = makePoint(
+                res.lat, res.lon, res.alt, res.accuracy,
+                pointName.ifBlank { "AVG${points.size + 1}" }, pointCode
+            )
             persist(points + p)
-            status = "میانگین ${samples.size} نمونه ثبت شد — ${p.name}"
+            status = "میانگین وزن‌دار ${res.count}/${samples.size} نمونه · σ≈${"%.2f".format(Locale.US, res.stdDevM)} m — ${p.name}"
             pointName = ""
             avgSamples = emptyList()
         }, avgSeconds * 1000L)
+    }
+
+    fun connectExternalGps(device: BluetoothDevice) {
+        extJob?.cancel()
+        extConnecting = true
+        status = "اتصال به ${device.name ?: device.address}…"
+        extJob = scope.launch {
+            val result = NmeaParser.readNmeaStream(device) { line ->
+                val gga = NmeaParser.parseGga(line)
+                if (gga != null) {
+                    // به‌روز روی UI thread
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        updateLiveFromNmea(gga)
+                        extDeviceName = device.name ?: device.address
+                        extConnecting = false
+                    }
+                }
+                true // ادامه خواندن
+            }
+            withContext(Dispatchers.Main) {
+                extConnecting = false
+                if (result.isFailure) {
+                    liveIsExternal = false
+                    extDeviceName = null
+                    status = "قطع GPS خارجی: ${result.exceptionOrNull()?.message ?: "خطا"}"
+                } else {
+                    liveIsExternal = false
+                    extDeviceName = null
+                    status = "GPS خارجی قطع شد"
+                }
+            }
+        }
+    }
+
+    fun disconnectExternal() {
+        extJob?.cancel()
+        extJob = null
+        liveIsExternal = false
+        extDeviceName = null
+        status = "GPS خارجی قطع شد — برگشت به گوشی"
     }
 
     fun updateFmtPreview(lat: Double, lon: Double, e: Double, n: Double, z: Int) {
@@ -507,6 +701,66 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             color = TextSecondary,
                             fontSize = 12.sp
                         )
+                    }
+                }
+            }
+
+            // —— نوار کیفیت GPS (فاز ۱) ——
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = SurfaceColor,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            Modifier
+                                .size(14.dp)
+                                .background(accQualityColor(), shape = RoundedCornerShape(7.dp))
+                        )
+                        Text(
+                            when {
+                                gpsLost -> "قطع سیگنال"
+                                liveLat == null -> "در انتظار GPS…"
+                                else -> "دقت ${if (liveAcc > 0) String.format(Locale.US, "%.1f m", liveAcc) else "؟"}"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            color = if (gpsLost) Color(0xFFE53935) else TextPrimary,
+                            fontSize = 14.sp
+                        )
+                        Text(fixLabel(), color = TextSecondary, fontSize = 12.sp)
+                        if (liveSats > 0) Text("${liveSats} ماهواره", color = TextSecondary, fontSize = 11.sp)
+                        if (liveHdop > 0) Text("HDOP ${String.format(Locale.US, "%.1f", liveHdop)}", color = TextSecondary, fontSize = 11.sp)
+                    }
+                    if (liveIsExternal) {
+                        Text("منبع: GPS خارجی (${extDeviceName ?: "NMEA"})", color = Color(0xFF43A047), fontSize = 11.sp)
+                    } else if (liveIsMock) {
+                        Text("منبع: Mock Location", color = Color(0xFFFB8C00), fontSize = 11.sp)
+                    } else if (liveProvider.isNotBlank()) {
+                        Text("منبع: $liveProvider", color = TextSecondary, fontSize = 11.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("آستانه دقت:", fontSize = 11.sp, color = TextSecondary)
+                        listOf(3f, 5f, 10f, 20f).forEach { th ->
+                            FilterChip(
+                                selected = accThreshold == th,
+                                onClick = { accThreshold = th },
+                                label = { Text("${th.toInt()}m", fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { showExtGps = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (liveIsExternal) "تعویض GPS خارجی" else "GPS خارجی (NMEA)")
+                        }
+                        if (liveIsExternal) {
+                            OutlinedButton(onClick = { disconnectExternal() }) {
+                                Text("قطع خارجی")
+                            }
+                        }
                     }
                 }
             }
@@ -862,9 +1116,79 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
         }
     }
+
+
+    if (showAccWarn) {
+            AlertDialog(
+                onDismissRequest = { showAccWarn = false },
+                title = { Text("دقت نامناسب") },
+                text = {
+                    Text(
+                        "دقت فعلی ${String.format(Locale.US, "%.1f", liveAcc)} متر است و از آستانه ${String.format(Locale.US, "%.0f", accThreshold)} متر بدتر است. باز هم ثبت شود؟"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showAccWarn = false
+                        doCaptureOnce()
+                    }) { Text("ثبت با همین دقت") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAccWarn = false }) { Text("انصراف") }
+                }
+            )
+        }
+    
+        if (showExtGps) {
+            val bonded = remember {
+                try {
+                    val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+                    mgr.adapter?.bondedDevices?.toList().orEmpty()
+                } catch (_: SecurityException) {
+                    emptyList()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+            AlertDialog(
+                onDismissRequest = { showExtGps = false },
+                title = { Text("گیرنده GPS بلوتوث (NMEA)") },
+                text = {
+                    Column {
+                        if (extConnecting) Text("در حال اتصال…", color = TextSecondary)
+                        if (bonded.isEmpty()) {
+                            Text("دستگاه جفت‌شده‌ای نیست. اول گیرنده را در تنظیمات بلوتوث Pair کنید.", fontSize = 13.sp)
+                        } else {
+                            bonded.forEach { dev ->
+                                Text(
+                                    dev.name ?: dev.address,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            showExtGps = false
+                                            connectExternalGps(dev)
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    fontSize = 14.sp,
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+                        Text(
+                            "جملات GGA خوانده می‌شود. Fix: GPS / DGPS / RTK Float / RTK Fixed",
+                            fontSize = 11.sp, color = TextSecondary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showExtGps = false }) { Text("بستن") }
+                }
+            )
+        }
 }
 
-@Composable
+
 private fun PointRow(
     p: LocationPoint,
     color: Color,
@@ -911,6 +1235,14 @@ private fun PointRow(
                 Text(
                     formatEn("%.7f , %.7f   h=%.1f", p.lat, p.lon, p.alt) +
                         (if (p.accuracy > 0) formatEn("  ±%.1fm", p.accuracy) else "") +
+                        (when (p.fix) {
+                            4 -> "  RTK"
+                            5 -> "  Float"
+                            2 -> "  DGPS"
+                            1 -> "  GPS"
+                            else -> ""
+                        }) +
+                        (if (p.isExternal) "  EXT" else "") +
                         (if (timeLabel.isNotBlank()) "  $timeLabel" else ""),
                     color = TextSecondary,
                     fontSize = 10.sp

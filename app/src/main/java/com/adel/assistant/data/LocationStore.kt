@@ -21,7 +21,13 @@ data class LocationPoint(
     val easting: Double = 0.0,
     val northing: Double = 0.0,
     val timeMs: Long = System.currentTimeMillis(),
-    val note: String = ""
+    val note: String = "",
+    /** کیفیت Fix از NMEA: 0=none 1=GPS 2=DGPS 4=RTK Fixed 5=RTK Float ؛ -1=نامشخص */
+    val fix: Int = -1,
+    val sats: Int = 0,
+    val hdop: Double = -1.0,
+    val isExternal: Boolean = false,
+    val isMock: Boolean = false
 ) {
     fun withUtm(zoneOverride: Int? = null): LocationPoint {
         val z = zoneOverride ?: UtmGeo.zoneFromLon(lon)
@@ -61,7 +67,12 @@ object LocationStore {
                     easting = o.optDouble("easting", 0.0),
                     northing = o.optDouble("northing", 0.0),
                     timeMs = o.optLong("timeMs", 0L),
-                    note = o.optString("note", "")
+                    note = o.optString("note", ""),
+                    fix = o.optInt("fix", -1),
+                    sats = o.optInt("sats", 0),
+                    hdop = o.optDouble("hdop", -1.0),
+                    isExternal = o.optBoolean("isExternal", false),
+                    isMock = o.optBoolean("isMock", false)
                 )
             }
         } catch (_: Exception) {
@@ -86,6 +97,11 @@ object LocationStore {
                     .put("northing", p.northing)
                     .put("timeMs", p.timeMs)
                     .put("note", p.note)
+                    .put("fix", p.fix)
+                    .put("sats", p.sats)
+                    .put("hdop", p.hdop)
+                    .put("isExternal", p.isExternal)
+                    .put("isMock", p.isMock)
             )
         }
         file(context).writeText(arr.toString())
