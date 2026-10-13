@@ -9,6 +9,8 @@ enum class CadTool {
     MeasureAngle,
     MeasureArea,
     MeasureObject,
+    Offset,
+    Trim,
     DrawLine,
     DrawPoly,
     DrawCircle,
@@ -329,6 +331,43 @@ object CadEngine {
     fun snapToGrid(x: Double, y: Double, step: Double): Pair<Double, Double> {
         if (step <= 0) return x to y
         return (round(x / step) * step) to (round(y / step) * step)
+    }
+
+    /** خط موازی به فاصله dist؛ سمت با sidePoint مشخص می‌شود */
+    fun offsetLine(l: DxfLine, dist: Double, sidePoint: Pair<Double, Double>): DxfLine {
+        val dx = l.x2 - l.x1
+        val dy = l.y2 - l.y1
+        val len = hypot(dx, dy)
+        if (len < 1e-12 || !dist.isFinite()) return l
+        var nx = -dy / len
+        var ny = dx / len
+        val mx = (l.x1 + l.x2) / 2.0
+        val my = (l.y1 + l.y2) / 2.0
+        val sx = sidePoint.first - mx
+        val sy = sidePoint.second - my
+        if (nx * sx + ny * sy < 0) {
+            nx = -nx
+            ny = -ny
+        }
+        val d = dist
+        return l.copy(
+            x1 = l.x1 + nx * d,
+            y1 = l.y1 + ny * d,
+            x2 = l.x2 + nx * d,
+            y2 = l.y2 + ny * d
+        )
+    }
+
+    /** کوتاه کردن خط تا نزدیک‌ترین تقاطع با cutting (ساده) */
+    fun trimLineToPoint(l: DxfLine, pick: Pair<Double, Double>, cut: DxfLine): DxfLine? {
+        val hit = intersectSeg(l, cut) ?: return null
+        val d1 = hypot(pick.first - l.x1, pick.second - l.y1)
+        val d2 = hypot(pick.first - l.x2, pick.second - l.y2)
+        return if (d1 <= d2) {
+            l.copy(x1 = hit.first, y1 = hit.second)
+        } else {
+            l.copy(x2 = hit.first, y2 = hit.second)
+        }
     }
 
     fun translateLine(l: DxfLine, dx: Double, dy: Double) =

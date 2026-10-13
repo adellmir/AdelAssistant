@@ -189,6 +189,11 @@ fun DxfPreviewScreen(
     var distanceMsg by remember { mutableStateOf<String?>(null) }
     var measureResults by remember { mutableStateOf<List<MeasureResult>>(emptyList()) }
     var showMeasureResults by remember { mutableStateOf(false) }
+    var offsetDistText by remember { mutableStateOf("1.0") }
+    var showOffsetDistDialog by remember { mutableStateOf(false) }
+    var offsetPendingLine by remember { mutableStateOf<CadEntity.Line?>(null) }
+    var trimPendingCut by remember { mutableStateOf<CadEntity.Line?>(null) }
+
     var showExportPickedDialog by remember { mutableStateOf(false) }
     // انتخاب از نقشه برای الاین: rowIndex, side "src"|"dst"
     var mapAlignPick by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -223,6 +228,12 @@ fun DxfPreviewScreen(
     val clipboard = LocalClipboardManager.current
 
     val zone = zoneText.toIntOrNull()?.coerceIn(1, 60) ?: 40
+
+    androidx.compose.runtime.LaunchedEffect(cadTool) {
+        if (cadTool != CadTool.Offset) offsetPendingLine = null
+        if (cadTool != CadTool.Trim) trimPendingCut = null
+    }
+
     val activeDrawings = drawings.filter { it.visible }
     val allModels = activeDrawings.map { it.model }
 
@@ -579,6 +590,31 @@ fun DxfPreviewScreen(
         message = "شیء حذف شد — ذخیره را فراموش نکن"
     }
 
+    fun nearestZ(e: Double, n: Double): Double? {
+        var bestZ: Double? = null
+        var bestD = 0.5 // متر
+        try {
+            activeDrawings.forEach { dr ->
+                dr.model.points.forEach { pt ->
+                    val d = CadEngine.hypot(pt.x - e, pt.y - n)
+                    if (d < bestD) {
+                        bestD = d
+                        bestZ = pt.z
+                    }
+                }
+            }
+        } catch (_: Throwable) { }
+        return bestZ
+    }
+
+    fun formatLiveCoord(e: Double, n: Double, suffix: String = ""): String {
+        val z = nearestZ(e, n)
+        return if (z != null)
+            String.format(java.util.Locale.US, "E=%.3f  N=%.3f  Z=%.3f%s", e, n, z, suffix)
+        else
+            String.format(java.util.Locale.US, "E=%.3f  N=%.3f%s", e, n, suffix)
+    }
+
     fun processCadPoint(raw: Pair<Double, Double>) {
         val ref = draftPts.lastOrNull()
         var p = snapWorld(raw.first, raw.second, ref)
@@ -741,6 +777,63 @@ fun DxfPreviewScreen(
             }
             CadTool.Rotate, CadTool.Scale -> {
                 message = "چرخش/مقیاس: شیء را Select کن سپس ابزار را از پنل CAD بزن (نسخه ساده: Move/Copy فعال)"
+            }
+            CadTool.Offset -> {
+                val dist = offsetDistText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.001) ?: 1.0
+                val maxW = pickToleranceWorld()
+                if (offsetPendingLine == null) {
+                    val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                    if (hit is CadEntity.Line) {
+                        offsetPendingLine = hit
+                        selected = hit
+                        message = "سمت آفست را لمس کن (فاصله ${"%.3f".format(dist)} m)"
+                        distanceMsg = CadEngine.describeEntity(hit)
+                    } else {
+                        message = "اول یک خط انتخاب کن"
+                    }
+                } else {
+                    val src = offsetPendingLine!!
+                    val neu = CadEngine.offsetLine(src.line, dist, p)
+                    pushUndo()
+                    drawings = drawings.map { dr ->
+                        if (dr.id != src.drawingId) dr
+                        else dr.copy(model = dr.model.copy(lines = dr.model.lines + neu).recalculatedBounds())
+                    }
+                    message = "آفست انجام شد (${"%.3f".format(dist)} m)"
+                    offsetPendingLine = null
+                    distanceMsg = String.format(java.util.Locale.US, "Offset %.3f m", dist)
+                }
+            }
+            CadTool.Trim -> {
+                val maxW = pickToleranceWorld()
+                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
+                if (trimPendingCut == null) {
+                    if (hit is CadEntity.Line) {
+                        trimPendingCut = hit
+                        selected = hit
+                        message = "خط برش انتخاب شد — خطی که باید کوتاه شود را بزن"
+                    } else message = "اول لبه برش (Cutting edge) را انتخاب کن"
+                } else if (hit is CadEntity.Line) {
+                    val cut = trimPendingCut!!.line
+                    val trimmed = CadEngine.trimLineToPoint(hit.line, p, cut)
+                    if (trimmed == null) {
+                        message = "تقاطعی با لبه برش نیست"
+                    } else {
+                        pushUndo()
+                        drawings = drawings.map { dr ->
+                            if (dr.id != hit.drawingId) dr
+                            else {
+                                val lines = dr.model.lines.mapIndexed { i, l ->
+                                    if (i == hit.index) trimmed else l
+                                }
+                                dr.copy(model = dr.model.copy(lines = lines).recalculatedBounds())
+                            }
+                        }
+                        message = "Trim انجام شد"
+                        distanceMsg = CadEngine.describeEntity(CadEntity.Line(hit.index, trimmed, hit.drawingId))
+                    }
+                    trimPendingCut = null
+                } else message = "یک خط برای Trim انتخاب کن"
             }
             else -> {}
         }
@@ -905,6 +998,7 @@ fun DxfPreviewScreen(
 
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
+                            liveCoordMsg = formatLiveCoord(sw.first, sw.second)
                             // Keep the original smooth map gesture. While editing a point,
                             // the map must stay still so the point can move independently.
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
@@ -1005,7 +1099,8 @@ fun DxfPreviewScreen(
                                         }
                                         // ابزار CAD
                                         if (cadTool != CadTool.None) {
-                                            processCadPoint(p)
+                                            liveCoordMsg = formatLiveCoord(p.first, p.second)
+                                        processCadPoint(p)
                                             return@detectTapGestures
                                         }
                                         if (measureMode) {
@@ -2436,6 +2531,33 @@ if (zoomWindowMode) {
         )
     }
 
+
+    if (showOffsetDistDialog) {
+        AlertDialog(
+            onDismissRequest = { showOffsetDistDialog = false },
+            title = { Text("فاصله آفست (متر)") },
+            text = {
+                OutlinedTextField(
+                    value = offsetDistText,
+                    onValueChange = { offsetDistText = it },
+                    label = { Text("مثلاً 0.5") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOffsetDistDialog = false
+                    cadTool = CadTool.Offset
+                    offsetPendingLine = null
+                    message = "آفست: اول خط را بزن"
+                }) { Text("شروع") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOffsetDistDialog = false }) { Text("لغو") }
+            }
+        )
+    }
+
     if (showSaveDxfDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDxfDialog = false },
@@ -2544,8 +2666,25 @@ if (zoomWindowMode) {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ترسیم", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن").forEach { (tool, label) ->
-                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = label }, label = { Text(label, fontSize = 11.sp) })
+                        listOf(CadTool.DrawLine to "خط", CadTool.DrawPoly to "پلی‌لاین", CadTool.DrawCircle to "دایره", CadTool.DrawText to "متن", CadTool.Offset to "آفست", CadTool.Trim to "Trim").forEach { (tool, label) ->
+                            FilterChip(selected = cadTool == tool, onClick = {
+                                draftPts = emptyList(); showCadPanel = false
+                                when (tool) {
+                                    CadTool.Offset -> {
+                                        showOffsetDistDialog = true
+                                        message = "فاصله آفست"
+                                    }
+                                    CadTool.Trim -> {
+                                        cadTool = CadTool.Trim
+                                        trimPendingCut = null
+                                        message = "Trim: اول لبه برش را بزن"
+                                    }
+                                    else -> {
+                                        cadTool = tool
+                                        message = label
+                                    }
+                                }
+                            }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
                     Text("اندازه", fontWeight = FontWeight.Bold)
