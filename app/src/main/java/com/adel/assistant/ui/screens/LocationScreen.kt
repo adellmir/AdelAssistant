@@ -161,6 +161,13 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var selB by remember { mutableStateOf<String?>(null) }
     var offsetDist by remember { mutableStateOf("10") }
     var offsetAz by remember { mutableStateOf("0") }
+    // —— فاز ۳: Stakeout / شبکه ——
+    var stakeoutTargetId by remember { mutableStateOf<String?>(null) }
+    var stakeoutNearAlerted by remember { mutableStateOf(false) }
+    var gridRows by remember { mutableStateOf("3") }
+    var gridCols by remember { mutableStateOf("3") }
+    var gridStep by remember { mutableStateOf("10") }
+    var gridAz by remember { mutableStateOf("0") }
 
     var hasPermission by remember {
         mutableStateOf(
@@ -174,6 +181,147 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     ) { granted -> hasPermission = granted }
 
     fun zone(): Int = zoneText.toIntOrNull() ?: UtmGeo.DEFAULT_ZONE
+
+    fun finishTrack(auto: Boolean = false) {
+        if (trackPts.size < 2) {
+            status = "نقاط مسیر کافی نیست"
+            tracking = false
+            return
+        }
+        val ring = trackPts.map { it.e to it.n }
+        val type = if (trackMode) MeasureType.FIELD else MeasureType.LINE
+        val z = zone()
+        val m = Measure(
+            id = System.nanoTime().toString(),
+            type = type,
+            name = trackName.ifBlank { if (trackMode) "محدوده${measures.size + 1}" else "مسیر${measures.size + 1}" },
+            zone = z,
+            rings = listOf(ring),
+            source = if (liveIsExternal) "gps-ext" else "gps",
+        )
+        val list = measures + m
+        measures = list
+        MeasureStore.save(context, list)
+        tracking = false
+        trackPaused = false
+        val info = if (type == MeasureType.FIELD)
+            "مساحت ${MeasureGeometry.fmtArea(m.areaM2)} · محیط ${MeasureGeometry.fmtDist(m.lengthM)}"
+        else
+            "طول ${MeasureGeometry.fmtDist(m.lengthM)}"
+        status = (if (auto) "بستن خودکار — " else "") + "ذخیره شد: ${m.name} · $info · ${trackPts.size} رأس"
+        trackPts = emptyList()
+        trackName = ""
+    }
+
+
+    fun startTrack(asField: Boolean) {
+        if (!liveIsExternal && !ensurePermission()) return
+        trackMode = asField
+        tracking = true
+        trackPaused = false
+        trackPts = emptyList()
+        trackFilter = TrackFilter()
+        status = if (asField) "ثبت محدوده — راه بروید؛ نزدیک نقطه اول = بستن خودکار" else "ثبت مسیر — راه بروید"
+    }
+
+    fun appendTrackFromLocation(loc: Location) {
+        val z = if (autoZone) UtmGeo.zoneFromLon(loc.longitude) else zone()
+        val (e, n) = UtmGeo.fromLatLon(loc.latitude, loc.longitude, z)
+        val acc = if (loc.hasAccuracy()) loc.accuracy else 25f
+        val sample = TrackFilter.Loc(e, n, acc, System.currentTimeMillis())
+        if (!trackFilter.accept(sample)) return
+        val next = trackPts + sample
+        trackPts = next
+        if (trackMode && trackFilter.shouldAutoClose(trackPts.dropLast(1), sample, 3.0)) {
+            finishTrack(auto = true)
+        }
+    }
+
+
+
+    fun stakeoutMetrics(): Triple<Double, Double, Double>? {
+        val id = stakeoutTargetId ?: selA ?: return null
+        val tgt = points.find { it.id == id } ?: return null
+        val la = liveLat ?: return null
+        val lo = liveLon ?: return null
+        val z = if (autoZone) UtmGeo.zoneFromLon(lo) else zone()
+        val (e, n) = UtmGeo.fromLatLon(la, lo, z)
+        val dE = tgt.easting - e
+        val dN = tgt.northing - n
+        val dist = kotlin.math.hypot(dE, dN)
+        // هشدار نزدیکی < 2 متر
+        if (dist < 2.0 && !stakeoutNearAlerted) {
+            stakeoutNearAlerted = true
+            status = "نزدیک هدف: ${tgt.name} · ${formatEn("%.2f", dist)} m"
+            try {
+                val v = if (Build.VERSION.SDK_INT >= 31) {
+                    (context.getSystemService(VibratorManager::class.java))?.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                }
+                if (Build.VERSION.SDK_INT >= 26) {
+                    v?.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    v?.vibrate(200)
+                }
+            } catch (_: Exception) { }
+        } else if (dist >= 2.0) {
+            stakeoutNearAlerted = false
+        }
+        return Triple(dist, dE, dN)
+    }
+
+    fun generateGrid() {
+        val baseId = selA
+        val base = points.find { it.id == baseId }
+        if (base == null) {
+            status = "نقطه مبنای شبکه (A) را انتخاب کنید"
+            return
+        }
+        val rows = gridRows.toIntOrNull() ?: 3
+        val cols = gridCols.toIntOrNull() ?: 3
+        val step = gridStep.toDoubleOrNull() ?: 10.0
+        val az = gridAz.toDoubleOrNull() ?: 0.0
+        if (rows < 1 || cols < 1 || rows * cols > 200) {
+            status = "ابعاد شبکه نامعتبر (حداکثر ۲۰۰ نقطه)"
+            return
+        }
+        val rad = Math.toRadians(az)
+        val cosA = kotlin.math.cos(rad)
+        val sinA = kotlin.math.sin(rad)
+        val newPts = mutableListOf<LocationPoint>()
+        var idx = 0
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                if (r == 0 && c == 0) continue // خود مبنا
+                val de = c * step
+                val dn = r * step
+                // چرخش آزیموت از شمال
+                val e = base.easting + de * cosA - dn * sinA
+                val n = base.northing + de * sinA + dn * cosA
+                val (lat, lon) = UtmGeo.toLatLon(e, n, base.zone)
+                idx++
+                newPts += LocationPoint(
+                    id = System.nanoTime().toString() + "_$idx",
+                    name = "G${r + 1}-${c + 1}",
+                    lat = lat,
+                    lon = lon,
+                    alt = base.alt,
+                    accuracy = -1f,
+                    code = "GRID",
+                    zone = base.zone,
+                    easting = e,
+                    northing = n,
+                    timeMs = System.currentTimeMillis(),
+                    note = "شبکه از ${base.name}"
+                )
+            }
+        }
+        persist(points + newPts)
+        status = "شبکه ${rows}×${cols} ساخته شد · ${newPts.size} نقطه جدید"
+    }
 
     fun persist(list: List<LocationPoint>) {
         points = list
@@ -486,60 +634,6 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         liveIsExternal = false
         extDeviceName = null
         status = "GPS خارجی قطع شد — برگشت به گوشی"
-    }
-
-    fun appendTrackFromLocation(loc: Location) {
-        val z = if (autoZone) UtmGeo.zoneFromLon(loc.longitude) else zone()
-        val (e, n) = UtmGeo.fromLatLon(loc.latitude, loc.longitude, z)
-        val acc = if (loc.hasAccuracy()) loc.accuracy else 25f
-        val sample = TrackFilter.Loc(e, n, acc, System.currentTimeMillis())
-        if (!trackFilter.accept(sample)) return
-        val next = trackPts + sample
-        trackPts = next
-        if (trackMode && trackFilter.shouldAutoClose(trackPts.dropLast(1), sample, 3.0)) {
-            finishTrack(auto = true)
-        }
-    }
-
-    fun startTrack(asField: Boolean) {
-        if (!liveIsExternal && !ensurePermission()) return
-        trackMode = asField
-        tracking = true
-        trackPaused = false
-        trackPts = emptyList()
-        trackFilter = TrackFilter()
-        status = if (asField) "ثبت محدوده — راه بروید؛ نزدیک نقطه اول = بستن خودکار" else "ثبت مسیر — راه بروید"
-    }
-
-    fun finishTrack(auto: Boolean = false) {
-        if (trackPts.size < 2) {
-            status = "نقاط مسیر کافی نیست"
-            tracking = false
-            return
-        }
-        val ring = trackPts.map { it.e to it.n }
-        val type = if (trackMode) MeasureType.FIELD else MeasureType.LINE
-        val z = zone()
-        val m = Measure(
-            id = System.nanoTime().toString(),
-            type = type,
-            name = trackName.ifBlank { if (trackMode) "محدوده${measures.size + 1}" else "مسیر${measures.size + 1}" },
-            zone = z,
-            rings = listOf(ring),
-            source = if (liveIsExternal) "gps-ext" else "gps",
-        )
-        val list = measures + m
-        measures = list
-        MeasureStore.save(context, list)
-        tracking = false
-        trackPaused = false
-        val info = if (type == MeasureType.FIELD)
-            "مساحت ${MeasureGeometry.fmtArea(m.areaM2)} · محیط ${MeasureGeometry.fmtDist(m.lengthM)}"
-        else
-            "طول ${MeasureGeometry.fmtDist(m.lengthM)}"
-        status = (if (auto) "بستن خودکار — " else "") + "ذخیره شد: ${m.name} · $info · ${trackPts.size} رأس"
-        trackPts = emptyList()
-        trackName = ""
     }
 
     fun updateFmtPreview(lat: Double, lon: Double, e: Double, n: Double, z: Int) {
@@ -1087,6 +1181,75 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("فاصله / آزیموت / قطب‌نما", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text("دو نقطه را از لیست انتخاب کنید (A سپس B) — یا هدف‌گیری با GPS", fontSize = 11.sp, color = TextSecondary)
+
+                    // فاز ۳: Stakeout زنده
+                    val so = stakeoutMetrics()
+                    if (so != null && (stakeoutTargetId != null || selA != null)) {
+                        val (dist, dE, dN) = so
+                        val tgtName = points.find { it.id == (stakeoutTargetId ?: selA) }?.name ?: "?"
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (dist < 2.0) Color(0xFF2E7D32).copy(alpha = 0.25f)
+                            else if (dist < 10.0) Color(0xFFF9A825).copy(alpha = 0.2f)
+                            else Color(0xFF1565C0).copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("Stakeout → $tgtName", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
+                                Text(
+                                    "فاصله: ${formatEn("%.2f", dist)} m",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (dist < 2.0) Color(0xFF2E7D32) else TextPrimary,
+                                    fontSize = 16.sp
+                                )
+                                Text(
+                                    "ΔE ${formatEn("%+.2f", dE)}   ΔN ${formatEn("%+.2f", dN)}",
+                                    color = TextSecondary, fontSize = 13.sp
+                                )
+                                Text(
+                                    "شرق ${if (dE >= 0) "برو" else "برگرد"} ${formatEn("%.2f", kotlin.math.abs(dE))} m · شمال ${if (dN >= 0) "برو" else "برگرد"} ${formatEn("%.2f", kotlin.math.abs(dN))} m",
+                                    color = TextSecondary, fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("هدف Stakeout:", fontSize = 11.sp, color = TextSecondary)
+                        OutlinedButton(
+                            onClick = {
+                                stakeoutTargetId = selA
+                                stakeoutNearAlerted = false
+                                status = if (selA != null) "هدف Stakeout تنظیم شد" else "اول نقطه A را انتخاب کنید"
+                            },
+                            enabled = selA != null
+                        ) { Text("A → هدف") }
+                        if (stakeoutTargetId != null) {
+                            OutlinedButton(onClick = { stakeoutTargetId = null }) { Text("لغو هدف") }
+                        }
+                    }
+
+                    // فاز ۳: شبکه نقاط
+                    Text("شبکه نقاط از مبنای A", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextPrimary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(gridRows, { gridRows = it.filter { ch -> ch.isDigit() }.take(2) },
+                            label = { Text("ردیف") }, modifier = Modifier.weight(1f), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        OutlinedTextField(gridCols, { gridCols = it.filter { ch -> ch.isDigit() }.take(2) },
+                            label = { Text("ستون") }, modifier = Modifier.weight(1f), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        OutlinedTextField(gridStep, { gridStep = it },
+                            label = { Text("گام m") }, modifier = Modifier.weight(1f), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(gridAz, { gridAz = it },
+                            label = { Text("آزیموت") }, modifier = Modifier.weight(1f), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
+                    Button(
+                        onClick = { generateGrid() },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = selA != null
+                    ) { Text("تولید شبکه نقاط") }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
