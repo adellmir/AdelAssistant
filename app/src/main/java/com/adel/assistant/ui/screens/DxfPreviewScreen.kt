@@ -81,6 +81,8 @@ private data class ViewerDrawing(
     var visible: Boolean = true
 )
 
+data class MeasureResult(val id: String, val kind: String, val text: String)
+
 @Composable
 fun DxfPreviewScreen(
     color: Color,
@@ -184,6 +186,8 @@ fun DxfPreviewScreen(
     var measureB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var measureDragTarget by remember { mutableStateOf<String?>(null) } // "A" | "B"
     var distanceMsg by remember { mutableStateOf<String?>(null) }
+    var measureResults by remember { mutableStateOf<List<MeasureResult>>(emptyList()) }
+    var showMeasureResults by remember { mutableStateOf(false) }
     var showExportPickedDialog by remember { mutableStateOf(false) }
     // انتخاب از نقشه برای الاین: rowIndex, side "src"|"dst"
     var mapAlignPick by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -581,11 +585,30 @@ fun DxfPreviewScreen(
             p = CadEngine.applyOrtho(ref, p)
         }
         when (cadTool) {
-            CadTool.Select -> {
+            CadTool.Select, CadTool.MeasureObject -> {
                 val maxW = pickToleranceWorld()
                 selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                 showProps = selected != null
-                message = if (selected != null) "شیء انتخاب شد" else "چیزی انتخاب نشد"
+                if (selected != null) {
+                    val info = CadEngine.describeEntity(selected!!)
+                    distanceMsg = info
+                    message = "اندازه شیء"
+                    // ثبت در لیست نتایج
+                    measureResults = listOf(
+                        MeasureResult(
+                            System.currentTimeMillis().toString(),
+                            when (selected) {
+                                is CadEntity.Line -> "خط"
+                                is CadEntity.Circle -> "دایره"
+                                is CadEntity.Text -> "متن"
+                                else -> "شیء"
+                            },
+                            info
+                        )
+                    ) + measureResults
+                } else {
+                    message = "چیزی انتخاب نشد"
+                }
             }
             CadTool.MeasureDist -> {
                 if (draftPts.isEmpty()) {
@@ -1596,7 +1619,7 @@ if (zoomWindowMode) {
             }
         }
         distanceMsg?.let {
-            Surface(shape = RoundedCornerShape(16.dp), color = color, modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)) {
+            Surface(shape = RoundedCornerShape(16.dp), color = color, modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp).clickable { if (measureResults.isNotEmpty()) showMeasureResults = true }) {
                 Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
             }
         }
@@ -1884,14 +1907,18 @@ if (zoomWindowMode) {
                                     listOf(
                                         "نقطه" to osnap.end,
                                         "وسط" to osnap.mid,
-                                        "تقاطع" to osnap.intersection
+                                        "تقاطع" to osnap.intersection,
+                                        "نزدیک" to osnap.nearest,
+                                        "Node" to osnap.node
                                     ).forEachIndexed { i, (lab, on) ->
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Checkbox(on, {
                                                 osnap = when (i) {
                                                     0 -> osnap.copy(end = it)
                                                     1 -> osnap.copy(mid = it)
-                                                    else -> osnap.copy(intersection = it)
+                                                    2 -> osnap.copy(intersection = it)
+                                                    3 -> osnap.copy(nearest = it)
+                                                    else -> osnap.copy(node = it)
                                                 }
                                             })
                                             Text(lab, color = Color.White, fontSize = 12.sp)
@@ -2386,6 +2413,28 @@ if (zoomWindowMode) {
     }
 
 
+
+    if (showMeasureResults) {
+        AlertDialog(
+            onDismissRequest = { showMeasureResults = false },
+            title = { Text("نتایج اندازه‌گیری (${measureResults.size})") },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    if (measureResults.isEmpty()) Text("موردی نیست")
+                    measureResults.forEach { r ->
+                        Text("${r.kind}: ${r.text}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { measureResults = emptyList(); showMeasureResults = false }) { Text("پاک کردن") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMeasureResults = false }) { Text("بستن") }
+            }
+        )
+    }
+
     if (showSaveDxfDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDxfDialog = false },
@@ -2500,7 +2549,7 @@ if (zoomWindowMode) {
                     }
                     Text("اندازه", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(CadTool.MeasureDist to "فاصله", CadTool.MeasureAngle to "زاویه", CadTool.MeasureArea to "مساحت").forEach { (tool, label) ->
+                        listOf(CadTool.MeasureDist to "فاصله", CadTool.MeasureAngle to "زاویه", CadTool.MeasureArea to "مساحت", CadTool.MeasureObject to "شیء").forEach { (tool, label) ->
                             FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); measureMode = false; showCadPanel = false }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
@@ -2545,8 +2594,13 @@ if (zoomWindowMode) {
                     Row {
                         Checkbox(osnap.intersection, { osnap = osnap.copy(intersection = it) }); Text("Int", fontSize = 11.sp)
                         Checkbox(osnap.perpendicular, { osnap = osnap.copy(perpendicular = it) }); Text("Perp", fontSize = 11.sp)
+                        Checkbox(osnap.node, { osnap = osnap.copy(node = it) }); Text("Node", fontSize = 11.sp)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row {
+                        Checkbox(osnap.nearest, { osnap = osnap.copy(nearest = it) }); Text("Near", fontSize = 11.sp)
+                        Checkbox(osnap.quadrant, { osnap = osnap.copy(quadrant = it) }); Text("Quad", fontSize = 11.sp)
+                    }
+Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { doUndo() }) { Text("Undo") }
                         TextButton(onClick = { doRedo() }) { Text("Redo") }
                         TextButton(onClick = {
