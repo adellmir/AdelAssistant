@@ -91,6 +91,7 @@ import com.adel.assistant.data.MeasureStore
 import com.adel.assistant.data.MeasureType
 import com.adel.assistant.data.MeasureGeometry
 import com.adel.assistant.data.TrackFilter
+import com.adel.assistant.data.GisPhase4Export
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -181,6 +182,18 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     ) { granted -> hasPermission = granted }
 
     fun zone(): Int = zoneText.toIntOrNull() ?: UtmGeo.DEFAULT_ZONE
+
+    fun persist(list: List<LocationPoint>) {
+        points = list
+        LocationStore.save(context, list)
+    }
+
+    fun ensurePermission(): Boolean {
+        if (hasPermission) return true
+        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        return false
+    }
+
 
     fun finishTrack(auto: Boolean = false) {
         if (trackPts.size < 2) {
@@ -323,21 +336,12 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         status = "شبکه ${rows}×${cols} ساخته شد · ${newPts.size} نقطه جدید"
     }
 
-    fun persist(list: List<LocationPoint>) {
-        points = list
-        LocationStore.save(context, list)
-    }
 
     fun copyText(label: String, value: String) {
         clipboard.setText(AnnotatedString(value))
         status = "$label کپی شد"
     }
 
-    fun ensurePermission(): Boolean {
-        if (hasPermission) return true
-        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        return false
-    }
 
     fun readBestLocation(): Location? {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -740,13 +744,56 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
 
 
     fun export(ext: String) {
+        if (ext == "backup") {
+            val text = GisPhase4Export.backupJson(points, measures)
+            val name = "backup_location_${System.currentTimeMillis() / 1000}.json"
+            val uri = FileExport.exportTextToDocuments(context, name, text)
+            status = if (uri != null) "پشتیبان: $name" else "خطا در پشتیبان"
+            return
+        }
+        if (ext == "geojson") {
+            if (points.isEmpty() && measures.isEmpty()) {
+                status = "چیزی برای خروجی نیست"
+                return
+            }
+            val text = if (points.isNotEmpty()) GisPhase4Export.pointsToGeoJson(points)
+            else GisPhase4Export.measuresToGeoJson(measures)
+            val name = "location_${System.currentTimeMillis() / 1000}.geojson"
+            val uri = FileExport.exportTextToDocuments(context, name, text)
+            status = if (uri != null) "خروجی: $name" else "خطا در ذخیره خروجی"
+            return
+        }
+        if (ext == "geojson-m") {
+            val text = GisPhase4Export.measuresToGeoJson(measures)
+            val name = "measures_${System.currentTimeMillis() / 1000}.geojson"
+            val uri = FileExport.exportTextToDocuments(context, name, text)
+            status = if (uri != null) "خروجی: $name" else "خطا در ذخیره خروجی"
+            return
+        }
+        if (ext == "kmz") {
+            if (points.isEmpty() && measures.isEmpty()) {
+                status = "چیزی برای خروجی نیست"
+                return
+            }
+            GisPhase4Export.setMeasuresForKml(measures)
+            val kml = GisPhase4Export.pointsToKml(points, "AdelLocation")
+            val name = "location_${System.currentTimeMillis() / 1000}.kmz"
+            val uri = GisPhase4Export.writeKmzToDocuments(context, name, kml)
+            // همچنین KML خام
+            FileExport.exportTextToDocuments(context, name.replace(".kmz", ".kml"), kml)
+            status = if (uri != null) "خروجی KMZ/KML: $name" else "خطا در KMZ"
+            return
+        }
         if (points.isEmpty()) {
             status = "نقطه‌ای برای خروجی نیست"
             return
         }
         val survey = points.map { it.toSurveyPoint() }
         val text = when (ext) {
-            "kml" -> UtmGeo.toKml(survey, "Location", points.first().zone)
+            "kml" -> {
+                GisPhase4Export.setMeasuresForKml(measures)
+                GisPhase4Export.pointsToKml(points, "Location")
+            }
             "txt", "dat", "gsi", "csv" -> PointConverter.write(survey, ext)
             else -> points.joinToString("\n") { p ->
                 listOf(p.name, formatEn("%.8f", p.lat), formatEn("%.8f", p.lon), formatEn("%.3f", p.alt),
@@ -1429,8 +1476,15 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf("txt", "dat", "gsi", "csv", "kml").forEach { ext ->
-                            OutlinedButton(onClick = { export(ext) }) { Text(ext.uppercase()) }
+                        listOf("txt", "dat", "gsi", "csv", "kml", "kmz", "geojson", "geojson-m", "backup").forEach { ext ->
+                            OutlinedButton(onClick = { export(ext) }) {
+                                Text(when (ext) {
+                                    "geojson" -> "GeoJSON"
+                                    "geojson-m" -> "GeoJSON مسیر"
+                                    "backup" -> "پشتیبان"
+                                    else -> ext.uppercase()
+                                }, fontSize = 11.sp)
+                            }
                         }
                     }
                     Text("ذخیره در Documents/AdelAssistant", fontSize = 10.sp, color = TextSecondary)
