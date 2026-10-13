@@ -231,97 +231,104 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
                     Text(
                         clock,
                         style = MaterialTheme.typography.headlineSmall,
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     // دو ردیف تاریخ و وقت بخیر | هواشناسی سمت راست
                     Row(
-                        Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            jalali,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            "$greeting مهندس پورمیر",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = WorkPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // هواشناسی — ضربه = سایت هواشناسی
-                    val snap = weatherSnap
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable {
-                                val url = if (snap != null)
-                                    WeatherStore.googleWeatherUrl(snap.lat, snap.lon)
-                                else
-                                    WeatherStore.googleWeatherUrlFallback()
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                } catch (_: Exception) {}
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                jalali,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "$greeting مهندس پورمیر",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = WorkPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val snap = weatherSnap
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clickable {
+                                    val url = if (snap != null)
+                                        WeatherStore.googleWeatherUrl(snap.lat, snap.lon)
+                                    else
+                                        WeatherStore.googleWeatherUrlFallback()
+                                    try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    } catch (_: Exception) {
+                                    }
+                                }
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
+                            val icon = when (kind) {
+                                WeatherIconKind.Clear -> Icons.Outlined.WbSunny
+                                WeatherIconKind.Clouds -> Icons.Outlined.Cloud
+                                WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
+                                WeatherIconKind.Snow -> Icons.Outlined.AcUnit
+                                WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
+                                WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
+                                WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
                             }
-                            .padding(horizontal = 4.dp)
-                    ) {
-                        val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
-                        val icon = when (kind) {
-                            WeatherIconKind.Clear -> Icons.Outlined.WbSunny
-                            WeatherIconKind.Clouds -> Icons.Outlined.Cloud
-                            WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
-                            WeatherIconKind.Snow -> Icons.Outlined.AcUnit
-                            WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
-                            WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
-                            WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
+                            val iconTint = when (kind) {
+                                WeatherIconKind.Clear -> Color(0xFFFFB74D)
+                                WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
+                                WeatherIconKind.Snow -> Color(0xFFE0E0E0)
+                                WeatherIconKind.Thunder -> Color(0xFFBA68C8)
+                                else -> TextSecondary
+                            }
+                            Icon(
+                                icon,
+                                contentDescription = snap?.description ?: "هواشناسی",
+                                tint = iconTint,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Text(
+                                when {
+                                    snap != null -> String.format(java.util.Locale.US, "%.0f°", snap.tempC)
+                                    weatherLoading -> "…"
+                                    else -> "—"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
                         }
-                        val iconTint = when (kind) {
-                            WeatherIconKind.Clear -> Color(0xFFFFB74D)
-                            WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
-                            WeatherIconKind.Snow -> Color(0xFFE0E0E0)
-                            WeatherIconKind.Thunder -> Color(0xFFBA68C8)
-                            else -> TextSecondary
-                        }
-                        Icon(
-                            icon,
-                            contentDescription = snap?.description ?: "هواشناسی",
-                            tint = iconTint,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Text(
-                            when {
-                                snap != null -> String.format(java.util.Locale.US, "%.0f°", snap.tempC)
-                                weatherLoading -> "…"
-                                else -> "—"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
-                        )
                     }
-                    } // end Row تاریخ|هواشناسی
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Image(
-                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                        contentDescription = "لوگو",
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(SurfaceHigh),
-                        contentScale = ContentScale.Fit
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                            contentDescription = "لوگو",
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(SurfaceHigh),
+                            contentScale = ContentScale.Fit
+                        )
                     }
-                } // end outer Column
+                }
             }
 
             // ---- برنامه‌ریزی (پروژه + تسک) ----

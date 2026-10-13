@@ -1302,14 +1302,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         buildString {
                             append("شفت قبل: ")
                             append(prevS?.let { "${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
-                            append("
-شفت بعد: ")
+                            append("\nشفت بعد: ")
                             append(nextS?.let { "${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
-                            append("
-سینه کار: ")
+                            append("\nسینه کار: ")
                             append(face?.let { "${it.extra.ifBlank { it.pointNo }} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—")
-                            append("
-نزدیک‌ترین اتفاق: ")
+                            append("\nنزدیک‌ترین اتفاق: ")
                             append(nearestEv?.let { "${it.type} (نقطه ${it.pointNo} · ${formatEn("%.1f", kotlin.math.hypot(it.x - p.x, it.y - p.y))} m)" } ?: "—")
                         },
                         fontSize = 12.sp,
