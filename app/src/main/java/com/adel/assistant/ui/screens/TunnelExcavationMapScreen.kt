@@ -737,7 +737,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                             onTap = { pos ->
                                 if (dimMode) {
                                     val w = screenToWorld(pos.x, pos.y)
-                                    if (dimA == null) {
+                                    if (dimA == null || dimB != null) {
+                                        // شروع دوباره
                                         dimA = w
                                         dimB = null
                                         dimMsg = "نقطه دوم را بزن"
@@ -746,7 +747,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                         val a = dimA!!
                                         val dist = kotlin.math.hypot(w.first - a.first, w.second - a.second)
                                         dimMsg = String.format(java.util.Locale.US, "طول = %.3f m", dist)
-                                        dimA = null
+                                        // dimA/dimB نگه داشته می‌شوند تا خط و متن روی نقشه بمانند
                                     }
                                     return@detectTapGestures
                                 }
@@ -981,14 +982,33 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
 
                 // بنچ‌مارک: متن سبز ۲۰؟ ۱۰ سانتی‌متر سمت راست — ردیف۱ نام، ردیف۲ تراز
-                // خط اندازه‌گذاری
+                // خط اندازه‌گذاری + متن طول روی خط
                 dimA?.let { a ->
                     val sa = worldToScreen(a.first, a.second)
                     drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sa)
                     dimB?.let { b ->
                         val sb = worldToScreen(b.first, b.second)
-                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3f)
+                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3.5f)
                         drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sb)
+                        val dist = kotlin.math.hypot(b.first - a.first, b.second - a.second)
+                        val mid = Offset((sa.x + sb.x) / 2f, (sa.y + sb.y) / 2f)
+                        val label = String.format(java.util.Locale.US, "%.3f m", dist)
+                        // پس‌زمینه متن
+                        val paint = android.graphics.Paint().apply {
+                            color = android.graphics.Color.BLACK
+                            textSize = 34f
+                            isAntiAlias = true
+                            isFakeBoldText = true
+                            textAlign = android.graphics.Paint.Align.CENTER
+                        }
+                        val tw = paint.measureText(label)
+                        drawRect(
+                            Color.Black.copy(alpha = 0.55f),
+                            topLeft = Offset(mid.x - tw / 2f - 8f, mid.y - 28f),
+                            size = androidx.compose.ui.geometry.Size(tw + 16f, 36f)
+                        )
+                        paint.color = android.graphics.Color.YELLOW
+                        drawContext.canvas.nativeCanvas.drawText(label, mid.x, mid.y + 4f, paint)
                     }
                 }
 
