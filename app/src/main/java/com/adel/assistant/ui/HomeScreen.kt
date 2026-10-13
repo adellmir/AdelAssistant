@@ -231,20 +231,20 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(Modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        clock,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    // دو ردیف تاریخ و وقت بخیر | هواشناسی سمت راست
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            clock,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             jalali,
                             style = MaterialTheme.typography.titleMedium,
@@ -259,7 +259,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // هواشناسی مینی‌مال — ضربه = گوگل آب‌وهوا
+                    // هواشناسی — ضربه = سایت هواشناسی
                     val snap = weatherSnap
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -308,18 +308,20 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             color = TextSecondary
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // foreground امن‌تر از adaptive icon است
+                    } // end Row تاریخ|هواشناسی
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Image(
                         painter = painterResource(id = R.mipmap.ic_launcher_foreground),
                         contentDescription = "لوگو",
                         modifier = Modifier
-                            .size(72.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(SurfaceHigh),
                         contentScale = ContentScale.Fit
                     )
-                }
+                    }
+                } // end outer Column
             }
 
             // ---- برنامه‌ریزی (پروژه + تسک) ----
