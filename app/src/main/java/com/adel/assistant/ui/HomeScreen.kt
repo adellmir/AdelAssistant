@@ -1,5 +1,19 @@
 package com.adel.assistant.ui
 
+import androidx.compose.foundation.lazy.items
+
+import androidx.compose.foundation.lazy.LazyColumn
+
+import androidx.compose.material.icons.filled.Navigation
+
+import androidx.compose.material.icons.filled.Sms
+
+import androidx.compose.material.icons.filled.Phone
+
+import com.adel.assistant.ui.PendingClientsNav
+
+import com.adel.assistant.data.TunnelReportStore
+
 import android.content.Intent
 import android.net.Uri
 
@@ -28,6 +42,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -187,6 +202,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     }
     var planOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var expandedEmp by remember { mutableStateOf<String?>(null) }
     var projectTasks by remember {
         mutableStateOf(
             try {
@@ -244,15 +260,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             painter = painterResource(id = R.mipmap.ic_launcher_foreground),
                             contentDescription = "لوگو",
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(67.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(SurfaceHigh),
                             contentScale = ContentScale.Fit
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         // سمت راست: ساعت / تاریخ / خوش‌آمد + هواشناسی
-                        Column(modifier = Modifier.weight(1f)) {
-                            // ردیف ۱: ساعت
+                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            // ردیف ۱: ساعت (وسط‌چین)
                             Text(
                                 clock,
                                 style = MaterialTheme.typography.headlineSmall,
@@ -265,7 +281,10 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
                                     Text(
                                         jalali,
                                         style = MaterialTheme.typography.titleMedium,
@@ -317,7 +336,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         icon,
                                         contentDescription = snap?.description ?: "هواشناسی",
                                         tint = iconTint,
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(34.dp)
                                     )
                                     Text(
                                         when {
@@ -524,7 +543,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("جستجوی برنامه یا پرسش از دستیار…", color = TextMuted, fontSize = 13.sp) },
+                        placeholder = { Text("جستجو: شفت، پیشرفت، مطالبات، پروژه…", color = TextMuted, fontSize = 13.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -541,16 +560,326 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
             }
 
-            // اگر جستجو فعال است، نتایج را نشان بده؛ وگرنه منوی بخش
+
+            // ---- نتایج جستجوی هوشمند ----
             if (query.isNotEmpty()) {
-                Text(
-                    "نتایج جستجو (${filteredItems.size})",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
+                val qLower = query.lowercase().trim()
+                val qNorm = qLower.replace("ی", "ي").replace("ک", "ك")
+
+                fun moneyM(v: Double): String =
+                    if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9)
+                        String.format(java.util.Locale.US, "%,.0f م", v)
+                    else
+                        String.format(java.util.Locale.US, "%,.1f م", v)
+
+                fun callPhone(phone: String) {
+                    if (phone.isBlank()) return
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
+                    } catch (_: Exception) { }
+                }
+                fun smsClaims(phone: String, amount: Double) {
+                    if (phone.isBlank()) return
+                    val body = "با سلام جهت پرداخت هزینه نقشه‌برداری به‌مبلغ ${moneyM(amount)}. ممنون می‌شوم پس از پرداخت اطلاع‌رسانی بفرمایید.\nکارت: 5859831142797561\nشبا: 430180000000242375213376"
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone")).apply {
+                            putExtra("sms_body", body)
+                        })
+                    } catch (_: Exception) { }
+                }
+
+                // تشخیص نوع کوئری
+                val isShaft = qLower.contains("شفت") || Regex("""(?i)^sh\s*\d*$""").matches(qLower) || qLower.startsWith("sh ")
+                val isWell = qLower.contains("چاه") || Regex("""(?i)^ch\s*\d*$""").matches(qLower) || qLower.startsWith("ch ")
+                val isSump = qLower.contains("سامپ") || qLower.contains("sump")
+                val isProgress = qLower.contains("پیشرفت")
+                val isClaims = qLower.contains("مطالبات") || qLower.contains("طلب")
+
+                val typePrefix: String? = when {
+                    isShaft -> "sh"
+                    isWell -> "ch"
+                    isSump -> "sump"
+                    else -> null
+                }
+                val typeNum = Regex("""(?i)(?:sh|ch|sump|شفت|چاه|سامپ)\s*([0-9]+)""").find(qLower)?.groupValues?.getOrNull(1)
+
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // —— نقاط تونل: شفت / چاه / سامپ ——
+                    if (typePrefix != null) {
+                        val pts = remember(query) { TunnelReportStore.allPoints(context) }
+                        val filtered = pts.filter { p ->
+                            val t = p.type.trim().lowercase()
+                            val okPrefix = when (typePrefix) {
+                                "sh" -> t.startsWith("sh") || t.contains("shaft") || t == "start" || t == "end"
+                                "ch" -> t.startsWith("ch") || t.contains("چاه") || t.contains("well")
+                                "sump" -> t.contains("sump") || t.contains("سامپ")
+                                else -> false
+                            }
+                            if (!okPrefix) return@filter false
+                            if (typeNum != null) {
+                                val n = Regex("""[0-9]+""").find(t)?.value
+                                n == typeNum || p.pointNo.contains(typeNum)
+                            } else true
+                        }
+                        Text(
+                            "اطلاعات موقعیت",
+                            color = WorkPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { onNavigate(Routes.SURVEY_TUNNEL_EVENTS) }
+                                .padding(vertical = 4.dp)
+                        )
+                        if (filtered.isEmpty()) {
+                            Text("نقطه‌ای با این کد یافت نشد", color = TextMuted, fontSize = 12.sp)
+                        } else {
+                            filtered.take(30).forEach { p ->
+                                val ctx = remember(p.pointNo, p.km) { TunnelReportStore.kmContext(context, p.km) }
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = SurfaceHigh,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text("نقطه ${p.pointNo} · ${p.type}", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
+                                        Text(
+                                            String.format(java.util.Locale.US, "کیلومتر: %.3f", p.km),
+                                            color = TextSecondary, fontSize = 12.sp
+                                        )
+                                        val ps = ctx.prevShaft
+                                        val ns = ctx.nextShaft
+                                        Text(
+                                            "شفت قبل: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}",
+                                            color = TextSecondary, fontSize = 11.sp
+                                        )
+                                        Text(
+                                            "شفت بعد: ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}",
+                                            color = TextSecondary, fontSize = 11.sp
+                                        )
+                                        val face = ctx.prevReport ?: ctx.nextReport
+                                        Text(
+                                            "سینه کار: ${face?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: "—"}",
+                                            color = TextSecondary, fontSize = 11.sp
+                                        )
+                                        if (p.elevDiff.isNotBlank()) {
+                                            Text("اختلاف تراز: ${p.elevDiff}", color = TextSecondary, fontSize = 11.sp)
+                                        }
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            IconButton(onClick = {
+                                                // UTM → اگر lat/lon نداریم از x,y به‌عنوان نمایش
+                                                try {
+                                                    val uri = Uri.parse(
+                                                        String.format(
+                                                            java.util.Locale.US,
+                                                            "https://nshn.ir/?lat=%.6f&lng=%.6f",
+                                                            // تقریبی: اگر مختصات جغرافیایی نیست، باز هم لینک بساز با تبدیل ساده نمی‌کنیم — از PendingMapGoto
+                                                            p.y, p.x
+                                                        )
+                                                    )
+                                                    // مسیر بهتر: باز کردن نقشه تونل
+                                                    onNavigate(Routes.SURVEY_TUNNEL_MAP)
+                                                } catch (_: Exception) {
+                                                    onNavigate(Routes.SURVEY_TUNNEL_MAP)
+                                                }
+                                            }) {
+                                                Icon(Icons.Filled.Navigation, "مسیریاب", tint = WorkPrimary, modifier = Modifier.size(20.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // —— پیشرفت تونل ——
+                    if (isProgress) {
+                        Text(
+                            "وضعیت پیشرفت تونل",
+                            color = WorkPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }
+                                .padding(vertical = 4.dp)
+                        )
+                        val entries = remember(query) { TunnelReportStore.allEntries(context).takeLast(8).reversed() }
+                        if (entries.isEmpty()) {
+                            Text("گزارشی ثبت نشده", color = TextMuted, fontSize = 12.sp)
+                        } else {
+                            entries.forEach { e ->
+                                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(10.dp)) {
+                                        Text(
+                                            "${e.dateLabel} · شفت${e.shaft}/${e.side}",
+                                            fontWeight = FontWeight.Medium, color = TextPrimary, fontSize = 13.sp
+                                        )
+                                        Text(
+                                            String.format(
+                                                java.util.Locale.US,
+                                                "km %.3f · روزانه %.1f · شفت %.1f · مانده %.1f",
+                                                e.km, e.dailyProgress, e.shaftProgress, e.remaining
+                                            ),
+                                            color = TextSecondary, fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // —— مطالبات ——
+                    if (isClaims) {
+                        val employers = remember(query) {
+                            ProjectStore.employerProfiles(context, "").filter {
+                                // بجز تونل
+                                !it.employer.contains("تونل") && it.sessions.none { s -> s.name.contains("تونل") }
+                            }
+                        }
+                        val total = employers.sumOf { it.totalClaims }
+                        Text(
+                            "مطالبات کارفرمایان — جمع کل: ${moneyM(total)}",
+                            color = WorkPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { onNavigate(Routes.FIN_PROJECT_RECEIVABLES) }
+                                .padding(vertical = 4.dp)
+                        )
+                            employers.filter { it.totalClaims > 0.01 }.take(40).forEach { emp ->
+                            Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            emp.employer,
+                                            Modifier
+                                                .weight(1f)
+                                                .clickable { expandedEmp = if (expandedEmp == emp.employer) null else emp.employer },
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(moneyM(emp.totalClaims), color = WorkPrimary, fontSize = 12.sp)
+                                        IconButton(onClick = { callPhone(emp.phone) }) {
+                                            Icon(Icons.Filled.Phone, null, tint = WorkPrimary, modifier = Modifier.size(18.dp))
+                                        }
+                                        IconButton(onClick = { smsClaims(emp.phone, emp.totalClaims) }) {
+                                            Icon(Icons.Filled.Sms, null, tint = WorkPrimary, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                    if (expandedEmp == emp.employer) {
+                                        emp.sessions.forEach { s ->
+                                            Text(
+                                                "${s.name} · ${moneyM(s.remaining)}",
+                                                color = TextSecondary,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        PendingClientsNav.openProject(s.name)
+                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                    }
+                                                    .padding(vertical = 4.dp, horizontal = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // —— جستجوی کارفرما / پروژه (همیشه اگر کوئری متنی باشد) ——
+                    if (!isProgress && !isClaims && typePrefix == null) {
+                        val emps = remember(query) {
+                            ProjectStore.employerProfiles(context, query)
+                        }
+                        val projs = remember(query) {
+                            ProjectStore.projectProfiles(context, query)
+                        }
+                        if (emps.isNotEmpty()) {
+                            Text("کارفرمایان", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            emps.take(15).forEach { emp ->
+                                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(10.dp)) {
+                                        Row {
+                                            Text(
+                                                emp.employer,
+                                                Modifier
+                                                    .weight(1f)
+                                                    .clickable {
+                                                        PendingClientsNav.openEmployer(emp.employer)
+                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                    },
+                                                fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp
+                                            )
+                                            Text(
+                                                "${moneyM(emp.sessions.sumOf { it.amount })} / ${moneyM(emp.totalClaims)}",
+                                                color = TextSecondary, fontSize = 11.sp
+                                            )
+                                        }
+                                        emp.sessions.take(8).forEach { s ->
+                                            Text(
+                                                "· ${s.name}  ${moneyM(s.amount)} / ${moneyM(s.remaining)}",
+                                                color = TextMuted, fontSize = 11.sp,
+                                                modifier = Modifier
+                                                    .clickable {
+                                                        PendingClientsNav.openProject(s.name)
+                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                    }
+                                                    .padding(start = 6.dp, top = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (projs.isNotEmpty()) {
+                            Text("پروژه‌ها", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            projs.take(15).forEach { pr ->
+                                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(10.dp)) {
+                                        Row {
+                                            Text(
+                                                pr.name,
+                                                Modifier
+                                                    .weight(1f)
+                                                    .clickable {
+                                                        PendingClientsNav.openProject(pr.name)
+                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                    },
+                                                fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp
+                                            )
+                                            Text(
+                                                "${moneyM(pr.sessions.sumOf { it.amount })} / ${moneyM(pr.totalClaims)}",
+                                                color = TextSecondary, fontSize = 11.sp
+                                            )
+                                        }
+                                        Text(pr.employer, color = TextMuted, fontSize = 11.sp)
+                                        pr.sessions.take(12).forEach { s ->
+                                            val settled = if (s.remaining <= 0.01) "تسویه" else "مانده ${moneyM(s.remaining)}"
+                                            Text(
+                                                "${s.year}/${s.month}/${s.day} — $settled",
+                                                color = TextSecondary, fontSize = 11.sp,
+                                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // برنامه‌های منو
+                    if (filteredItems.isNotEmpty()) {
+                        Text(
+                            "برنامه‌ها (${filteredItems.size})",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
+                    }
+                }
             }
+
 
             if (searchQuery.trim().isEmpty()) {
             // ---- عنوان بخش ----

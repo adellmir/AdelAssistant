@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material3.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.openNeshanNav
 import com.adel.assistant.ui.PendingProjectEdit
+import com.adel.assistant.ui.PendingClientsNav
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -49,6 +51,11 @@ fun ClientsProjectsScreen(
     var searchProject by remember { mutableStateOf("") }
     var searchEmployer by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        PendingClientsNav.consumeTab()?.let { tab = it }
+        PendingClientsNav.consumeProjectSearch()?.let { searchProject = it }
+        PendingClientsNav.consumeEmployerSearch()?.let { searchEmployer = it }
+    }
     var tick by remember { mutableStateOf(0) }
 
     var editEmployerOld by remember { mutableStateOf<String?>(null) }

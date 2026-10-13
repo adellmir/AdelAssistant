@@ -194,6 +194,7 @@ fun DxfPreviewScreen(
 
     // —— CAD حرفه‌ای (منوی کرکره‌ای، نه آیکن زیاد) ——
     var showCadPanel by remember { mutableStateOf(false) }
+    var showLayerManager by remember { mutableStateOf(false) }
     var showSaveDxfDialog by remember { mutableStateOf(false) }
     var saveDxfName by remember { mutableStateOf("map_edit") }
     var openedDxfName by remember { mutableStateOf<String?>(null) }
@@ -2392,7 +2393,11 @@ if (zoomWindowMode) {
                                             showExportPickedDialog = true; closeMenus()
                                         }
                                     }
-                                    11 -> { // سه‌بعدی (نقشه ۲)
+                                    11 -> {
+                                        GlassIcon(Icons.Filled.Layers, "لایه‌ها") {
+                                            showLayerManager = true; closeMenus()
+                                        }
+ // سه‌بعدی (نقشه ۲)
                                         GlassIcon(Icons.Filled.Terrain, "توپوگرافی") {
                                             // همگام‌سازی نقاط visible به توپو
                                             val vols = Map2Session.toVolPoints()
@@ -3314,6 +3319,80 @@ if (showSaveDxfDialog) {
                 }
             },
             dismissButton = { TextButton(onClick = { showSaveDxfDialog = false }) { Text("لغو") } }
+        )
+    }
+
+    
+    if (showLayerManager) {
+        val allLayers = remember(drawings) {
+            drawings.flatMap { dr -> dr.model.layers.values.map { it to dr.id } }
+                .groupBy { it.first.name }
+                .map { (name, list) -> name to list.first().first }
+        }
+        AlertDialog(
+            onDismissRequest = { showLayerManager = false },
+            title = { Text("مدیریت لایه‌ها (فاز ۴)") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    if (allLayers.isEmpty()) {
+                        Text("لایه‌ای نیست — اول ترسیم یا DXF باز کن", fontSize = 13.sp)
+                    } else {
+                        allLayers.forEach { (name, info) ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = info.visible,
+                                    onCheckedChange = { vis ->
+                                        drawings = drawings.map { dr ->
+                                            val layers = dr.model.layers.toMutableMap()
+                                            layers[name]?.let { layers[name] = it.copy(visible = vis) }
+                                            dr.copy(model = dr.model.copy(layers = layers))
+                                        }
+                                    }
+                                )
+                                Text(name, Modifier.weight(1f), fontSize = 13.sp)
+                                // رنگ ساده
+                                val colors = listOf(1, 3, 5, 1, 30, 200)
+                                colors.forEach { aci ->
+                                    Box(
+                                        Modifier
+                                            .size(16.dp)
+                                            .padding(1.dp)
+                                            .background(
+                                                when (aci) {
+                                                    1 -> Color(0xFFE53935)
+                                                    3 -> Color(0xFF43A047)
+                                                    5 -> Color(0xFF1E88E5)
+                                                    30 -> Color(0xFFFB8C00)
+                                                    200 -> Color(0xFF8E24AA)
+                                                    else -> Color.Gray
+                                                },
+                                                RoundedCornerShape(2.dp)
+                                            )
+                                            .clickable {
+                                                drawings = drawings.map { dr ->
+                                                    val layers = dr.model.layers.toMutableMap()
+                                                    layers[name]?.let { layers[name] = it.copy(colorAci = aci) }
+                                                    dr.copy(model = dr.model.copy(layers = layers))
+                                                }
+                                            }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        "خاموش/روشن و رنگ لایه — فاز ۴",
+                        fontSize = 11.sp, color = Color.Gray,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLayerManager = false }) { Text("بستن") }
+            }
         )
     }
 
