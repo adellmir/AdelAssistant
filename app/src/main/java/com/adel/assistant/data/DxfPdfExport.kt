@@ -54,9 +54,6 @@ object DxfPdfExport {
             val rr = (cir.r * s).toFloat()
             c.drawCircle(X(cir.x), Y(cir.y), rr, paint)
         }
-        model.points.forEach { p ->
-            c.drawCircle(X(p.x), Y(p.y), 1.5f, paint)
-        }
         model.texts.forEach { t ->
             textPaint.textSize = (t.height * s).toFloat().coerceIn(4f, 28f)
             c.drawText(t.text, X(t.x), Y(t.y), textPaint)
