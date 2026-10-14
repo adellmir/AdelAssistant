@@ -1,8 +1,6 @@
 package com.adel.assistant.ui.screens
 
 import com.adel.assistant.data.FileExport
-import com.adel.assistant.data.SurveyUnits
-import com.adel.assistant.data.DxfPdfExport
 import com.adel.assistant.data.CompassMath
 import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.rememberCompassHeading
@@ -47,7 +45,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.PointerInputChange
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -174,27 +171,10 @@ fun DxfPreviewScreen(
 
     var showLayers by remember { mutableStateOf(false) }
     var showDrawings by remember { mutableStateOf(false) }
-    var loupeActive by remember { mutableStateOf(false) }
-    var loupeScreen by remember { mutableStateOf(Offset.Zero) }
-    var loupeWorld by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var liveCoordMsg by remember { mutableStateOf<String?>(null) }
-    var showPdfExportDialog by remember { mutableStateOf(false) }
-    var pdfScaleText by remember { mutableStateOf("500") }
-    var offsetDistText by remember { mutableStateOf("1.0") }
-    var offsetCountText by remember { mutableStateOf("1") }
-    var showOffsetDistDialog by remember { mutableStateOf(false) }
-    var offsetPendingLine by remember { mutableStateOf<CadEntity.Line?>(null) }
-    var trimPendingCut by remember { mutableStateOf<CadEntity.Line?>(null) }
-    var extendPendingBoundary by remember { mutableStateOf<CadEntity.Line?>(null) }
-    var mirrorAxis by remember { mutableStateOf<CadEntity.Line?>(null) }
-    var filletFirst by remember { mutableStateOf<CadEntity.Line?>(null) }
-    var filletRadiusText by remember { mutableStateOf("0.5") }
-    var showFilletDialog by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
 
     // —— CAD حرفه‌ای (منوی کرکره‌ای، نه آیکن زیاد) ——
     var showCadPanel by remember { mutableStateOf(false) }
-    var showLayerManager by remember { mutableStateOf(false) }
     var showSaveDxfDialog by remember { mutableStateOf(false) }
     var saveDxfName by remember { mutableStateOf("map_edit") }
     var openedDxfName by remember { mutableStateOf<String?>(null) }
@@ -254,10 +234,9 @@ fun DxfPreviewScreen(
     var mapAlignPick by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var gotoMarker by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var mapRotationDeg by remember { mutableStateOf(0f) } // همیشه ۰ — چرخش غیرفعال
+    var mapRotationDeg by remember { mutableStateOf(0f) }
     var crosshairMode by remember { mutableStateOf(false) }
     var crosshairEditId by remember { mutableStateOf<Int?>(null) }
     var showGotoDialog by remember { mutableStateOf(false) }
@@ -475,7 +454,6 @@ LaunchedEffect(profileMode) {
         val metersPerPixel = (2.0 * Math.PI * 6378137.0 * cos(latRad)) / (256.0 * (1 shl zoom))
         scale = (1.0 / metersPerPixel).toFloat().coerceIn(0.000001f, 5000f)
         offset = Offset(canvasSize.x / 2f - (easting * scale).toFloat(), canvasSize.y / 2f + (northing * scale).toFloat())
-        gotoMarker = easting to northing
     }
 
     fun centerOnLatLon(lat: Double, lon: Double, zoom: Int = 12) {
@@ -927,69 +905,53 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
         message = "شیء حذف شد — ذخیره را فراموش نکن"
     }
 
-    /** در حالت تارگت همیشه مرکز صفحه؛ وگرنه نقطه لمس */
-    fun pickWorld(sx: Float, sy: Float): Pair<Double, Double> {
-        return if (crosshairMode) centerWorldSnapped() else screenToWorld(sx, sy)
-    }
-
-    fun processCadPoint(rawIn: Pair<Double, Double>) {
-        val raw = if (crosshairMode) centerWorldSnapped() else rawIn
+    fun processCadPoint(raw: Pair<Double, Double>) {
         val ref = draftPts.lastOrNull()
         var p = snapWorld(raw.first, raw.second, ref)
         if (orthoOn && ref != null && cadTool in listOf(CadTool.DrawLine, CadTool.DrawPoly, CadTool.Move, CadTool.Copy)) {
             p = CadEngine.applyOrtho(ref, p)
         }
         when (cadTool) {
-            CadTool.Select, CadTool.MeasureObject -> {
+            CadTool.Select -> {
                 val maxW = pickToleranceWorld()
                 selected = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
                 showProps = selected != null
-                if (selected != null) {
-                    distanceMsg = CadEngine.describeEntity(selected!!)
-                    message = "اندازه شیء"
-                } else message = "چیزی انتخاب نشد"
+                message = if (selected != null) "شیء انتخاب شد" else "چیزی انتخاب نشد"
             }
             CadTool.MeasureDist -> {
-                if (draftPts.isEmpty()) {
-                    draftPts = listOf(p)
-                    distanceMsg = "نقطه دوم فاصله"
-                } else {
-                    val a = draftPts[0]
-                    val dE = p.first - a.first
-                    val dN = p.second - a.second
-                    val d = CadEngine.hypot(dE, dN)
-                    val brg = SurveyUnits.bearing(dE, dN)
-                    val az = SurveyUnits.azimuthDeg(dE, dN)
-                    distanceMsg = "فاصله: ${"%.3f".format(java.util.Locale.US, d)} m  |  $brg  |  Az ${"%.2f".format(java.util.Locale.US, az)}°"
-                    draftPts = emptyList()
-                }
+                cadTool = CadTool.None
+                measureMode = true
+                measureA = null; measureB = null
+                distanceMsg = null
+                message = "اندازه‌گذاری: دو نقطه را لمس کن"
             }
             CadTool.MeasureAngle -> {
                 draftPts = draftPts + p
                 if (draftPts.size >= 3) {
                     val ang = CadEngine.angleDeg(draftPts[0], draftPts[1], draftPts[2])
-                    distanceMsg = "زاویه: ${SurveyUnits.dms(ang)}  (${"%.2f".format(java.util.Locale.US, ang)}°)"
+                    distanceMsg = "زاویه: ${"%.2f".format(java.util.Locale.US, ang)}°"
                     draftPts = emptyList()
                 } else distanceMsg = "نقطه ${draftPts.size + 1} از ۳ (رأس وسط)"
             }
             CadTool.MeasureArea -> {
-                draftPts = draftPts + p
-                if (draftPts.size >= 3) {
-                    val ar = CadEngine.polygonArea(draftPts)
-                    distanceMsg = "مساحت: ${SurveyUnits.formatArea(ar)} — دوباره بزن برای بستن"
-                } else distanceMsg = "رأس ${draftPts.size} — حداقل ۳"
+                cadTool = CadTool.None
+                areaMode = true
+                areaFinished = false
+                areaPts = listOf(p)
+                distanceMsg = null
+                message = "مساحت: رأس ۱ — ادامه دهید"
             }
             CadTool.DrawLine -> {
                 if (draftPts.isEmpty()) {
                     draftPts = listOf(p)
-                    message = "نقطه دوم خط"
+                    message = "خط پیوسته — نقطه بعدی (لغو = بستن منو)"
                 } else {
-                    val a = draftPts[0]
+                    val a = draftPts.last()
                     mutateCad { m ->
                         m.copy(lines = m.lines + DxfLine(a.first, a.second, p.first, p.second, drawLayer, 1))
                     }
-                    draftPts = emptyList()
-                    message = "خط ترسیم شد"
+                    draftPts = listOf(p)
+                    message = "خط پیوسته ادامه دارد — نقطه بعدی یا لغو"
                 }
             }
             CadTool.DrawPoly -> {
@@ -1093,162 +1055,6 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     draftPts = emptyList()
                     if (cadTool == CadTool.Move) selected = null
                     message = if (cadTool == CadTool.Copy) "کپی شد" else "جابجا شد"
-                }
-            }
-            CadTool.Offset -> {
-                val dist = offsetDistText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.001) ?: 1.0
-                val count = offsetCountText.toIntOrNull()?.coerceIn(1, 50) ?: 1
-                val maxW = pickToleranceWorld()
-                if (offsetPendingLine == null) {
-                    val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
-                    if (hit is CadEntity.Line) {
-                        offsetPendingLine = hit
-                        selected = hit
-                        message = "سمت آفست را لمس کن (${"%.3f".format(dist)} m × $count)"
-                    } else message = "اول یک خط انتخاب کن"
-                } else {
-                    val src = offsetPendingLine!!
-                    val neus = CadEngine.offsetLineMultiple(src.line, dist, count, p)
-                    pushUndo()
-                    drawings = drawings.map { dr ->
-                        if (dr.id != src.drawingId) dr
-                        else dr.copy(model = dr.model.copy(lines = dr.model.lines + neus).recalculatedBounds())
-                    }
-                    message = "آفست: $count خط"
-                    offsetPendingLine = null
-                }
-            }
-            CadTool.Trim -> {
-                val maxW = pickToleranceWorld()
-                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
-                if (trimPendingCut == null) {
-                    if (hit is CadEntity.Line) { trimPendingCut = hit; selected = hit; message = "لبه برش انتخاب شد — خط کوتاه‌شونده را بزن" }
-                    else message = "اول لبه برش را انتخاب کن"
-                } else if (hit is CadEntity.Line) {
-                    val trimmed = CadEngine.trimLineToPoint(hit.line, p, trimPendingCut!!.line)
-                    if (trimmed == null) message = "تقاطعی نیست"
-                    else {
-                        pushUndo()
-                        drawings = drawings.map { dr ->
-                            if (dr.id != hit.drawingId) dr
-                            else dr.copy(model = dr.model.copy(lines = dr.model.lines.mapIndexed { i, l -> if (i == hit.index) trimmed else l }).recalculatedBounds())
-                        }
-                        message = "Trim انجام شد"
-                    }
-                    trimPendingCut = null
-                } else message = "خط برای Trim انتخاب کن"
-            }
-            CadTool.Extend -> {
-                val maxW = pickToleranceWorld()
-                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
-                if (extendPendingBoundary == null) {
-                    if (hit is CadEntity.Line) { extendPendingBoundary = hit; selected = hit; message = "مرز انتخاب شد — خط امتداد را بزن" }
-                    else message = "اول خط مرزی را انتخاب کن"
-                } else if (hit is CadEntity.Line) {
-                    val ext = CadEngine.extendLineTo(hit.line, p, extendPendingBoundary!!.line)
-                    if (ext == null) message = "امتداد ممکن نیست"
-                    else {
-                        pushUndo()
-                        drawings = drawings.map { dr ->
-                            if (dr.id != hit.drawingId) dr
-                            else dr.copy(model = dr.model.copy(lines = dr.model.lines.mapIndexed { i, l -> if (i == hit.index) ext else l }).recalculatedBounds())
-                        }
-                        message = "Extend انجام شد"
-                    }
-                    extendPendingBoundary = null
-                } else message = "خط برای Extend انتخاب کن"
-            }
-            CadTool.Mirror -> {
-                val maxW = pickToleranceWorld()
-                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
-                if (mirrorAxis == null) {
-                    if (hit is CadEntity.Line) {
-                        mirrorAxis = hit; selected = hit
-                        message = "محور آینه انتخاب شد — شیء را لمس کن"
-                    } else message = "اول یک خط به‌عنوان محور انتخاب کن"
-                } else {
-                    val axis = mirrorAxis!!.line
-                    when (hit) {
-                        is CadEntity.Line -> {
-                            val neu = CadEngine.mirrorLine(hit.line, axis)
-                            pushUndo()
-                            drawings = drawings.map { dr ->
-                                if (dr.id != hit.drawingId) dr
-                                else dr.copy(model = dr.model.copy(lines = dr.model.lines + neu).recalculatedBounds())
-                            }
-                            message = "خط آینه شد"
-                        }
-                        is CadEntity.Circle -> {
-                            val neu = CadEngine.mirrorCircle(hit.circle, axis)
-                            pushUndo()
-                            drawings = drawings.map { dr ->
-                                if (dr.id != hit.drawingId) dr
-                                else dr.copy(model = dr.model.copy(circles = dr.model.circles + neu).recalculatedBounds())
-                            }
-                            message = "دایره آینه شد"
-                        }
-                        else -> message = "خط یا دایره را برای آینه انتخاب کن"
-                    }
-                }
-            }
-            CadTool.Fillet -> {
-                val maxW = pickToleranceWorld()
-                val hit = CadEngine.pickEntity(p.first, p.second, activeDrawings.map { it.id to it.model }, maxW)
-                if (hit !is CadEntity.Line) {
-                    message = "فقط خط برای فیلت"
-                } else if (filletFirst == null) {
-                    filletFirst = hit; selected = hit
-                    message = "خط دوم فیلت را لمس کن (شعاع: $filletRadiusText m)"
-                } else {
-                    val r = filletRadiusText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.5
-                    val a = filletFirst!!
-                    // ساده: وصل به تقاطع (شعاع ۰) یا آفست تقریبی
-                    val hitPt = CadEngine.intersectInfinite(a.line, hit.line)
-                    if (hitPt == null) {
-                        message = "خطوط موازی یا بدون تقاطع"
-                    } else {
-                        pushUndo()
-                        val (ix, iy) = hitPt
-                        fun trimTo(l: DxfLine, keepNear: Pair<Double, Double>): DxfLine {
-                            val d1 = CadEngine.hypot(keepNear.first - l.x1, keepNear.second - l.y1)
-                            val d2 = CadEngine.hypot(keepNear.first - l.x2, keepNear.second - l.y2)
-                            return if (d1 <= d2) l.copy(x1 = ix, y1 = iy) else l.copy(x2 = ix, y2 = iy)
-                        }
-                        // نقطه دور از تقاطع روی هر خط
-                        fun far(l: DxfLine) =
-                            if (CadEngine.hypot(l.x1 - ix, l.y1 - iy) >= CadEngine.hypot(l.x2 - ix, l.y2 - iy))
-                                l.x1 to l.y1 else l.x2 to l.y2
-                        var fa = trimTo(a.line, far(a.line))
-                        var fb = trimTo(hit.line, far(hit.line))
-                        if (r > 1e-6) {
-                            // کوتاه کردن به اندازه تقریباً radius از تقاطع
-                            fun shorten(l: DxfLine): DxfLine {
-                                val fromStart = CadEngine.hypot(l.x1 - ix, l.y1 - iy) < 1e-9
-                                val ox = if (fromStart) l.x2 - ix else l.x1 - ix
-                                val oy = if (fromStart) l.y2 - iy else l.y1 - iy
-                                val n = CadEngine.hypot(ox, oy)
-                                if (n < 1e-9) return l
-                                val ux = ox / n; val uy = oy / n
-                                val px = ix + ux * r; val py = iy + uy * r
-                                return if (fromStart) l.copy(x1 = px, y1 = py) else l.copy(x2 = px, y2 = py)
-                            }
-                            fa = shorten(fa); fb = shorten(fb)
-                        }
-                        drawings = drawings.map { dr ->
-                            var lines = dr.model.lines
-                            var ch = false
-                            if (dr.id == a.drawingId) {
-                                lines = lines.mapIndexed { i, l -> if (i == a.index) fa else l }; ch = true
-                            }
-                            if (dr.id == hit.drawingId) {
-                                lines = lines.mapIndexed { i, l -> if (i == hit.index) fb else l }; ch = true
-                            }
-                            if (ch) dr.copy(model = dr.model.copy(lines = lines).recalculatedBounds()) else dr
-                        }
-                        message = if (r > 0) "فیلت ساده R=$r (گوشه کوتاه شد)" else "گوشه تیز در تقاطع"
-                        distanceMsg = message
-                    }
-                    filletFirst = null
                 }
             }
             CadTool.Rotate, CadTool.Scale -> {
@@ -1357,7 +1163,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
         val a = measureA; val b = measureB
         if (a != null && b != null) {
             val d = DxfParser.horizontalDistance(a.first, a.second, b.first, b.second)
-            distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر — لمس نزدیک نقطه = کشیدن"
+            distanceMsg = null; message = String.format(java.util.Locale.US, "فاصله افقی: %.3f m", d)
         }
     }
 
@@ -1398,24 +1204,16 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                 val cw = centerWorldSnapped()
                 val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
                 // علامت تارگت وسط صفحه
-                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp).zIndex(30f)) {
+                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
                     val cx = size.width / 2f
                     val cy = size.height / 2f
-                    val arm = 52f
-                    val gap = 14f
-                    val stroke = 3.5f
-                    // همیشه سفید با حاشیه تیره برای دیده شدن روی ماهواره و نقشه
-                    val outer = Color.Black.copy(alpha = 0.45f)
-                    val inner = Color.White
-                    listOf(outer to stroke + 2.5f, inner to stroke).forEach { (col, sw) ->
-                        drawLine(col, Offset(cx - arm, cy), Offset(cx - gap, cy), sw)
-                        drawLine(col, Offset(cx + gap, cy), Offset(cx + arm, cy), sw)
-                        drawLine(col, Offset(cx, cy - arm), Offset(cx, cy - gap), sw)
-                        drawLine(col, Offset(cx, cy + gap), Offset(cx, cy + arm), sw)
-                    }
-                    drawCircle(Color.Black.copy(alpha = 0.4f), radius = 10f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
-                    drawCircle(Color.White, radius = 8f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f))
-                    drawCircle(Color(0xFFFF5252), radius = 3.5f, center = Offset(cx, cy))
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
                 }
                 Surface(
                     color = Color(0xCC111111),
@@ -1460,8 +1258,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                 }
             }
             // —— قطب‌نمای چرخش نقشه ——
-            if (false && kotlin.math.abs(mapRotationDeg) > 0.5f) { // چرخش حذف شد
-
+            if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = Color(0xCC222222),
@@ -1548,12 +1345,13 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     .padding(bottom = 76.dp)
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, rotation ->
-                            val sw = if (crosshairMode) centerWorldSnapped() else screenToWorld(centroid.x, centroid.y)
+                            val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
-                            liveCoordMsg = statusXY
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
-                            // چرخش نقشه غیرفعال — تایل ماهواره با چرخش به‌هم می‌ریزد
-
+                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
+                            if (kotlin.math.abs(rotation) > 1e-4f) {
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
+                            }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -1597,16 +1395,6 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                     .pointerInput(measureMode, scale, offset, pickCoordinateMode, editingPointId, cadTool, pathMode, areaMode, linePickMode, profileAlignmentMode, profileDrawMode, zoomWindowMode, annotMode, mapAlignPick, pathFinished, areaFinished) {
                         if (editingPointId == null) {
                             detectTapGestures(
-                                onLongPress = { tap ->
-                                    val raw = screenToWorld(tap.x, tap.y)
-                                    val maxW = (0.02 / scale.coerceAtLeast(1e-6f)).toDouble().coerceIn(0.005, 0.5)
-                                    val p = CadEngine.snap(raw.first, raw.second, activeDrawings.map { it.id to it.model }, osnap, maxW, null)
-                                    loupeActive = true
-                                    loupeScreen = tap
-                                    loupeWorld = p
-                                    liveCoordMsg = String.format(java.util.Locale.US, "E=%.3f  N=%.3f  (ذره‌بین)", p.first, p.second)
-                                    message = "ذره‌بین — ضربه برای ثبت"
-                                },
                                 onDoubleTap = { tap ->
                                     if (pickCoordinateMode) return@detectTapGestures
                                     val factor = 1.7f
@@ -1616,12 +1404,12 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                 },
                                 onTap = { tap ->
                                     if (profilePlacementActive) {
-                                        val raw = pickWorld(tap.x, tap.y)
+                                        val raw = screenToWorld(tap.x, tap.y)
                                         placeProfileAt(raw.first, raw.second)
                                         return@detectTapGestures
                                     }
                                     if (profileAlignmentMode && profileDrawMode) {
-                                        val raw = pickWorld(tap.x, tap.y)
+                                        val raw = screenToWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val last = profileDraftVertices.lastOrNull()
                                         if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.01 / scale.coerceAtLeast(1e-6f))) {
@@ -1631,7 +1419,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                         return@detectTapGestures
                                     }
                                     if (pickCoordinateMode) {
-                                        val raw = pickWorld(tap.x, tap.y)
+                                        val raw = screenToWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
                                         pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
@@ -1645,7 +1433,7 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                             if (menuOpen) { menuOpen = false; menuGroup = null }
                                             return@detectTapGestures
                                         }
-                                    val raw = pickWorld(tap.x, tap.y)
+                                    val raw = screenToWorld(tap.x, tap.y)
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
                                     mapAlignPick?.let { (rowIdx, side) ->
@@ -1730,7 +1518,18 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                                     if (areaMode && !areaFinished) {
                                         val p = snapWorld(raw.first, raw.second)
                                         areaPts = areaPts + p
-                                        message = "مساحت: ${areaPts.size} رأس"
+                                        if (areaPts.size >= 3) {
+                                            var ar = 0.0
+                                            val nn = areaPts.size
+                                            for (ii in 0 until nn) {
+                                                val jj = (ii + 1) % nn
+                                                ar += areaPts[ii].first * areaPts[jj].second - areaPts[jj].first * areaPts[ii].second
+                                            }
+                                            ar = kotlin.math.abs(ar) / 2.0
+                                            message = String.format(java.util.Locale.US, "پلیگون بسته · %d رأس · %.2f m²", areaPts.size, ar)
+                                        } else {
+                                            message = "مساحت: ${areaPts.size} رأس (حداقل ۳)"
+                                        }
                                         return@detectTapGestures
                                     }
                                     if (linePickMode) {
@@ -1784,13 +1583,13 @@ if (zoomWindowMode) {
                                         val db = kotlin.math.hypot(tap.x - pb.x, tap.y - pb.y)
                                         if (da < 36f || db < 36f) {
                                             measureDragTarget = if (da <= db) "A" else "B"
-                                            distanceMsg = "نقطه ${measureDragTarget} را بکش؛ برای نقطه جدید دوباره اندازه را بزن"
+                                            distanceMsg = null; message = "نقطه ${measureDragTarget} را بکش"
                                             return@detectTapGestures
                                         }
                                     }
                                     if (measureA == null || (measureB != null && measureDragTarget == null)) {
                                         measureA = p; measureB = null; measureDragTarget = null
-                                        distanceMsg = "نقطه اول (حساس به عارضه)؛ نقطه دوم را لمس کن"
+                                        distanceMsg = null; message = "نقطه اول؛ نقطه دوم را لمس کن"
                                     } else if (measureB == null) {
                                         measureB = p
                                         updateMeasureDistance()
@@ -1847,7 +1646,8 @@ if (zoomWindowMode) {
                         if (cadTool == CadTool.None) return@pointerInput
                         detectTapGestures(
                             onTap = { tap ->
-                                processCadPoint(pickWorld(tap.x, tap.y))
+                                val raw = screenToWorld(tap.x, tap.y)
+                                processCadPoint(raw)
                             }
                         )
                     }
@@ -2056,7 +1856,7 @@ if (zoomWindowMode) {
                         val al = worldToScreen(areaPts.last().first, areaPts.last().second)
                         drawLine(Color(0xFFCE93D8), al, a0, 2f)
                     }
-                    if (areaFinished && areaPts.size >= 3) {
+                    if (areaPts.size >= 3) {
                         var a = 0.0
                         val n = areaPts.size
                         for (i in 0 until n) {
@@ -2177,42 +1977,6 @@ if (zoomWindowMode) {
                     drawCircle(Color(0xFF2196F3), 12f, s)
                     drawCircle(Color.White, 5f, s)
                 }
-
-                gotoMarker?.let { p ->
-                    val s = worldToScreen(p.first, p.second)
-                    // مارکر «برو به»
-                    drawCircle(Color(0xFFE53935).copy(alpha = 0.3f), 28f, s)
-                    drawCircle(Color(0xFFE53935), 12f, s)
-                    drawCircle(Color.White, 5f, s)
-                    drawLine(Color(0xFFE53935), Offset(s.x, s.y - 22f), Offset(s.x, s.y - 8f), 3f)
-                }
-
-
-                if (loupeActive && loupeWorld != null) {
-                    val finger = loupeScreen
-                    val r = 56f
-                    val c = Offset(finger.x, (finger.y - 100f).coerceAtLeast(r + 8f))
-                    drawCircle(Color.Black.copy(alpha = 0.35f), r, c)
-                    drawCircle(Color.White, r, c, style = Stroke(2.5f))
-                    drawLine(Color(0xFFFF5252), Offset(c.x - r + 6f, c.y), Offset(c.x + r - 6f, c.y), 1.5f)
-                    drawLine(Color(0xFFFF5252), Offset(c.x, c.y - r + 6f), Offset(c.x, c.y + r - 6f), 1.5f)
-                    val wp = worldToScreen(loupeWorld!!.first, loupeWorld!!.second)
-                    drawCircle(Color(0xFFFFEB3B), 6f, wp)
-                    drawLine(Color(0xFFFFEB3B), Offset(wp.x - 14f, wp.y), Offset(wp.x + 14f, wp.y), 2f)
-                    drawLine(Color(0xFFFFEB3B), Offset(wp.x, wp.y - 14f), Offset(wp.x, wp.y + 14f), 2f)
-                }
-
-            }
-        }
-
-        liveCoordMsg?.let { msg ->
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color.Black.copy(alpha = 0.75f),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp, start = 12.dp, end = 12.dp)
-            ) {
-                Text(msg, color = Color(0xFFE0E0E0), style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             }
         }
 
@@ -2225,11 +1989,8 @@ if (zoomWindowMode) {
                 Text(message, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
             }
         }
-        distanceMsg?.let {
-            Surface(shape = RoundedCornerShape(16.dp), color = color, modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)) {
-                Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-            }
-        }
+        // نوار اعلان فاصله تکراری CAD حذف شد
+
 
         if (editingPointId != null) {
             Surface(
@@ -2279,57 +2040,21 @@ if (zoomWindowMode) {
         fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
         fun exitAllTools() {
             cadTool = CadTool.None
+            draftPts = emptyList()
             measureMode = false
-            pathMode = false; pathEdit = false; pathFinished = false
-            areaMode = false; areaEdit = false; areaFinished = false
+            pathMode = false; pathEdit = false; pathFinished = false; pathPts = emptyList()
+            areaMode = false; areaEdit = false; areaFinished = false; areaPts = emptyList()
             linePickMode = false
             profileDrawMode = false
             zoomWindowMode = false
             annotMode = ""
             mapAlignPick = null
+            distanceMsg = null
             closeMenus()
             message = ""
         }
         val anyTool = cadTool != CadTool.None || measureMode || pathMode || areaMode || linePickMode || profileDrawMode ||
             zoomWindowMode || annotMode.isNotEmpty() || mapAlignPick != null
-
-
-            if (cadTool != CadTool.None) {
-                val toolName = when (cadTool) {
-                    CadTool.MeasureDist -> "فاصله + آزیموت"
-                    CadTool.MeasureAngle -> "زاویه"
-                    CadTool.MeasureArea -> "مساحت"
-                    CadTool.MeasureObject -> "اندازه شیء"
-                    CadTool.DrawLine -> "ترسیم خط"
-                    CadTool.DrawPoly -> "پلی‌لاین"
-                    CadTool.DrawCircle -> "دایره"
-                    CadTool.Offset -> "آفست"
-                    CadTool.Trim -> "Trim"
-                    CadTool.Extend -> "Extend"
-                    CadTool.Mirror -> "آینه"
-                    CadTool.Fillet -> "فیلت"
-                    CadTool.Select -> "انتخاب"
-                    CadTool.Move -> "جابجایی"
-                    CadTool.Copy -> "کپی"
-                    else -> cadTool.name
-                }
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xEE1B5E20),
-                    border = BorderStroke(1.dp, Color(0xFF81C995)),
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 52.dp).zIndex(25f)
-                ) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("CAD: $toolName", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = {
-                            cadTool = CadTool.None; draftPts = emptyList()
-                            offsetPendingLine = null; trimPendingCut = null
-                            extendPendingBoundary = null; mirrorAxis = null; filletFirst = null
-                            message = "ابزار خاموش"
-                        }) { Text("لغو", color = Color(0xFFFFCDD2), fontSize = 12.sp) }
-                    }
-                }
-            }
 
         Column(
             Modifier
@@ -2389,6 +2114,11 @@ if (zoomWindowMode) {
                                         GlassIcon(Icons.Filled.NearMe, "برو به") {
                                             showGotoDialog = true; closeMenus()
                                         }
+                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
+                                            crosshairMode = !crosshairMode
+                                            message = if (crosshairMode) "تارگت مرکزی فعال — ثبت از مرکز" else "تارگت خاموش"
+                                            closeMenus()
+                                        }
                                         GlassIcon(Icons.Filled.FileOpen, "ورود نقاط") {
                                             showMap2Points = true; closeMenus()
                                         }
@@ -2401,11 +2131,7 @@ if (zoomWindowMode) {
                                             showExportPickedDialog = true; closeMenus()
                                         }
                                     }
-                                    11 -> {
-                                        GlassIcon(Icons.Filled.Layers, "لایه‌ها") {
-                                            showLayerManager = true; closeMenus()
-                                        }
- // سه‌بعدی (نقشه ۲)
+                                    11 -> { // سه‌بعدی (نقشه ۲)
                                         GlassIcon(Icons.Filled.Terrain, "توپوگرافی") {
                                             // همگام‌سازی نقاط visible به توپو
                                             val vols = Map2Session.toVolPoints()
@@ -2425,14 +2151,7 @@ if (zoomWindowMode) {
                                             onOpenVolume(); closeMenus()
                                         }
                                     }
-                                    1 -> {
-                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
-                                            crosshairMode = !crosshairMode
-                                            message = if (crosshairMode)
-                                                "تارگت فعال: همه انتخاب‌ها روی مرکز صفحه — نقشه را جابجا کنید"
-                                            else "تارگت خاموش"
-                                        }
- // مشاهده / نمایش
+                                    1 -> { // مشاهده / نمایش
                                         GlassIcon(Icons.Filled.ZoomOutMap, "فیت") { fitTrigger++; closeMenus() }
                                         if (map2Mode) {
                                             GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
@@ -2452,30 +2171,27 @@ if (zoomWindowMode) {
                                             closeMenus()
                                         }
                                     }
-                                    2 -> { // اندازه — فاز۱/۲
-                                        GlassIcon(Icons.Filled.Straighten, "فاصله") {
-                                            cadTool = CadTool.MeasureDist; draftPts = emptyList()
-                                            measureMode = false; pathMode = false; areaMode = false; linePickMode = false
-                                            message = "فاصله CAD: دو نقطه (با آزیموت)"; closeMenus()
+                                    2 -> { // اندازه
+                                        GlassIcon(Icons.Filled.Straighten, "طول") {
+                                            measureMode = true; measureA = null; measureB = null
+                                            pathMode = false; areaMode = false; linePickMode = false
+                                            cadTool = CadTool.None
+                                            message = "اندازه طول: دو نقطه"; closeMenus()
                                         }
-                                        GlassIcon(Icons.Filled.Architecture, "زاویه") {
-                                            cadTool = CadTool.MeasureAngle; draftPts = emptyList()
-                                            measureMode = false; message = "زاویه: سه نقطه"; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.CropSquare, "مساحت") {
-                                            cadTool = CadTool.MeasureArea; draftPts = emptyList()
-                                            measureMode = false; message = "مساحت: رئوس چندضلعی"; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.Info, "شیء") {
-                                            cadTool = CadTool.MeasureObject; draftPts = emptyList()
-                                            measureMode = false; message = "اندازه شیء: خط/دایره را لمس کن"; closeMenus()
-                                        }
-                                        IconSep()
-                                        GlassIcon(Icons.Filled.MoreHoriz, "مسیر") {
+                                        GlassIcon(Icons.Filled.MoreHoriz, "مسافت") {
                                             pathMode = true; pathPts = emptyList(); pathFinished = false; pathEdit = false
-                                            measureMode = false; cadTool = CadTool.None
-                                            message = "مسافت مسیر"; closeMenus()
+                                            measureMode = false; areaMode = false; linePickMode = false
+                                            cadTool = CadTool.None
+                                            message = "مسافت: نقاط را پشت‌سرهم لمس کن"; closeMenus()
                                         }
+                                        GlassIcon(Icons.Filled.Remove, "خط") {
+                                            linePickMode = true; linePickIds = emptyList()
+                                            measureMode = false; pathMode = false; areaMode = false
+                                            cadTool = CadTool.None
+                                            message = "خطوط را لمس کن"; closeMenus()
+                                        }
+                                        GlassIcon(Icons.Filled.CropSquare, "مساحت") { showAreaSub = true }
+                                        IconSep()
                                         GlassIcon(Icons.Filled.Place, "مختصات") { showCoordSub = true }
                                     }
                                     3 -> { // ترسیم
@@ -2509,6 +2225,11 @@ if (zoomWindowMode) {
                                         GlassIcon(Icons.Filled.NearMe, "برو به") {
                                             showGotoDialog = true; closeMenus()
                                         }
+                                        GlassIcon(Icons.Filled.FilterCenterFocus, "تارگت", if (crosshairMode) Color(0xFF81C995) else Color.White) {
+                                            crosshairMode = !crosshairMode
+                                            message = if (crosshairMode) "تارگت مرکزی فعال" else "تارگت خاموش"
+                                            closeMenus()
+                                        }
                                         GlassIcon(Icons.Filled.NearMe, "انتخاب") {
                                             cadTool = CadTool.Select; draftPts = emptyList()
                                             measureMode = false; pathMode = false; areaMode = false; linePickMode = false
@@ -2528,23 +2249,6 @@ if (zoomWindowMode) {
                                             }
                                             closeMenus()
                                         }
-                                        IconSep()
-                                        GlassIcon(Icons.Filled.SwapHoriz, "آفست") {
-                                            showOffsetDistDialog = true; closeMenus(); message = "آفست"
-                                        }
-                                        GlassIcon(Icons.Filled.CallSplit, "Trim") {
-                                            cadTool = CadTool.Trim; trimPendingCut = null; draftPts = emptyList()
-                                            measureMode = false; message = "Trim: لبه برش سپس خط"; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.ZoomOutMap, "Extend") {
-                                            cadTool = CadTool.Extend; extendPendingBoundary = null; draftPts = emptyList()
-                                            measureMode = false; message = "Extend: مرز سپس خط"; closeMenus()
-                                        }
-                                        GlassIcon(Icons.Filled.CompareArrows, "آینه") {
-                                            cadTool = CadTool.Mirror; mirrorAxis = null; draftPts = emptyList()
-                                            measureMode = false; message = "آینه: محور سپس شیء"; closeMenus()
-                                        }
-
                                     }
                                     5 -> { // الاین
                                         GlassIcon(Icons.Filled.Transform, "الاین") {
@@ -2566,10 +2270,6 @@ if (zoomWindowMode) {
                                     }
                                     8 -> {
                                         GlassIcon(Icons.Filled.MyLocation, "گیر") { showOsnapPanel = true }
-                                    }
-                                    12 -> { // پنل کامل CAD فاز۱–۳
-                                        showCadPanel = true
-                                        closeMenus()
                                     }
                                     9 -> {
                                         if (profileAlignmentMode) {
@@ -2670,7 +2370,6 @@ if (zoomWindowMode) {
                                 Triple(Icons.Filled.Folder, 0, "فایل"),
                                 Triple(Icons.Filled.Place, 10, "نقاط"),
                                 Triple(Icons.Filled.Create, 3, "ترسیم"),
-                                Triple(Icons.Filled.Architecture, 12, "CAD"),
                                 Triple(Icons.Filled.Straighten, 2, "اندازه"),
                                 Triple(Icons.Filled.Build, 4, "ویرایش"),
                                 Triple(Icons.Filled.ViewInAr, 11, "سه‌بعدی"),
@@ -2681,7 +2380,6 @@ if (zoomWindowMode) {
                                 Triple(Icons.Filled.Straighten, 2, "اندازه"),
                                 Triple(Icons.Filled.Create, 3, "ترسیم"),
                                 Triple(Icons.Filled.Build, 4, "ویرایش"),
-                                Triple(Icons.Filled.Architecture, 12, "CAD"),
                                 Triple(Icons.Filled.Transform, 5, "الاین"),
                                 Triple(Icons.Filled.Undo, 6, "عقب"),
                                 Triple(Icons.Filled.Redo, 7, "جلو"),
@@ -3330,80 +3028,6 @@ if (showSaveDxfDialog) {
         )
     }
 
-    
-    if (showLayerManager) {
-        val allLayers = remember(drawings) {
-            drawings.flatMap { dr -> dr.model.layers.values.map { it to dr.id } }
-                .groupBy { it.first.name }
-                .map { (name, list) -> name to list.first().first }
-        }
-        AlertDialog(
-            onDismissRequest = { showLayerManager = false },
-            title = { Text("مدیریت لایه‌ها (فاز ۴)") },
-            text = {
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    if (allLayers.isEmpty()) {
-                        Text("لایه‌ای نیست — اول ترسیم یا DXF باز کن", fontSize = 13.sp)
-                    } else {
-                        allLayers.forEach { (name, info) ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.Checkbox(
-                                    checked = info.visible,
-                                    onCheckedChange = { vis ->
-                                        drawings = drawings.map { dr ->
-                                            val layers = dr.model.layers.toMutableMap()
-                                            layers[name]?.let { layers[name] = it.copy(visible = vis) }
-                                            dr.copy(model = dr.model.copy(layers = layers))
-                                        }
-                                    }
-                                )
-                                Text(name, Modifier.weight(1f), fontSize = 13.sp)
-                                // رنگ ساده
-                                val colors = listOf(1, 3, 5, 1, 30, 200)
-                                colors.forEach { aci ->
-                                    Box(
-                                        Modifier
-                                            .size(16.dp)
-                                            .padding(1.dp)
-                                            .background(
-                                                when (aci) {
-                                                    1 -> Color(0xFFE53935)
-                                                    3 -> Color(0xFF43A047)
-                                                    5 -> Color(0xFF1E88E5)
-                                                    30 -> Color(0xFFFB8C00)
-                                                    200 -> Color(0xFF8E24AA)
-                                                    else -> Color.Gray
-                                                },
-                                                RoundedCornerShape(2.dp)
-                                            )
-                                            .clickable {
-                                                drawings = drawings.map { dr ->
-                                                    val layers = dr.model.layers.toMutableMap()
-                                                    layers[name]?.let { layers[name] = it.copy(colorAci = aci) }
-                                                    dr.copy(model = dr.model.copy(layers = layers))
-                                                }
-                                            }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Text(
-                        "خاموش/روشن و رنگ لایه — فاز ۴",
-                        fontSize = 11.sp, color = Color.Gray,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLayerManager = false }) { Text("بستن") }
-            }
-        )
-    }
-
     if (showCadPanel) {
         AlertDialog(
             onDismissRequest = { showCadPanel = false },
@@ -3416,36 +3040,10 @@ if (showSaveDxfDialog) {
                             FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); showCadPanel = false; message = label }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
-                    Text("اندازه (فاز ۱–۲)", fontWeight = FontWeight.Bold)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(
-                            CadTool.MeasureDist to "فاصله+آزیموت",
-                            CadTool.MeasureAngle to "زاویه",
-                            CadTool.MeasureArea to "مساحت",
-                            CadTool.MeasureObject to "اندازه شیء"
-                        ).forEach { (tool, label) ->
-                            FilterChip(selected = cadTool == tool, onClick = {
-                                cadTool = tool; draftPts = emptyList(); measureMode = false
-                                showCadPanel = false; message = label
-                            }, label = { Text(label, fontSize = 11.sp) })
-                        }
-                    }
-                    Text("ویرایش پیشرفته (فاز ۳)", fontWeight = FontWeight.Bold)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilterChip(selected = cadTool == CadTool.Offset, onClick = {
-                            showCadPanel = false; showOffsetDistDialog = true; message = "آفست"
-                        }, label = { Text("آفست", fontSize = 11.sp) })
-                        listOf(
-                            CadTool.Trim to "Trim",
-                            CadTool.Extend to "Extend",
-                            CadTool.Mirror to "آینه",
-                            CadTool.Fillet to "فیلت"
-                        ).forEach { (tool, label) ->
-                            FilterChip(selected = cadTool == tool, onClick = {
-                                cadTool = tool; draftPts = emptyList()
-                                trimPendingCut = null; extendPendingBoundary = null
-                                showCadPanel = false; message = label
-                            }, label = { Text(label, fontSize = 11.sp) })
+                    Text("اندازه", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(CadTool.MeasureDist to "فاصله", CadTool.MeasureAngle to "زاویه", CadTool.MeasureArea to "مساحت").forEach { (tool, label) ->
+                            FilterChip(selected = cadTool == tool, onClick = { cadTool = tool; draftPts = emptyList(); measureMode = false; showCadPanel = false }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
                     Text("ویرایش", fontWeight = FontWeight.Bold)

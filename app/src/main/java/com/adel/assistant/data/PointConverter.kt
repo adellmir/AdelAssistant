@@ -19,19 +19,34 @@ object PointConverter {
     fun readBytes(bytes: ByteArray, fileName: String): List<SurveyPoint> {
         val lower = fileName.lowercase()
         val ext = extractExtension(lower)
-        return when {
+        val text = try { bytes.toString(Charsets.UTF_8) } catch (_: Exception) { "" }
+        fun tryAll(): List<SurveyPoint> {
+            val attempts = listOf(
+                { if (looksLikeDatOrder(text)) parseDelimited(text, datOrder = true) else emptyList() },
+                { parseDelimited(text, datOrder = false) },
+                { parseGsi(text) },
+                { parseIdx(text) },
+                { runCatching { KmlParser.parseBytes(bytes, fileName).points }.getOrDefault(emptyList()) },
+                { read(text, "txt") }
+            )
+            for (a in attempts) {
+                val r = runCatching { a() }.getOrDefault(emptyList())
+                if (r.isNotEmpty()) return r
+            }
+            return emptyList()
+        }
+        val primary = when {
             ext == "kmz" || ext == "kml" || lower.endsWith(".kmz") || lower.endsWith(".kml") ->
-                KmlParser.parseBytes(bytes, fileName).points
-            ext == "gsi" || lower.endsWith(".gsi") -> parseGsi(bytes.toString(Charsets.UTF_8))
-            ext == "dat" || lower.endsWith(".dat") ->
-                parseDelimited(bytes.toString(Charsets.UTF_8), datOrder = true)
+                runCatching { KmlParser.parseBytes(bytes, fileName).points }.getOrDefault(emptyList())
+            ext == "gsi" || lower.endsWith(".gsi") -> parseGsi(text)
+            ext == "dat" || lower.endsWith(".dat") -> parseDelimited(text, datOrder = true)
+            ext == "idx" || lower.endsWith(".idx") -> parseIdx(text)
             else -> {
-                val text = bytes.toString(Charsets.UTF_8)
-                // اگر پسوند نامشخص است ولی ستون‌ها شبیه N,Y,X,Z هستند → DAT
                 if (looksLikeDatOrder(text)) parseDelimited(text, datOrder = true)
                 else read(text, ext.ifBlank { "txt" })
             }
         }
+        return if (primary.isNotEmpty()) primary else tryAll()
     }
 
     /** استخراج پسوند از نام یا URI (مثلاً content://.../Namaz%20Hashemie.dat) */

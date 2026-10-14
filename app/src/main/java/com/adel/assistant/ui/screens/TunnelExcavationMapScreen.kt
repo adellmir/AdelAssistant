@@ -1,7 +1,5 @@
 package com.adel.assistant.ui.screens
 
-import com.adel.assistant.ui.PendingTunnelLookup
-
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -35,8 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -625,71 +621,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             }
-            // —— تارگت مرکزی ثبت نقطه (بالای لایهٔ لمس نقشه) ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
-                val inv = Color.White
-                // فقط رسم — بدون گرفتن لمس (لمس‌ها به نوار بالا می‌روند)
-                Canvas(Modifier.fillMaxSize().zIndex(15f)) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 54f
-                    val gap = 18f
-                    val stroke = 4.5f
-                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke)
-                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke)
-                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke)
-                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke)
-                    drawCircle(inv, radius = 9f, center = Offset(cx, cy), style = Stroke(3.5f))
-                    drawCircle(Color.Black.copy(alpha = 0.25f), radius = 11f, center = Offset(cx, cy), style = Stroke(1.5f))
-                }
-                Surface(
-                    color = Color(0xEE111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp, start = 8.dp, end = 8.dp)
-                        .zIndex(25f)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                registerFromCrosshair()
-                                status = "فرم ثبت باز شد"
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = color),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) { Text("ثبت", color = Color.White, fontSize = 12.sp) }
-                        TextButton(
-                            onClick = {
-                                if (editHintId != null) {
-                                    crosshairEditOverlayId = editHintId
-                                    crosshairDimId = editHintId
-                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairDimId = null
-                                    crosshairEditOverlayId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
-                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-
-
             dimMsg?.let { msg ->
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -737,8 +668,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         detectTapGestures(
                             onTap = { pos ->
                                 if (dimMode) {
-                                    val w = if (crosshairMode) centerWorldSnapped() else screenToWorld(pos.x, pos.y)
-                                    if (dimA == null || dimB != null) {
+                                    val w = screenToWorld(pos.x, pos.y)
+                                    if (dimA == null) {
                                         dimA = w
                                         dimB = null
                                         dimMsg = "نقطه دوم را بزن"
@@ -747,7 +678,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                         val a = dimA!!
                                         val dist = kotlin.math.hypot(w.first - a.first, w.second - a.second)
                                         dimMsg = String.format(java.util.Locale.US, "طول = %.3f m", dist)
-                                        // A و B نگه داشته می‌شوند تا خط و متن روی نقشه بماند
+                                        dimA = null
                                     }
                                     return@detectTapGestures
                                 }
@@ -932,7 +863,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
                 // لایه «اتفاقات تونل»: نقاط کددار/توضیح‌دار + دستی + گزارش
                 if (showEvents) {
-                    val hPx = (0.60f * scale).coerceIn(42f, 216f) // ۳× متن اتفاقات بنفش
+                    val hPx = (0.20f * scale).coerceIn(14f, 72f)
                     val eventPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0x43, 0xA0, 0x47)
                         textSize = hPx
@@ -941,7 +872,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         textAlign = Paint.Align.RIGHT
                     }
                     // نقاط تونل که فیلد type (کد/توضیح) دارند
-                    val codedPx = (0.21f * scale).coerceIn(36f, 120f) // ۳×
+                    val codedPx = (0.07f * scale).coerceIn(18f, 56f)
                     val codedPaint = Paint().apply {
                         this.color = android.graphics.Color.rgb(0xAB, 0x47, 0xBC)
                         textSize = codedPx
@@ -982,30 +913,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
 
                 // بنچ‌مارک: متن سبز ۲۰؟ ۱۰ سانتی‌متر سمت راست — ردیف۱ نام، ردیف۲ تراز
-                // خط اندازه‌گذاری + طول روی خط
+                // خط اندازه‌گذاری
                 dimA?.let { a ->
                     val sa = worldToScreen(a.first, a.second)
                     drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sa)
                     dimB?.let { b ->
                         val sb = worldToScreen(b.first, b.second)
-                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3.5f)
+                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3f)
                         drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sb)
-                        val dist = kotlin.math.hypot(b.first - a.first, b.second - a.second)
-                        val mid = Offset((sa.x + sb.x) / 2f, (sa.y + sb.y) / 2f)
-                        val label = String.format(java.util.Locale.US, "%.3f m", dist)
-                        val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                            setColor(android.graphics.Color.YELLOW)
-                            textSize = 34f
-                            isFakeBoldText = true
-                            textAlign = android.graphics.Paint.Align.CENTER
-                        }
-                        val tw = labelPaint.measureText(label)
-                        drawRect(
-                            Color.Black.copy(alpha = 0.55f),
-                            topLeft = Offset(mid.x - tw / 2f - 8f, mid.y - 28f),
-                            size = androidx.compose.ui.geometry.Size(tw + 16f, 36f)
-                        )
-                        drawContext.canvas.nativeCanvas.drawText(label, mid.x, mid.y + 4f, labelPaint)
                     }
                 }
 
@@ -1032,6 +947,64 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             }
+            // —— تارگت مرکزی ثبت نقطه ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
+                val inv = Color(0xFFFFEB3B)
+                val invShadow = Color.Black
+                Canvas(Modifier.fillMaxSize().zIndex(40f)) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 56f
+                    val gap = 14f
+                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp).zIndex(50f).zIndex(50f)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { registerFromCrosshair() },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
+                        TextButton(
+                            onClick = {
+                                if (editHintId != null) {
+                                    crosshairEditOverlayId = editHintId
+                                    crosshairDimId = editHintId
+                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairDimId = null
+                                    crosshairEditOverlayId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
+                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+
+
+
         }
 
         if (overlays.isNotEmpty()) {
@@ -1335,25 +1308,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = { infoTunnelPt = null }) { Text("بستن") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        try {
-                            val (lat, lon) = UtmGeo.toLatLon(p.x, p.y, UtmGeo.DEFAULT_ZONE)
-                            val url = "https://nshn.ir/?lat=$lat&lng=$lon"
-                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                        } catch (_: Exception) { }
-                    }) { Text("مسیریاب نشان", color = color) }
-                    TextButton(onClick = {
-                        PendingTunnelLookup.openPoint(p.pointNo)
-                        infoTunnelPt = null
-                        com.adel.assistant.data.DeepLinkHolder.setRoute(
-                            com.adel.assistant.navigation.Routes.SURVEY_TUNNEL_EVENTS
-                        )
-                        onBack()
-                    }) { Text("ویرایش", color = color) }
-                }
             }
         )
     }

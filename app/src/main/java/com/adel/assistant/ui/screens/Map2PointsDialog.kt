@@ -77,15 +77,35 @@ fun Map2PointsDialog(
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) {
-            if (!filePicked && points.isEmpty()) onDismiss()
+            // لغو انتخاب فایل — دیالوگ باز بماند تا دوباره انتخاب شود
+            if (!filePicked && points.isEmpty()) {
+                message = "فایلی انتخاب نشد — دوباره «انتخاب فایل» را بزنید"
+            }
             return@rememberLauncherForActivityResult
         }
         try {
-            val name = uri.lastPathSegment.orEmpty()
+            var name = uri.lastPathSegment.orEmpty()
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0 && c.moveToFirst()) name = c.getString(idx) ?: name
+                }
+            } catch (_: Exception) { }
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
-            val parsed = PointConverter.readBytes(bytes, name)
+            if (bytes.isEmpty()) {
+                message = "فایل خالی یا غیرقابل خواندن"
+                return@rememberLauncherForActivityResult
+            }
+            var parsed = PointConverter.readBytes(bytes, name)
             if (parsed.isEmpty()) {
-                message = "نقطه‌ای خوانده نشد"
+                // تلاش با نام جعلی txt/dat/gsi
+                for (fake in listOf("points.txt", "points.dat", "points.gsi", "points.kml")) {
+                    parsed = PointConverter.readBytes(bytes, fake)
+                    if (parsed.isNotEmpty()) { name = fake; break }
+                }
+            }
+            if (parsed.isEmpty()) {
+                message = "نقطه‌ای خوانده نشد — فرمت را بررسی کنید (txt/dat/gsi/kml)"
                 return@rememberLauncherForActivityResult
             }
             val base = System.currentTimeMillis()
