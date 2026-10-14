@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.PendingTunnelLookup
+
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
