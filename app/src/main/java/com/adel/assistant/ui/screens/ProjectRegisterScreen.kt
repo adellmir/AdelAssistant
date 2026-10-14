@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.foundation.text.KeyboardOptions
@@ -64,6 +65,9 @@ fun ProjectRegisterScreen(
     var minute by remember { mutableStateOf("0") }
     var name by remember { mutableStateOf("") }
     var locLat by remember { mutableStateOf(0.0) }
+    var showGotoDialog by remember { mutableStateOf(false) }
+    var gotoLine by remember { mutableStateOf("") }
+    var gotoZone by remember { mutableStateOf("40") }
     var locLon by remember { mutableStateOf(0.0) }
     var locLink by remember { mutableStateOf("") }
     var showLocationPicker by remember { mutableStateOf(false) }
@@ -324,6 +328,9 @@ fun ProjectRegisterScreen(
                     com.adel.assistant.data.openNeshanNav(context, locLat, locLon)
                 }) { Text("نشان") }
             }
+            IconButton(onClick = { showGotoDialog = true }) {
+                Icon(Icons.Filled.MyLocation, contentDescription = "برو به", tint = color)
+            }
         }
 
         Row(
@@ -480,4 +487,51 @@ fun ProjectRegisterScreen(
             dismissButton = { TextButton(onClick = { confirmDeleteFor = null }) { Text("انصراف") } }
         )
     }
+
+    if (showGotoDialog) {
+        AlertDialog(
+            onDismissRequest = { showGotoDialog = false },
+            title = { Text("برو به مختصات روی نقشه") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        gotoLine, { gotoLine = it },
+                        label = { Text("مختصات (E N یا lat,lon)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        gotoZone, { gotoZone = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("Zone UTM") },
+                        singleLine = true,
+                        modifier = Modifier.width(100.dp)
+                    )
+                    Text("مثال: 512345.6 3954321.2 یا 35.7,51.4", fontSize = MaterialTheme.typography.bodySmall.fontSize)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val parsed = com.adel.assistant.data.CoordGoto.parse(gotoLine)
+                    if (parsed == null) {
+                        statusMsg = "مختصات نامعتبر"
+                        return@TextButton
+                    }
+                    val z = gotoZone.toIntOrNull() ?: 40
+                    val (e, n, zz) = com.adel.assistant.data.CoordGoto.toUtm(parsed, z)
+                    com.adel.assistant.data.PendingMapGoto.set(e, n, zz)
+                    com.adel.assistant.data.DeepLinkHolder.setRoute(
+                        com.adel.assistant.navigation.Routes.TOOL_MAP2
+                    )
+                    showGotoDialog = false
+                    statusMsg = "نقشه به E=${String.format(java.util.Locale.US, "%.2f", e)} باز می‌شود"
+                    onBack()
+                }) { Text("برو به نقشه") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGotoDialog = false }) { Text("انصراف") }
+            }
+        )
+    }
+
+
 }

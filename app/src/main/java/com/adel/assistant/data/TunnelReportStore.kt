@@ -293,19 +293,27 @@ object TunnelReportStore {
         val km: Double, val elevDiff: String, val slope: String, val type: String
     )
 
+    @Volatile private var pointsCache: List<TunnelPoint>? = null
+
+    fun invalidatePointsCache() { pointsCache = null }
+
     fun allPoints(context: Context): List<TunnelPoint> {
-        return CsvStore.readAll(context, POINTS_TXT).mapNotNull { row ->
+        pointsCache?.let { return it }
+        val list = CsvStore.readAll(context, POINTS_TXT).mapNotNull { row ->
             if (row.size < 8) return@mapNotNull null
             try {
                 TunnelPoint(row[0], row[1].toEnglishDigits().toDouble(), row[2].toEnglishDigits().toDouble(),
                     row[3].toEnglishDigits().toDouble(), row[4].toEnglishDigits().toDouble(), row[5], row[6], row[7])
             } catch (e: Exception) { null }
         }
+        pointsCache = list
+        return list
     }
 
     fun savePoint(context: Context, p: TunnelPoint) {
         CsvStore.appendRow(context, POINTS_TXT, listOf(p.pointNo, p.x.toString(), p.y.toString(),
             p.z.toString(), p.km.toString(), p.elevDiff, p.slope, p.type))
+        invalidatePointsCache()
     }
 
     fun replacePoint(context: Context, oldPointNo: String, updated: TunnelPoint) {
@@ -314,6 +322,7 @@ object TunnelReportStore {
         val rows = all.map { listOf(it.pointNo, it.x.toString(), it.y.toString(), it.z.toString(),
             it.km.toString(), it.elevDiff, it.slope, it.type) }
         CsvStore.overwriteAll(context, POINTS_TXT, rows)
+        invalidatePointsCache()
     }
 
     fun findByKm(context: Context, km: Double): TunnelPoint? {

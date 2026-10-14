@@ -226,6 +226,13 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        // اول گزارش ثبت‌شدهٔ همان روز
+        loadDay()
+        if (rows.isNotEmpty()) {
+            statusMsg = "${rows.size} ردیف امروز بارگذاری شد"
+            return@LaunchedEffect
+        }
+        // در غیر این صورت پیش‌نویس
         val draft = WorkingDraftStore.loadDaily(context) ?: return@LaunchedEffect
         if (draft.year == year && draft.month == month && draft.day == day && draft.rows.isNotEmpty()) {
             rows = draft.rows.map {
@@ -315,7 +322,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             )
             // عدد سفید ارتفاع زیر + — بدون به‌هم‌ریختن ردیف
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = { addOrUpdateRow() }) {
+                IconButton(onClick = { addOrUpdateRow(); if (rows.isNotEmpty()) registerAll() }) {
                     Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
                 }
                 val elevHint = remember(pointNo, length, shaft, side) {

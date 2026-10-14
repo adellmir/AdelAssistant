@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Thunderstorm
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.ui.graphics.SolidColor
@@ -245,6 +246,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     }
     var planOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var debouncedQuery by remember { mutableStateOf("") }
+    LaunchedEffect(searchQuery) {
+        delay(350)
+        debouncedQuery = searchQuery
+    }
+    // کش یک‌بار نقاط تونل برای جستجو (جلوگیری از خواندن مکرر فایل)
+    val cachedTunnelPts = remember {
+        try { TunnelReportStore.allPoints(context) } catch (_: Exception) { emptyList() }
+    }
     var expandedEmp by remember { mutableStateOf<String?>(null) }
     var projectTasks by remember {
         mutableStateOf(
@@ -597,16 +607,30 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         ),
                         textStyle = TextStyle(fontSize = 14.sp, color = TextPrimary),
                         leadingIcon = {
-                            Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                            if (searchQuery.isNotEmpty()) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "پاک کردن",
+                                    tint = TextMuted,
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clickable {
+                                            searchQuery = ""
+                                            debouncedQuery = ""
+                                        }
+                                )
+                            } else {
+                                Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                            }
                         }
                     )
                 }
             }
 
 
-            // ---- نتایج جستجوی هوشمند ----
-            if (query.isNotEmpty()) {
-                val qLower = query.lowercase().trim()
+            // ---- نتایج جستجوی هوشمند (با debounce برای جلوگیری از کرش) ----
+            if (debouncedQuery.isNotEmpty()) {
+                val qLower = debouncedQuery.lowercase().trim()
                 val qNorm = qLower.replace("ی", "ي").replace("ک", "ك")
 
                 fun moneyM(v: Double): String =
@@ -640,11 +664,11 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
 
                 // —— عدد خالص: شماره نقطه یا کیلومتر ——
-                val pureNum = query.toEnglishDigits().trim()
+                val pureNum = debouncedQuery.toEnglishDigits().trim()
                 val isPureNumber = pureNum.matches(Regex("""^\d+(\.\d+)?$"""))
                 if (isPureNumber) {
-                    val pts = remember(query) { TunnelReportStore.allPoints(context) }
-                    val asPoint = pts.filter { it.pointNo == pureNum || it.pointNo.contains(pureNum) }
+                    val pts = cachedTunnelPts
+                    val asPoint = pts.asSequence().filter { it.pointNo == pureNum || it.pointNo.contains(pureNum) }.take(30).toList()
                     val asKm = pureNum.toDoubleOrNull()
                     Text("شماره نقطه / کیلومتر", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     // نقاط با این شماره
@@ -874,7 +898,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // —— نقاط تونل: شفت / چاه / سامپ ——
                     if (typePrefix != null) {
-                        val pts = remember(query) { TunnelReportStore.allPoints(context) }
+                        val pts = cachedTunnelPts
                         val filtered = pts.filter { p ->
                             val t = p.type.trim().lowercase()
                             val okPrefix = when (typePrefix) {
@@ -971,7 +995,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 .clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }
                                 .padding(vertical = 4.dp)
                         )
-                        val entries = remember(query) { TunnelReportStore.allEntries(context).takeLast(8).reversed() }
+                        val entries = remember(debouncedQuery) { TunnelReportStore.allEntries(context).takeLast(8).reversed() }
                         if (entries.isEmpty()) {
                             Text("گزارشی ثبت نشده", color = TextMuted, fontSize = 12.sp)
                         } else {
@@ -998,7 +1022,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
                     // —— مطالبات ——
                     if (isClaims) {
-                        val employers = remember(query) {
+                        val employers = remember(debouncedQuery) {
                             ProjectStore.employerProfiles(context, "").filter {
                                 // بجز تونل
                                 !it.employer.contains("تونل") && it.sessions.none { s -> s.name.contains("تونل") }
@@ -1057,10 +1081,10 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
                     // —— جستجوی کارفرما / پروژه (همیشه اگر کوئری متنی باشد) ——
                     if (!isProgress && !isClaims && typePrefix == null) {
-                        val emps = remember(query) {
+                        val emps = remember(debouncedQuery) {
                             ProjectStore.employerProfiles(context, query)
                         }
-                        val projs = remember(query) {
+                        val projs = remember(debouncedQuery) {
                             ProjectStore.projectProfiles(context, query)
                         }
                         if (emps.isNotEmpty()) {

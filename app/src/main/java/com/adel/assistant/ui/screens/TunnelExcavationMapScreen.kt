@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -621,12 +623,13 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             }
-            // —— تارگت مرکزی ثبت نقطه ——
+            // —— تارگت مرکزی ثبت نقطه (بالای لایهٔ لمس نقشه) ——
             if (crosshairMode) {
                 val cw = centerWorldSnapped()
                 val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
                 val inv = Color.White
-                Canvas(Modifier.fillMaxSize()) {
+                // فقط رسم — بدون گرفتن لمس (لمس‌ها به نوار بالا می‌روند)
+                Canvas(Modifier.fillMaxSize().zIndex(15f)) {
                     val cx = size.width / 2f
                     val cy = size.height / 2f
                     val arm = 54f
@@ -640,19 +643,26 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     drawCircle(Color.Black.copy(alpha = 0.25f), radius = 11f, center = Offset(cx, cy), style = Stroke(1.5f))
                 }
                 Surface(
-                    color = Color(0xCC111111),
+                    color = Color(0xEE111111),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                        .zIndex(25f)
                 ) {
                     Row(
                         Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        TextButton(
-                            onClick = { registerFromCrosshair() },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
+                        Button(
+                            onClick = {
+                                registerFromCrosshair()
+                                status = "فرم ثبت باز شد"
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) { Text("ثبت", color = Color.White, fontSize = 12.sp) }
                         TextButton(
                             onClick = {
                                 if (editHintId != null) {
@@ -1323,6 +1333,25 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = { infoTunnelPt = null }) { Text("بستن") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        try {
+                            val (lat, lon) = UtmGeo.toLatLon(p.x, p.y, UtmGeo.DEFAULT_ZONE)
+                            val url = "https://nshn.ir/?lat=$lat&lng=$lon"
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                        } catch (_: Exception) { }
+                    }) { Text("مسیریاب نشان", color = color) }
+                    TextButton(onClick = {
+                        PendingTunnelLookup.openPoint(p.pointNo)
+                        infoTunnelPt = null
+                        com.adel.assistant.data.DeepLinkHolder.setRoute(
+                            com.adel.assistant.navigation.Routes.SURVEY_TUNNEL_EVENTS
+                        )
+                        onBack()
+                    }) { Text("ویرایش", color = color) }
+                }
             }
         )
     }
