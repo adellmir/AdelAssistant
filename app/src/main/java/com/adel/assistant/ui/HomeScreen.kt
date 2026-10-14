@@ -670,6 +670,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 val isClaims = qLower.contains("مطالبات") || qLower.contains("طلب")
 
 
+                val pureNum = debouncedQuery.toEnglishDigits().trim()
+                val isPureNumber = pureNum.matches(Regex("""^\d+(\.\d+)?$"""))
+
                 // —— جستجوی کد / توضیح نقطه تونل (حروفی یا ترکیبی) ——
                 if (!isPureNumber && debouncedQuery.length >= 1) {
                     val codeQ = debouncedQuery.toEnglishDigits().trim().lowercase()
@@ -705,8 +708,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
 
                 // —— عدد خالص: شماره نقطه یا کیلومتر ——
-                val pureNum = debouncedQuery.toEnglishDigits().trim()
-                val isPureNumber = pureNum.matches(Regex("""^\d+(\.\d+)?$"""))
                 if (isPureNumber) {
                     val pts = cachedTunnelPts
                     val pureDigits = pureNum.trimStart('0').ifEmpty { pureNum }

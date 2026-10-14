@@ -304,6 +304,36 @@ object PlumbStore {
         return out
     }
 
+
+    /** خروجی JSON یک پروژه (پایگاه همان پروژه) */
+    fun exportOneJson(p: PlumbProject): String = toJson(p).toString(2)
+
+    /** ورود JSON یک پروژه — جایگزین یا اضافه */
+    fun importOneJson(ctx: Context, text: String): PlumbProject? {
+        return try {
+            val obj = JSONObject(text.trim())
+            // اگر آرایه بود، اولین را بگیر
+            val project = if (obj.has("name") || obj.has("id")) {
+                parseProject(obj)
+            } else {
+                null
+            }
+            if (project != null) {
+                upsert(ctx, project.copy(updatedAt = System.currentTimeMillis()))
+                project
+            } else {
+                // شاید آرایه باشد
+                val arr = JSONArray(text.trim())
+                if (arr.length() == 0) return null
+                val pr = parseProject(arr.getJSONObject(0))
+                upsert(ctx, pr.copy(updatedAt = System.currentTimeMillis()))
+                pr
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /** JSON کامل پایگاه برای زیپ پشتیبان */
     fun exportJson(ctx: Context): String {
         val arr = org.json.JSONArray()
