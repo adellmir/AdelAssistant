@@ -736,7 +736,13 @@ LaunchedEffect(profileMode) {
     }
 
     fun requestExit() {
-showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیره
+        // اگر ترسیمی/تغییری نبود مستقیم خارج شو
+        val hasWork = docDirty || drawings.any { it.name != "_CAD" || it.model.lines.isNotEmpty() || it.model.texts.isNotEmpty() || it.model.circles.isNotEmpty() }
+        if (!hasWork) {
+            onBack()
+            return
+        }
+        showExitSaveDialog = true
     }
 
     BackHandler { requestExit() }
@@ -1199,91 +1205,8 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
 
     Box(Modifier.fillMaxSize().background(Background)) {
 
-            // —— تارگت مرکزی + نوار ثبت ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
-                // علامت تارگت وسط صفحه
-                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 18f
-                    val gap = 6f
-                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
-                }
-                Surface(
-                    color = Color(0xCC111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
-                            Text("ثبت", color = color, fontSize = 12.sp)
-                        }
-                        TextButton(
-                            onClick = {
-                                if (crosshairEditId != null) {
-                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
-                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairEditId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(
-                                String.format(java.util.Locale.US, "E %.3f", cw.first),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                            Text(
-                                String.format(java.util.Locale.US, "N %.3f", cw.second),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
-            // —— قطب‌نمای چرخش نقشه ——
-            if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color(0xCC222222),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 90.dp)
-                        .size(44.dp)
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .clickable { mapRotationDeg = 0f; message = "چرخش نقشه صفر شد" },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("N", color = Color.Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        // نشان زاویه
-                        Text(
-                            String.format(java.util.Locale.US, "%.0f°", mapRotationDeg),
-                            color = Color.White.copy(0.7f),
-                            fontSize = 8.sp,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp)
-                        )
-                    }
-                }
-            }
+            // قطب‌نمای چرخش حذف شد
+
 
 
             if (showCompass) {
@@ -1348,10 +1271,8 @@ showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیر
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
-                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
-                            if (kotlin.math.abs(rotation) > 1e-4f) {
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
-                            }
+                            // چرخش نقشه غیرفعال (تایل ماهواره‌ای را خراب می‌کند)
+
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -2423,6 +2344,73 @@ if (zoomWindowMode) {
             containerColor = color,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp)
         ) { Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White) }
+
+            // —— تارگت مرکزی + نوار ثبت ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val invStroke = Color(0xFFFFEB3B)
+                val invShadow = Color.Black
+                // علامت تارگت وسط صفحه — روی همه لایه‌ها
+                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp).zIndex(50f)) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 56f
+                    val gap = 14f
+                    val stroke = 5f
+                    drawLine(invShadow, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke + 3f)
+                    drawLine(invShadow, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke + 3f)
+                    drawLine(invShadow, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke + 3f)
+                    drawLine(invShadow, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke + 3f)
+                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke)
+                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke)
+                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke)
+                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke)
+                    drawCircle(invShadow, radius = 12f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
+                    drawCircle(invStroke, radius = 10f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(3.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
+                        .zIndex(60f)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
+                            Text("ثبت", color = color, fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = {
+                                if (crosshairEditId != null) {
+                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
+                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairEditId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(
+                                String.format(java.util.Locale.US, "E %.3f", cw.first),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                            Text(
+                                String.format(java.util.Locale.US, "N %.3f", cw.second),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
 
         // نوار مختصات و ابزار فعال
         Surface(

@@ -138,7 +138,7 @@ private fun ShaftProgressCard(c: ShaftCard) {
             Column(Modifier.weight(1f)) {
                 Text(c.moreLabel, style = MaterialTheme.typography.bodySmall, color = Color(0xFF81C995), fontSize = 12.sp)
                 Text(formatEn("%.3f", c.moreKm), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9BA888), fontSize = 11.sp)
-                Text(formatEn("پ:%.1f / م:%.1f", c.moreProgress, c.moreRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
+                Text(formatEn("پیشرفت: %.1f / مانده: %.1f", c.moreProgress, c.moreRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
             }
             // وسط: فقط شماره شفت
             Text(
@@ -151,7 +151,7 @@ private fun ShaftProgressCard(c: ShaftCard) {
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                 Text(c.lessLabel, style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFB74D), fontSize = 12.sp)
                 Text(formatEn("%.3f", c.lessKm), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9BA888), fontSize = 11.sp)
-                Text(formatEn("پ:%.1f / م:%.1f", c.lessProgress, c.lessRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
+                Text(formatEn("پیشرفت: %.1f / مانده: %.1f", c.lessProgress, c.lessRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
             }
         }
     }
@@ -185,7 +185,7 @@ private fun buildOverallCards(context: android.content.Context): List<ShaftCard>
     }
 }
 
-/** پیشرفت بازه‌ای: پ = جابجایی کیلومتر در بازه؛ م = مانده تا جبهه مقابل در انتهای بازه */
+/** پیشرفت بازه‌ای: پیشرفت = جابجایی کیلومتر در بازه؛ مانده = تا جبهه مقابل در انتهای بازه */
 private fun buildRangeCards(context: android.content.Context, fromKey: String, toKey: String): List<ShaftCard> {
     val byShaft = TunnelReportStore.TUNNEL_LAYOUT.groupBy { it.first }.toSortedMap()
     return byShaft.map { (shaftName, sides) ->

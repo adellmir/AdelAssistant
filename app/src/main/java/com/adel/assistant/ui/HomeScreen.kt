@@ -251,9 +251,16 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
         delay(350)
         debouncedQuery = searchQuery
     }
-    // کش یک‌بار نقاط تونل برای جستجو (جلوگیری از خواندن مکرر فایل)
-    val cachedTunnelPts = remember {
-        try { TunnelReportStore.allPoints(context) } catch (_: Exception) { emptyList() }
+    // کش نقاط تونل — با هر جستجوی جدید به‌روز می‌شود
+    var cachedTunnelPts by remember {
+        mutableStateOf(
+            try { TunnelReportStore.allPoints(context) } catch (_: Exception) { emptyList() }
+        )
+    }
+    LaunchedEffect(debouncedQuery) {
+        if (debouncedQuery.isNotBlank()) {
+            cachedTunnelPts = try { TunnelReportStore.allPoints(context) } catch (_: Exception) { emptyList() }
+        }
     }
     var expandedEmp by remember { mutableStateOf<String?>(null) }
     var projectTasks by remember {
@@ -663,12 +670,52 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 val isClaims = qLower.contains("مطالبات") || qLower.contains("طلب")
 
 
+                // —— جستجوی کد / توضیح نقطه تونل (حروفی یا ترکیبی) ——
+                if (!isPureNumber && debouncedQuery.length >= 1) {
+                    val codeQ = debouncedQuery.toEnglishDigits().trim().lowercase()
+                    val codeHits = cachedTunnelPts.asSequence().filter { p ->
+                        val typ = p.type.toEnglishDigits().trim().lowercase()
+                        val pn = p.pointNo.toEnglishDigits().trim().lowercase()
+                        typ.contains(codeQ) || pn.contains(codeQ) ||
+                        typ.replace(" ", "").contains(codeQ.replace(" ", ""))
+                    }.take(40).toList()
+                    if (codeHits.isNotEmpty()) {
+                        Text("کد / توضیح نقاط تونل", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        codeHits.forEach { p ->
+                            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        "نقطه ${p.pointNo} · ${p.type}",
+                                        color = WorkPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.clickable {
+                                            PendingTunnelLookup.openPoint(p.pointNo)
+                                            onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
+                                        }
+                                    )
+                                    Text(
+                                        String.format(java.util.Locale.US, "کیلومتر: %.3f  X=%.3f Y=%.3f Z=%.3f", p.km, p.x, p.y, p.z),
+                                        color = TextMuted, fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // —— عدد خالص: شماره نقطه یا کیلومتر ——
                 val pureNum = debouncedQuery.toEnglishDigits().trim()
                 val isPureNumber = pureNum.matches(Regex("""^\d+(\.\d+)?$"""))
                 if (isPureNumber) {
                     val pts = cachedTunnelPts
-                    val asPoint = pts.asSequence().filter { it.pointNo == pureNum || it.pointNo.contains(pureNum) }.take(30).toList()
+                    val pureDigits = pureNum.trimStart('0').ifEmpty { pureNum }
+                    val asPoint = pts.asSequence().filter { p ->
+                        val pn = p.pointNo.toEnglishDigits().trim()
+                        val pnDigits = pn.trimStart('0').ifEmpty { pn }
+                        pn == pureNum || pn.contains(pureNum) ||
+                        pnDigits == pureDigits || pnDigits.contains(pureDigits)
+                    }.take(30).toList()
                     val asKm = pureNum.toDoubleOrNull()
                     Text("شماره نقطه / کیلومتر", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     // نقاط با این شماره

@@ -17,7 +17,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +37,6 @@ import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.ui.ScreenTopBar
-import com.adel.assistant.ui.PendingDailyReport
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -62,12 +60,6 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var day by remember { mutableStateOf(today.third.toString()) }
     var month by remember { mutableStateOf(today.second.toString()) }
     var year by remember { mutableStateOf(today.first.toString()) }
-
-    LaunchedEffect(Unit) {
-        PendingDailyReport.consume()?.let { (y, m, d) ->
-            year = y; month = m; day = d
-        }
-    }
 
     var shaft by remember { mutableStateOf("") }
     var side by remember { mutableStateOf("") }
@@ -226,13 +218,6 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        // اول گزارش ثبت‌شدهٔ همان روز
-        loadDay()
-        if (rows.isNotEmpty()) {
-            statusMsg = "${rows.size} ردیف امروز بارگذاری شد"
-            return@LaunchedEffect
-        }
-        // در غیر این صورت پیش‌نویس
         val draft = WorkingDraftStore.loadDaily(context) ?: return@LaunchedEffect
         if (draft.year == year && draft.month == month && draft.day == day && draft.rows.isNotEmpty()) {
             rows = draft.rows.map {
@@ -322,7 +307,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             )
             // عدد سفید ارتفاع زیر + — بدون به‌هم‌ریختن ردیف
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = { addOrUpdateRow(); if (rows.isNotEmpty()) registerAll() }) {
+                IconButton(onClick = { addOrUpdateRow() }) {
                     Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
                 }
                 val elevHint = remember(pointNo, length, shaft, side) {
@@ -406,7 +391,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                         }
                         Text(
                             formatEn(
-                                "ک:%.3f  پ.روز:%.3f  پ.شفت:%.3f  مانده:%.3f",
+                                "کیلومتر: %.3f  پیشرفت روز: %.3f  پیشرفت شفت: %.3f  مانده: %.3f",
                                 r.km, r.dailyProgress, r.shaftProgress, r.remaining
                             ),
                             style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B)
