@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.CalendarHelper
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
@@ -119,7 +120,7 @@ fun ProjectRegisterScreen(
 
     BackHandler(enabled = editingRow != null) { clearForm() }
 
-    val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.AlignPair
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.AlignPoint
 import com.adel.assistant.data.AlignTransform
 import com.adel.assistant.data.FileExport
@@ -75,7 +76,7 @@ private fun AlignCoordinateTab(color: Color) {
         return com.adel.assistant.data.PointImport.readText(text, fileName).toGsiPoints()
     }
 
-    val picker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
+    val picker = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val pts = com.adel.assistant.data.PointImport.readAsGsi(context, uri)
@@ -160,12 +161,12 @@ private fun AlignCoordinateTab(color: Color) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
-                onClick = { loadTarget = "control"; picker.launch(arrayOf("*/*", "text/*")) },
+                onClick = { loadTarget = "control"; picker.launch(FilePicker.POINTS) },
                 colors = ButtonDefaults.buttonColors(containerColor = color),
                 modifier = Modifier.weight(1f)
             ) { Text("فایل کنترل") }
             Button(
-                onClick = { loadTarget = "survey"; picker.launch(arrayOf("*/*", "text/*")) },
+                onClick = { loadTarget = "survey"; picker.launch(FilePicker.POINTS) },
                 colors = ButtonDefaults.buttonColors(containerColor = color),
                 modifier = Modifier.weight(1f)
             ) { Text("فایل برداشت") }

@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.adel.assistant.data.CodeSetting
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.FileExport
@@ -53,7 +54,7 @@ fun DxfConverterScreen(onBack: () -> Unit, onOpenTopography: () -> Unit = {}) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = FilePicker.contract()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
@@ -141,7 +142,7 @@ fun DxfConverterScreen(onBack: () -> Unit, onOpenTopography: () -> Unit = {}) {
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
-                        onClick = { filePicker.launch(arrayOf("*/*")) },
+                        onClick = { filePicker.launch(FilePicker.POINTS) },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ToolPrimary)

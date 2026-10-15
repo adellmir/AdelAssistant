@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ContourSet
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.CutFillCell
 import com.adel.assistant.data.VolumeAnalysis
 import com.adel.assistant.data.FileExport
@@ -143,7 +144,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         else parseSimplePoints(bytes.toString(Charsets.UTF_8))
     }
 
-    val boundaryPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val boundaryPicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
@@ -165,7 +166,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
     }
 
-    val sessionPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val sessionPicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
@@ -196,7 +197,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
     }
 
-    val breaklinePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val breaklinePicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
@@ -220,7 +221,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val filePicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val name = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
@@ -630,7 +631,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                     Button(
                         onClick = {
                             assignIndex = index
-                            filePicker.launch(arrayOf("*/*"))
+                            filePicker.launch(FilePicker.POINTS)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)

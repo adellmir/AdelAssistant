@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.PlumbStore
 import com.adel.assistant.ui.ScreenTopBar
@@ -124,7 +125,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
         }
     }
 
-    val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { importZip(it.readBytes()) }

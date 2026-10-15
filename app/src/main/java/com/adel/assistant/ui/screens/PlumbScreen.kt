@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.PlumbColumn
 import com.adel.assistant.data.PlumbNeighbor
@@ -105,7 +106,7 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
 
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
-    val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val csvPicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use {

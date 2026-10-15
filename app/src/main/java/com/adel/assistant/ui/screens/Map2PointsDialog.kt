@@ -75,7 +75,7 @@ fun Map2PointsDialog(
     var lineShowCode by remember { mutableStateOf(true) }
     var lineShowElev by remember { mutableStateOf(false) }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val picker = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri == null) {
             if (!filePicked && points.isEmpty()) onDismiss()
             return@rememberLauncherForActivityResult
@@ -245,7 +245,7 @@ fun Map2PointsDialog(
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = {
-                        picker.launch(arrayOf("*/*", "text/*", "application/octet-stream"))
+                        picker.launch(FilePicker.POINTS)
                     }) { Text("فایل دیگر", color = color, fontSize = 12.sp) }
                     TextButton(onClick = onDismiss) { Text("بستن", color = Color(0xFFE57373), fontSize = 12.sp) }
                 }

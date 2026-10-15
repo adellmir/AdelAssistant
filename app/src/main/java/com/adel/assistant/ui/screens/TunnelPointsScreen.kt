@@ -32,6 +32,7 @@ import android.net.Uri
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CsvStore
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.TunnelReportStore
@@ -75,7 +76,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         )
     }
 
-    val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->

@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
@@ -86,7 +87,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        FilePicker.contract()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {

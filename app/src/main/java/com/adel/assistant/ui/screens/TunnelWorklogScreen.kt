@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.TunnelFinanceStore
@@ -71,7 +72,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
     }
     BackHandler(enabled = editingCode != null) { clearForm() }
 
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->

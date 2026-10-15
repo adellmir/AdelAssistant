@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.MonAnalysisRow
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.MonEpoch
 import com.adel.assistant.data.MonPoint
 import com.adel.assistant.data.MonProject
@@ -166,7 +167,7 @@ private fun ProjectDetail(
     var exportPickEpoch by remember { mutableStateOf<MonEpoch?>(null) }
     var exportPickIdx by remember { mutableStateOf(1) }
 
-    val templatePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val templatePicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
@@ -329,7 +330,7 @@ private fun NewEpochDialog(color: Color, onDismiss: () -> Unit, onCreated: (MonE
     var msg by remember { mutableStateOf("") }
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val filePicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use { ins ->
@@ -355,7 +356,7 @@ private fun NewEpochDialog(color: Color, onDismiss: () -> Unit, onCreated: (MonE
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
-                        filePicker.launch(arrayOf("text/*", "text/csv", "text/plain", "*/*"))
+                        filePicker.launch(FilePicker.TEXT_CSV)
                     }) { Text("ورود برداشت‌ها") }
                     Button(
                         onClick = {
@@ -393,7 +394,7 @@ private fun BaseEditor(
     var points by remember { mutableStateOf(project.basePoints.map { it.copy() }.toMutableList()) }
     var msg by remember { mutableStateOf("") }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val filePicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val text = context.contentResolver.openInputStream(uri)?.use { BufferedReader(InputStreamReader(it)).readText() } ?: return@rememberLauncherForActivityResult
@@ -417,7 +418,7 @@ private fun BaseEditor(
         }
         OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { filePicker.launch(arrayOf("text/*", "*/*")) }) { Text("ورود فایل") }
+            OutlinedButton(onClick = { filePicker.launch(FilePicker.TEXT_CSV) }) { Text("ورود فایل") }
             if (msg.isNotBlank()) Text(msg, color = Color(0xFFB0B8A8), fontSize = 12.sp)
         }
         Spacer(Modifier.height(6.dp))

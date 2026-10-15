@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.MapOverlayPoint
 import com.adel.assistant.data.MapOverlayStore
@@ -456,7 +457,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     }
 
     val mapUploadLauncher = rememberLauncherForActivityResult(
-        com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
+        FilePicker.contract()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
@@ -1460,7 +1461,7 @@ private fun TunnelBenchmarkImportDialog(
         }
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val picker = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val name = PointImport.resolveDisplayName(context, uri)
@@ -1503,7 +1504,7 @@ private fun TunnelBenchmarkImportDialog(
             Column(Modifier.fillMaxWidth().heightIn(max = 480.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(onClick = {
-                        picker.launch(arrayOf("*/*", "text/*", "application/octet-stream"))
+                        picker.launch(FilePicker.POINTS)
                     }) { Text("فایل (GSI/TXT/…)") }
                     TextButton(onClick = { applySelection("all") }) { Text("همه") }
                     TextButton(onClick = { applySelection("none") }) { Text("هیچ") }

@@ -54,7 +54,7 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         if (points.size >= 3) rebuild()
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val picker = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val name = uri.lastPathSegment ?: "points.dat"
@@ -79,7 +79,7 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 title = { Text("توپوگرافی") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "بازگشت") } },
                 actions = {
-                    IconButton(onClick = { picker.launch(arrayOf("*/*")) }) { Icon(Icons.Filled.FileOpen, "ورود نقاط") }
+                    IconButton(onClick = { picker.launch(FilePicker.POINTS) }) { Icon(Icons.Filled.FileOpen, "ورود نقاط") }
                 }
             )
         }

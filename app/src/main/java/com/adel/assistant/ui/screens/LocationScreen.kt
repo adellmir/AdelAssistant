@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.LocationPoint
 import com.adel.assistant.data.LocationStore
@@ -324,7 +325,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     }
 
 
-    val batchOpen = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val batchOpen = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             val name = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"

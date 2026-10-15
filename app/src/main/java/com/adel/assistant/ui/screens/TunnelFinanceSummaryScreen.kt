@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatMoney
@@ -33,7 +34,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 
     fun refresh() { summary = TunnelFinanceStore.summary(context) }
 
-    val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->

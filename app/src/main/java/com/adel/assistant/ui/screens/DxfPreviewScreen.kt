@@ -530,7 +530,7 @@ LaunchedEffect(profileMode) {
     }
 
 
-    val mapAlignFilePicker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
+    val mapAlignFilePicker = rememberLauncherForActivityResult(FilePicker.contract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             // یکپارچه: PointImport — منطق ترسیم نقشه دست نخورده
@@ -735,7 +735,13 @@ LaunchedEffect(profileMode) {
     }
 
     fun requestExit() {
-showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیره
+        // یکپارچه: فقط اگر تغییر/ترسیم هست بپرس
+        val hasWork = docDirty || drawings.isNotEmpty() || MapOps.needsExitPrompt()
+        if (!hasWork) {
+            onBack()
+            return
+        }
+        showExitSaveDialog = true
     }
 
     BackHandler { requestExit() }
@@ -2933,7 +2939,7 @@ if (zoomWindowMode) {
                         drawings = emptyList()
                         docDirty = false
                         try {
-                            Map2Session.discardProject(context)
+                            MapOps.discard(context)
                         } catch (_: Exception) {
                             Map2Session.projectDxfParts = emptyList()
                             Map2Session.categories = emptyList()

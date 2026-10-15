@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.TaskItem
+import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -63,7 +64,7 @@ fun TaskScreen(
     }
 
     val importLauncher = rememberLauncherForActivityResult(
-        com.adel.assistant.data.AdelDocuments.OpenDocumentContract()
+        FilePicker.contract()
     ) { uri ->
         if (uri != null) {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
