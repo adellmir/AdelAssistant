@@ -64,4 +64,8 @@ object ExportHub {
         val name = if (fileName.lowercase().endsWith(".csv")) fileName else "$fileName.csv"
         return exportText(context, name, text, "text/csv")
     }
+
+    /** خواندن CSV داخلی store (پشتیبان/خروجی مجدد) */
+    fun readCsvText(context: Context, csvName: String): String =
+        FileExport.readAsCsvText(context, csvName)
 }

@@ -131,13 +131,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
 
     fun doExport(base: String) {
         val list = selectedPoints()
-        val body = when (pendingExportKind) {
-            "txt" -> GsiParser.toTxt(list)
-            "dat" -> GsiParser.toDat(list)
-            "csv" -> GsiParser.toCsv(list)
-            "gsi" -> GsiParser.toGsi(list)
-            else -> GsiParser.toTxt(list)
-        }
+        val body = PointImport.writeGsiList(list, pendingExportKind.ifBlank { "txt" })
         val ext = pendingExportKind.ifBlank { "txt" }
         val name = base.trim().ifBlank { "gsi_export" }.let {
             if (it.endsWith(".$ext", true)) it else "$it.$ext"

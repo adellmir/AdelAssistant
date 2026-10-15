@@ -3198,13 +3198,11 @@ if (showSaveDxfDialog) {
                                         val survey = GeoExport.surveyFromGsi(gsiPts)
                                         val z = zone
                                         val body = when (fmt) {
-                                            "txt" -> GsiParser.toTxt(gsiPts)
-                                            "gsi" -> GsiParser.toGsi(gsiPts)
-                                            "dxf" -> GsiParser.toDxf(gsiPts)
-                                            "csv" -> PointConverter.write(survey, "csv")
+                                            "txt", "gsi", "dxf", "dat" -> PointImport.writeGsiList(gsiPts, fmt)
+                                            "csv" -> PointImport.write(survey, "csv")
                                             "kml" -> GeoExport.toKml(survey, "picked", z)
                                             "gpx" -> GeoExport.toGpx(survey, "picked", z)
-                                            else -> GsiParser.toTxt(gsiPts)
+                                            else -> PointImport.writeGsiList(gsiPts, "txt")
                                         }
                                         val mime = when (fmt) {
                                             "dxf" -> "application/dxf"

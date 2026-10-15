@@ -64,4 +64,17 @@ object MapOps {
     fun needsExitPrompt(): Boolean = isDirty()
 
     enum class ExitAction { KEEP, DISCARD, SAVE }
+
+    /** خواندن فایل نقطه و افزودن به نشست نقشه */
+    fun importFromUri(context: Context, uri: android.net.Uri, categoryName: String? = null): Map2PointCategory? {
+        val pts = PointImport.readUri(context, uri)
+        if (pts.isEmpty()) return null
+        return importSurveyPoints(pts, categoryName)
+    }
+
+    fun keepOnExit() {
+        Map2Session.openProject = true
+        Map2Session.dirty = Map2Session.categories.isNotEmpty() || Map2Session.projectDxfParts.isNotEmpty()
+    }
 }
+

@@ -176,7 +176,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                     com.adel.assistant.data.GsiPoint(name = it.id, e = it.x, n = it.y, z = it.z, code = it.code)
                 }
                 val body = try {
-                    GsiParser.toGsi(gsiPts)
+                    PointImport.writeGsiList(gsiPts, "gsi")
                 } catch (_: Throwable) {
                     points.joinToString("\r\n") { p ->
                         val id = p.id.filter { it.isDigit() }.ifEmpty { "0" }.padStart(16, '0')

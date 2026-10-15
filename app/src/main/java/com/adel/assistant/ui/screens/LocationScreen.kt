@@ -41,6 +41,8 @@ import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
+import com.adel.assistant.data.ReportHub
+import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.LocationPoint
 import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
@@ -331,7 +333,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             val name = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: return@rememberLauncherForActivityResult
-            val pts = PointConverter.readBytes(bytes, name)
+            val pts = PointImport.readBytes(bytes, name)
             if (pts.isEmpty()) {
                 status = "نقطه‌ای از فایل خوانده نشد"
                 return@rememberLauncherForActivityResult
@@ -412,11 +414,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             if (p.code.isNotBlank()) appendLine("کد: ${p.code}")
             appendLine(UtmGeo.googleMapsUrl(p.lat, p.lon))
         }
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, body)
-        }
-        context.startActivity(Intent.createChooser(intent, "اشتراک موقعیت"))
+        ReportHub.shareText(context, body, "اشتراک موقعیت")
     }
 
     fun applyOffset() {

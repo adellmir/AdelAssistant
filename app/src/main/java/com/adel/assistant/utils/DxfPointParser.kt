@@ -1,6 +1,7 @@
 package com.adel.assistant.utils
 
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.SurveyPoint
 import java.io.InputStream
 
@@ -12,7 +13,7 @@ object DxfPointParser {
         val text = inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         val lower = fileName.lowercase()
         if (lower.endsWith(".gsi")) {
-            val pts = PointConverter.read(text, "gsi")
+            val pts = PointImport.readText(text, "points.gsi")
             return ParseResult(pts, if (pts.isEmpty()) listOf("نقطه GSI پیدا نشد") else emptyList())
         }
         return parseDelimited(text, lower.endsWith(".dat"))

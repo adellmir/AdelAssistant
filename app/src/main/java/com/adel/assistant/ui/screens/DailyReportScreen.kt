@@ -251,7 +251,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
-                    val text = FileExport.readAsCsvText(context, "survey_tunnel_report")
+                    val text = ExportHub.readCsvText(context, "survey_tunnel_report")
                     val uri = ExportHub.exportText(context, "survey_tunnel_report.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })

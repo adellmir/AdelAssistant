@@ -282,12 +282,7 @@ private fun AlignCoordinateTab(color: Color) {
                             Button(
                                 onClick = {
                                     val base = saveName.trim().ifBlank { "aligned" }
-                                    val body = when (kind) {
-                                        "txt" -> GsiParser.toTxt(surveyPts)
-                                        "dat" -> GsiParser.toDat(surveyPts)
-                                        "dxf" -> GsiParser.toDxf(surveyPts)
-                                        else -> GsiParser.toGsi(surveyPts)
-                                    }
+                                    val body = PointImport.writeGsiList(surveyPts, kind)
                                     val fname = if (base.lowercase().endsWith(".$kind")) base else "$base.$kind"
                                     val ok = ExportHub.exportText(
                                         context, fname, body,

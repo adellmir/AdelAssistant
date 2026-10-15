@@ -253,7 +253,7 @@ fun ProjectRegisterScreen(
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
-                    val text = FileExport.readAsCsvText(context, "projects")
+                    val text = ExportHub.readCsvText(context, "projects")
                     val uri = ExportHub.exportText(context, "projects.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })

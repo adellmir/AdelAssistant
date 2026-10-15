@@ -240,7 +240,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                 })
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
-                    val text = FileExport.readAsCsvText(context, "tunnel_points")
+                    val text = ExportHub.readCsvText(context, "tunnel_points")
                     val uri = ExportHub.exportText(context, "tunnel_points.txt", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })
