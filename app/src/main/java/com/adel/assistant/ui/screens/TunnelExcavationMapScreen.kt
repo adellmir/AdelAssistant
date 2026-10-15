@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.MapOverlayPoint
 import com.adel.assistant.data.MapOverlayStore
 import com.adel.assistant.data.ReportEntry
@@ -399,7 +400,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     fun exportCsv() {
         val pts = overlays
         if (pts.isEmpty()) { status = "نقطهٔ دستی برای CSV نیست"; return }
-        val ok = FileExport.exportTextToDocuments(
+        val ok = ExportHub.exportText(
             context, "tunnel_map_points.csv", MapOverlayStore.toCsvBody(pts), "text/csv"
         ) != null
         status = if (ok) "CSV ذخیره شد" else "خطا در CSV"
@@ -411,7 +412,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         }
         val all = overlays + fromReport
         if (all.isEmpty()) { status = "نقطه‌ای برای DXF نیست"; return }
-        val ok = FileExport.exportTextToDocuments(
+        val ok = ExportHub.exportText(
             context, "tunnel_map.dxf", MapOverlayStore.toDxf(all), "application/dxf"
         ) != null
         status = if (ok) "DXF ذخیره شد" else "خطا در DXF"

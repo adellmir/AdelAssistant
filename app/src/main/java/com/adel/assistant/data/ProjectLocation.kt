@@ -5,7 +5,7 @@ import android.content.Context
 /**
  * فضای یکپارچهٔ موقعیت و مسیر پروژه.
  * قانون: اگر لینک نشان باشد همان استفاده می‌شود؛ تبدیل اجباری به مختصات نیست.
- * ثبت روی یک نام → همهٔ ردیف‌های هم‌نام.
+ * ثبت روی یک نام → همهٔ ردیف‌های هم‌نام ([ProjectStore.updateLocationByProjectName]).
  */
 object ProjectLocation {
 
@@ -36,4 +36,13 @@ object ProjectLocation {
 
     /** لینک خام نشان یا geo از lat/lon */
     fun resolveUrl(entry: ProjectEntry): String = entry.neshanUrl
+
+    fun resolveUrl(lat: Double, lon: Double, neshanLink: String = ""): String {
+        return when {
+            neshanLink.isNotBlank() -> neshanLink.trim()
+            lat != 0.0 || lon != 0.0 ->
+                String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+            else -> ""
+        }
+    }
 }

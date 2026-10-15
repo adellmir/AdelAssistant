@@ -27,6 +27,7 @@ import com.adel.assistant.data.CodeSetting
 import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.KmlParser
 import com.adel.assistant.data.PointConverter
@@ -247,7 +248,7 @@ private fun saveAndShare(context: Context, content: String, originalName: String
     try {
         val base = originalName.substringBeforeLast(".").ifBlank { "map" }
         val fileName = "${base}_map.dxf"
-        FileExport.exportTextToDocuments(
+        ExportHub.exportText(
             context,
             fileName,
             content,
@@ -272,7 +273,7 @@ private fun saveAndShareKml(context: Context, content: String, originalName: Str
     try {
         val base = originalName.substringBeforeLast(".").ifBlank { "map" }
         val fileName = "${base}_map.kml"
-        FileExport.exportTextToDocuments(
+        ExportHub.exportText(
             context, fileName, content,
             mimeType = "application/vnd.google-earth.kml+xml"
         )

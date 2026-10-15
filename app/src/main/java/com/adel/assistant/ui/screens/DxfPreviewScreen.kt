@@ -722,7 +722,7 @@ LaunchedEffect(profileMode) {
             if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
         }
         val body = buildCombinedDxf()
-        val uri = FileExport.exportTextToDocuments(context, name, body, "application/dxf")
+        val uri = ExportHub.exportText(context, name, body, "application/dxf")
         if (uri != null) {
             docDirty = false
             openedDxfName = name
@@ -3208,7 +3208,7 @@ if (showSaveDxfDialog) {
                                             else -> "text/plain"
                                         }
                                         val name = "picked_coords.$fmt"
-                                        val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
+                                        val ok = ExportHub.exportText(context, name, body, mime) != null
                                         message = if (ok) "ذخیره شد: $name" else "خطا در ذخیره"
                                     } catch (e: Exception) {
                                         message = "خطا خروجی: ${e.message}"
@@ -3251,7 +3251,7 @@ if (showSaveDxfDialog) {
                                         }
                                         val safe = Map2Session.projectName.replace(Regex("""[^A-Za-z0-9_\u0600-\u06FF-]+"""), "_").ifBlank { "map2" }
                                         val name = "${safe}_points.$fmt"
-                                        val ok = FileExport.exportTextToDocuments(context, name, body, mime) != null
+                                        val ok = ExportHub.exportText(context, name, body, mime) != null
                                         message = if (ok) "ذخیره شد: $name (${survey.size} نقطه)" else "خطا در ذخیره"
                                     } catch (e: Exception) {
                                         message = "خطا خروجی نقشه۲: ${e.message}"

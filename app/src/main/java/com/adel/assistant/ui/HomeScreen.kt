@@ -1,39 +1,11 @@
 package com.adel.assistant.ui
-import com.adel.assistant.data.TunnelFinanceStore
-import com.adel.assistant.data.toEnglishDigits
-import com.adel.assistant.ui.PendingDailyReport
-import com.adel.assistant.ui.PendingTunnelLookup
-
-import androidx.compose.foundation.lazy.items
-
-import androidx.compose.foundation.lazy.LazyColumn
-
-import androidx.compose.material.icons.filled.Navigation
-
-import androidx.compose.material.icons.filled.Sms
-
-import androidx.compose.material.icons.filled.Phone
-
-import com.adel.assistant.ui.PendingClientsNav
-
-import com.adel.assistant.data.TunnelReportStore
-
-import android.content.Intent
-import android.net.Uri
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.outlined.WbSunny
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material.icons.outlined.AcUnit
-import androidx.compose.material.icons.outlined.Thunderstorm
-import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.ui.graphics.SolidColor
@@ -47,12 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,12 +35,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.R
@@ -79,9 +47,7 @@ import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
-import com.adel.assistant.data.WeatherStore
-import com.adel.assistant.data.WeatherIconKind
-import com.adel.assistant.data.openNeshanNav
+import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.ui.screens.ProjectLocationPickerDialog
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
@@ -150,45 +116,6 @@ private fun todaySortKey(): String {
     return String.format(Locale.US, "%d%02d%02d", y, m, d)
 }
 
-
-private val PERSIAN_MONTHS = listOf(
-    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
-    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
-)
-
-private fun monthIndexFromName(s: String): Int? {
-    val t = s.trim().replace("ي", "ی").replace("ك", "ک")
-    PERSIAN_MONTHS.forEachIndexed { i, name ->
-        if (t.contains(name)) return i + 1
-    }
-    return null
-}
-
-private fun parseDayMonthYear(q: String): Triple<Int?, Int?, Int?> {
-    // returns day, month, year (nullable)
-    val e = q.toEnglishDigits().trim()
-    val mon = monthIndexFromName(e)
-    val yearM = Regex("""(13|14)\d{2}""").find(e)?.value?.toIntOrNull()
-    val dayM = Regex("""(?<![\d.])(\d{1,2})(?![\d.])""").find(e.replace(Regex("""(13|14)\d{2}"""), ""))?.groupValues?.getOrNull(1)?.toIntOrNull()
-    // "05/05" or "5/5"
-    val slash = Regex("""(\d{1,2})\s*/\s*(\d{1,2})(?:\s*/\s*((?:13|14)\d{2}))?""").find(e)
-    if (slash != null) {
-        val a = slash.groupValues[1].toInt()
-        val b = slash.groupValues[2].toInt()
-        val y = slash.groupValues.getOrNull(3)?.toIntOrNull()
-        // day/month
-        return Triple(a, b, y)
-    }
-    if (mon != null) {
-        // if only month+year or month+day
-        val nums = Regex("""\d+""").findAll(e).map { it.value.toInt() }.toList()
-        val day = nums.firstOrNull { it in 1..31 && it != mon && (yearM == null || it != yearM) }
-        return Triple(day, mon, yearM)
-    }
-    return Triple(null, null, null)
-}
-
-
 object PendingAssistantPrompt {
     var text: String = ""
 }
@@ -206,13 +133,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     var tabIndex by rememberSaveable { mutableStateOf(0) }
 
     var clock by remember { mutableStateOf(currentTimeString()) }
-    var weatherSnap by remember { mutableStateOf(WeatherStore.cached()) }
-    var weatherLoading by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        weatherLoading = true
-        weatherSnap = WeatherStore.fetch(context, force = true)
-        weatherLoading = false
-    }
     var greeting by remember { mutableStateOf(timeBasedGreeting()) }
     var jalali by remember { mutableStateOf(jalaliDateWithWeekday()) }
 
@@ -246,23 +166,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     }
     var planOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var debouncedQuery by remember { mutableStateOf("") }
-    LaunchedEffect(searchQuery) {
-        delay(350)
-        debouncedQuery = searchQuery
-    }
-    // کش نقاط تونل — با هر جستجوی جدید به‌روز می‌شود
-    var cachedTunnelPts by remember {
-        mutableStateOf(
-            try { TunnelReportStore.allPoints(context) } catch (_: Exception) { emptyList() }
-        )
-    }
-    LaunchedEffect(debouncedQuery) {
-        if (debouncedQuery.isNotBlank()) {
-            cachedTunnelPts = try { TunnelReportStore.allPoints(context) } catch (_: Exception) { emptyList() }
-        }
-    }
-    var expandedEmp by remember { mutableStateOf<String?>(null) }
     var projectTasks by remember {
         mutableStateOf(
             try {
@@ -308,109 +211,44 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        // سمت چپ: لوگو
-                        Image(
-                            painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                            contentDescription = "لوگو",
-                            modifier = Modifier
-                                .size(67.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(SurfaceHigh),
-                            contentScale = ContentScale.Fit
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            clock,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        // سمت راست: ساعت / تاریخ / خوش‌آمد + هواشناسی
-                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            // ردیف ۱: ساعت (وسط‌چین)
-                            Text(
-                                clock,
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            // ردیف ۲ و ۳ + هواشناسی سمت راست
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        jalali,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = TextSecondary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "$greeting مهندس پورمیر",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = WorkPrimary,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                val snap = weatherSnap
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clickable {
-                                            val url = if (snap != null)
-                                                WeatherStore.googleWeatherUrl(snap.lat, snap.lon)
-                                            else
-                                                WeatherStore.googleWeatherUrlFallback()
-                                            try {
-                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                            } catch (_: Exception) {
-                                            }
-                                        }
-                                        .padding(horizontal = 4.dp)
-                                ) {
-                                    val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
-                                    val icon = when (kind) {
-                                        WeatherIconKind.Clear -> Icons.Outlined.WbSunny
-                                        WeatherIconKind.Clouds -> Icons.Outlined.Cloud
-                                        WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
-                                        WeatherIconKind.Snow -> Icons.Outlined.AcUnit
-                                        WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
-                                        WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
-                                        WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
-                                    }
-                                    val iconTint = when (kind) {
-                                        WeatherIconKind.Clear -> Color(0xFFFFB74D)
-                                        WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
-                                        WeatherIconKind.Snow -> Color(0xFFE0E0E0)
-                                        WeatherIconKind.Thunder -> Color(0xFFBA68C8)
-                                        else -> TextSecondary
-                                    }
-                                    Icon(
-                                        icon,
-                                        contentDescription = snap?.description ?: "هواشناسی",
-                                        tint = iconTint,
-                                        modifier = Modifier.size(34.dp)
-                                    )
-                                    Text(
-                                        when {
-                                            snap != null -> String.format(java.util.Locale.US, "%.0f°", snap.tempC)
-                                            weatherLoading -> "…"
-                                            else -> "—"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            jalali,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "$greeting مهندس پورمیر",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = WorkPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    // foreground امن‌تر از adaptive icon است
+                    Image(
+                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                        contentDescription = "لوگو",
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SurfaceHigh),
+                        contentScale = ContentScale.Fit
+                    )
                 }
             }
 
@@ -462,7 +300,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                             .fillMaxWidth()
                                             .padding(vertical = 4.dp)
                                             .clickable {
-                                                if (p.hasLocation) openNeshanNav(context, p)
+                                                if (p.hasLocation) ProjectLocation.openNavigation(context, p)
                                                 else locEditProject = p
                                             },
                                         horizontalArrangement = Arrangement.SpaceBetween
@@ -603,7 +441,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("جستجو: شفت، پیشرفت، مطالبات، پروژه…", color = TextMuted, fontSize = 13.sp) },
+                        placeholder = { Text("جستجوی برنامه یا پرسش از دستیار…", color = TextMuted, fontSize = 13.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -614,612 +452,22 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         ),
                         textStyle = TextStyle(fontSize = 14.sp, color = TextPrimary),
                         leadingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "پاک کردن",
-                                    tint = TextMuted,
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clickable {
-                                            searchQuery = ""
-                                            debouncedQuery = ""
-                                        }
-                                )
-                            } else {
-                                Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                            }
+                            Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
                         }
                     )
                 }
             }
 
-
-            // ---- نتایج جستجوی هوشمند (با debounce برای جلوگیری از کرش) ----
-            if (debouncedQuery.isNotEmpty()) {
-                val qLower = debouncedQuery.lowercase().trim()
-                val qNorm = qLower.replace("ی", "ي").replace("ک", "ك")
-
-                fun moneyM(v: Double): String =
-                    if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9)
-                        String.format(java.util.Locale.US, "%,.0f م", v)
-                    else
-                        String.format(java.util.Locale.US, "%,.1f م", v)
-
-                fun callPhone(phone: String) {
-                    if (phone.isBlank()) return
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
-                    } catch (_: Exception) { }
-                }
-                fun smsClaims(phone: String, amount: Double) {
-                    if (phone.isBlank()) return
-                    val body = "با سلام جهت پرداخت هزینه نقشه‌برداری به‌مبلغ ${moneyM(amount)}. ممنون می‌شوم پس از پرداخت اطلاع‌رسانی بفرمایید.\nکارت: 5859831142797561\nشبا: 430180000000242375213376"
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone")).apply {
-                            putExtra("sms_body", body)
-                        })
-                    } catch (_: Exception) { }
-                }
-
-                // تشخیص نوع کوئری
-                val isShaft = qLower.contains("شفت") || Regex("""(?i)^sh\s*\d*$""").matches(qLower) || qLower.startsWith("sh ")
-                val isWell = qLower.contains("چاه") || Regex("""(?i)^ch\s*\d*$""").matches(qLower) || qLower.startsWith("ch ")
-                val isSump = qLower.contains("سامپ") || qLower.contains("sump")
-                val isProgress = qLower.contains("پیشرفت")
-                val isClaims = qLower.contains("مطالبات") || qLower.contains("طلب")
-
-
-                val pureNum = debouncedQuery.toEnglishDigits().trim()
-                val isPureNumber = pureNum.matches(Regex("""^\d+(\.\d+)?$"""))
-
-                // —— جستجوی کد / توضیح نقطه تونل (حروفی یا ترکیبی) ——
-                if (!isPureNumber && debouncedQuery.length >= 1) {
-                    val codeQ = debouncedQuery.toEnglishDigits().trim().lowercase()
-                    val codeHits = cachedTunnelPts.asSequence().filter { p ->
-                        val typ = p.type.toEnglishDigits().trim().lowercase()
-                        val pn = p.pointNo.toEnglishDigits().trim().lowercase()
-                        typ.contains(codeQ) || pn.contains(codeQ) ||
-                        typ.replace(" ", "").contains(codeQ.replace(" ", ""))
-                    }.take(40).toList()
-                    if (codeHits.isNotEmpty()) {
-                        Text("کد / توضیح نقاط تونل", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        codeHits.forEach { p ->
-                            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        "نقطه ${p.pointNo} · ${p.type}",
-                                        color = WorkPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.clickable {
-                                            PendingTunnelLookup.openPoint(p.pointNo)
-                                            onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
-                                        }
-                                    )
-                                    Text(
-                                        String.format(java.util.Locale.US, "کیلومتر: %.3f  X=%.3f Y=%.3f Z=%.3f", p.km, p.x, p.y, p.z),
-                                        color = TextMuted, fontSize = 11.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // —— عدد خالص: شماره نقطه یا کیلومتر ——
-                if (isPureNumber) {
-                    val pts = cachedTunnelPts
-                    val pureDigits = pureNum.trimStart('0').ifEmpty { pureNum }
-                    val asPoint = pts.asSequence().filter { p ->
-                        val pn = p.pointNo.toEnglishDigits().trim()
-                        val pnDigits = pn.trimStart('0').ifEmpty { pn }
-                        pn == pureNum || pn.contains(pureNum) ||
-                        pnDigits == pureDigits || pnDigits.contains(pureDigits)
-                    }.take(30).toList()
-                    val asKm = pureNum.toDoubleOrNull()
-                    Text("شماره نقطه / کیلومتر", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    // نقاط با این شماره
-                    asPoint.forEach { p ->
-                        val ctx = remember(p.pointNo) { TunnelReportStore.kmContext(context, p.km) }
-                        Surface(shape = RoundedCornerShape(12.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    "نقطه ${p.pointNo} / km ${String.format(java.util.Locale.US, "%.3f", p.km)}",
-                                    color = WorkPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.clickable {
-                                        PendingTunnelLookup.openPoint(p.pointNo)
-                                        onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
-                                    }
-                                )
-                                Text("کد: ${p.type}", color = TextSecondary, fontSize = 12.sp)
-                                Text(
-                                    String.format(java.util.Locale.US, "X=%.3f Y=%.3f Z=%.3f", p.x, p.y, p.z),
-                                    color = TextMuted, fontSize = 11.sp
-                                )
-                                if (p.elevDiff.isNotBlank()) Text("اختلاف تراز: ${p.elevDiff}", color = TextSecondary, fontSize = 11.sp)
-                                val ps = ctx.prevShaft; val ns = ctx.nextShaft
-                                Text("شفت‌ها: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1fm", it.distanceM) } ?: ""} | ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1fm", it.distanceM) } ?: ""}", color = TextSecondary, fontSize = 11.sp)
-                                val face = ctx.prevReport ?: ctx.nextReport
-                                Text("سینه کار: ${face?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: "—"}", color = TextSecondary, fontSize = 11.sp)
-                            }
-                        }
-                    }
-                    // نزدیک‌ترین کیلومتر
-                    if (asKm != null && pts.isNotEmpty()) {
-                        val near = pts.minByOrNull { kotlin.math.abs(it.km - asKm) }!!
-                        val ctx = remember(near.pointNo, asKm) { TunnelReportStore.kmContext(context, asKm) }
-                        Surface(shape = RoundedCornerShape(12.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    String.format(java.util.Locale.US, "کیلومتر ≈ %.3f / نقطه %s", near.km, near.pointNo),
-                                    color = WorkPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.clickable {
-                                        PendingTunnelLookup.openKm(asKm)
-                                        onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
-                                    }
-                                )
-                                Text("نزدیک‌ترین نقطه: ${near.pointNo} (${near.type})", color = TextSecondary, fontSize = 12.sp)
-                                val ps = ctx.prevShaft; val ns = ctx.nextShaft
-                                Text("شفت قبل: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}", color = TextSecondary, fontSize = 11.sp)
-                                Text("شفت بعد: ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}", color = TextSecondary, fontSize = 11.sp)
-                            }
-                        }
-                    }
-                    if (asPoint.isEmpty() && (asKm == null || pts.isEmpty())) {
-                        Text("نقطه یا کیلومتری یافت نشد", color = TextMuted, fontSize = 12.sp)
-                    }
-                }
-
-                // —— تاریخ و ماه ——
-                val (pDay, pMonth, pYear) = parseDayMonthYear(query)
-                val (cy, cm, cd) = CalendarStore.todayJalali()
-                if (pMonth != null) {
-                    val yearsToShow = if (pYear != null) listOf(pYear) else {
-                        // سال جاری اول، بعد سال قبل اگر داده داشته باشد
-                        listOf(cy, cy - 1)
-                    }
-                    // روز مشخص
-                    if (pDay != null) {
-                        yearsToShow.forEach { y ->
-                            val wd = CalendarStore.weekdayNameJalali(y, pMonth, pDay)
-                            Text(
-                                "$wd ${String.format(java.util.Locale.US, "%04d/%02d/%02d", y, pMonth, pDay)}",
-                                color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp
-                            )
-                            // پروژه‌های آن روز
-                            val dayProjects = remember(query, y) {
-                                ProjectStore.all(context).filter {
-                                    (it.year.toEnglishDigits().toIntOrNull() ?: 0).let { yy -> if (yy in 0..99) yy + 1400 else yy } == y &&
-                                        (it.month.toIntOrNull() ?: 0) == pMonth &&
-                                        (it.day.toIntOrNull() ?: 0) == pDay
-                                }
-                            }
-                            Text("پروژه‌ها", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            if (dayProjects.isEmpty()) {
-                                Text("پروژه‌ای در این تاریخ نیست", color = TextMuted, fontSize = 11.sp)
-                            } else {
-                                dayProjects.forEach { s ->
-                                    val ok = s.remaining <= 0.01
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                PendingClientsNav.openProject(s.name)
-                                                onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                            }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("${s.name} / ${s.employer} / ${moneyM(s.amount)}", Modifier.weight(1f), color = TextPrimary, fontSize = 12.sp)
-                                        Text(if (ok) "✓" else "✕", color = if (ok) Color(0xFF43A047) else Color(0xFFE53935), fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                            // گزارش حفاری
-                            val reports = remember(query, y) {
-                                TunnelReportStore.allEntries(context).filter {
-                                    TunnelReportStore.sameDate(it, y.toString(), pMonth.toString(), pDay.toString())
-                                }
-                            }
-                            Text(
-                                "گزارش حفاری",
-                                color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clickable {
-                                    PendingDailyReport.open(y, pMonth, pDay)
-                                    onNavigate(Routes.SURVEY_TUNNEL_REPORT)
-                                }
-                            )
-                            if (reports.isEmpty()) {
-                                Text("گزارشی در این تاریخ نیست", color = TextMuted, fontSize = 11.sp)
-                            } else {
-                                reports.forEach { e ->
-                                    Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            PendingDailyReport.open(y, pMonth, pDay)
-                                            onNavigate(Routes.SURVEY_TUNNEL_REPORT)
-                                        }) {
-                                        Column(Modifier.padding(8.dp)) {
-                                            Text(
-                                                "${e.dateLabel} · شفت${e.shaft}/${e.side} · نقطه ${e.pointNo}",
-                                                fontWeight = FontWeight.Medium, color = TextPrimary, fontSize = 12.sp
-                                            )
-                                            Text(
-                                                String.format(
-                                                    java.util.Locale.US,
-                                                    "km %.3f · روزانه %.1f · شفت %.1f · مانده %.1f",
-                                                    e.km, e.dailyProgress, e.shaftProgress, e.remaining
-                                                ),
-                                                color = TextSecondary, fontSize = 11.sp
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // فقط ماه (± سال)
-                        yearsToShow.forEach { y ->
-                            val monthName = PERSIAN_MONTHS.getOrNull(pMonth - 1) ?: pMonth.toString()
-                            Text(
-                                "$monthName $y",
-                                color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp
-                            )
-                            // ۱ پروژه‌ها
-                            val monthProjects = remember(query, y, pMonth) {
-                                ProjectStore.all(context)
-                                    .filter {
-                                        (it.year.toEnglishDigits().toIntOrNull() ?: 0).let { yy -> if (yy in 0..99) yy + 1400 else yy } == y &&
-                                            (it.month.toIntOrNull() ?: 0) == pMonth
-                                    }
-                                    .sortedByDescending { it.dateSortKey }
-                            }
-                            Text("۱. پروژه‌ها", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            if (monthProjects.isEmpty()) Text("—", color = TextMuted, fontSize = 11.sp)
-                            else monthProjects.forEach { s ->
-                                val ok = s.remaining <= 0.01
-                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        "${s.name} / ${s.employer} / ${moneyM(s.amount)}",
-                                        Modifier.weight(1f).clickable {
-                                            PendingClientsNav.openProject(s.name)
-                                            onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                        },
-                                        color = TextPrimary, fontSize = 12.sp
-                                    )
-                                    Text(if (ok) "✓" else "✕", color = if (ok) Color(0xFF43A047) else Color(0xFFE53935))
-                                }
-                            }
-                            // ۲ وضعیت حفاری بازه‌ای آن ماه
-                            Text("۲. وضعیت حفاری", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            val monthReports = remember(query, y, pMonth) {
-                                TunnelReportStore.allEntries(context).filter {
-                                    (it.year.toIntOrNull() ?: 0).let { yy -> if (yy in 0..99) yy + 1400 else yy } == y &&
-                                        (it.month.toIntOrNull() ?: 0) == pMonth
-                                }
-                            }
-                            val byShaft = monthReports.groupBy { it.shaft }
-                            if (byShaft.isEmpty()) Text("—", color = TextMuted, fontSize = 11.sp)
-                            else byShaft.forEach { (sh, list) ->
-                                val last = list.maxByOrNull { it.dateSortKey }
-                                Text(
-                                    "شفت $sh: ${list.size} گزارش · آخرین km ${last?.let { String.format(java.util.Locale.US, "%.3f", it.km) } ?: "—"} · پیشرفت روزانه جمع ${String.format(java.util.Locale.US, "%.1f", list.sumOf { it.dailyProgress })}",
-                                    color = TextSecondary, fontSize = 11.sp,
-                                    modifier = Modifier.clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }
-                                )
-                            }
-                            // ۳ درآمد و دریافتی
-                            Text("۳. درآمد و دریافتی", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            val projIncome = monthProjects.sumOf { it.amount }
-                            val projRecv = monthProjects.sumOf { it.settled }
-                            Text("پروژه — درآمد: ${moneyM(projIncome)} / دریافتی: ${moneyM(projRecv)}", color = TextPrimary, fontSize = 12.sp)
-                            val tunRows = remember(query, y, pMonth) {
-                                try {
-                                    TunnelFinanceStore.all(context).filter { it.year == y && it.month == pMonth }
-                                } catch (_: Exception) { emptyList() }
-                            }
-                            val tunIncome = tunRows.sumOf { it.income }
-                            val tunRecv = tunRows.sumOf { it.receiveAmount ?: 0.0 }
-                            Text(
-                                "تونل — درآمد: ${moneyM(tunIncome)} / دریافتی: ${moneyM(tunRecv)}",
-                                color = TextPrimary, fontSize = 12.sp,
-                                modifier = Modifier.clickable { onNavigate(Routes.FIN_TUNNEL_SUMMARY) }
-                            )
-                        }
-                    }
-                }
-
-
-                                val typePrefix: String? = when {
-                    isShaft -> "sh"
-                    isWell -> "ch"
-                    isSump -> "sump"
-                    else -> null
-                }
-                val typeNum = Regex("""(?i)(?:sh|ch|sump|شفت|چاه|سامپ)\s*([0-9]+)""").find(qLower)?.groupValues?.getOrNull(1)
-
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // —— نقاط تونل: شفت / چاه / سامپ ——
-                    if (typePrefix != null) {
-                        val pts = cachedTunnelPts
-                        val filtered = pts.filter { p ->
-                            val t = p.type.trim().lowercase()
-                            val okPrefix = when (typePrefix) {
-                                "sh" -> t.startsWith("sh") || t.contains("shaft") || t == "start" || t == "end"
-                                "ch" -> t.startsWith("ch") || t.contains("چاه") || t.contains("well")
-                                "sump" -> t.contains("sump") || t.contains("سامپ")
-                                else -> false
-                            }
-                            if (!okPrefix) return@filter false
-                            if (typeNum != null) {
-                                val n = Regex("""[0-9]+""").find(t)?.value
-                                n == typeNum || p.pointNo.contains(typeNum)
-                            } else true
-                        }
-                        Text(
-                            "اطلاعات موقعیت",
-                            color = WorkPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { onNavigate(Routes.SURVEY_TUNNEL_EVENTS) }
-                                .padding(vertical = 4.dp)
-                        )
-                        if (filtered.isEmpty()) {
-                            Text("نقطه‌ای با این کد یافت نشد", color = TextMuted, fontSize = 12.sp)
-                        } else {
-                            filtered.take(30).forEach { p ->
-                                val ctx = remember(p.pointNo, p.km) { TunnelReportStore.kmContext(context, p.km) }
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = SurfaceHigh,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text("نقطه ${p.pointNo} · ${p.type}", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
-                                        Text(
-                                            String.format(java.util.Locale.US, "کیلومتر: %.3f", p.km),
-                                            color = TextSecondary, fontSize = 12.sp
-                                        )
-                                        val ps = ctx.prevShaft
-                                        val ns = ctx.nextShaft
-                                        Text(
-                                            "شفت قبل: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}",
-                                            color = TextSecondary, fontSize = 11.sp
-                                        )
-                                        Text(
-                                            "شفت بعد: ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}",
-                                            color = TextSecondary, fontSize = 11.sp
-                                        )
-                                        val face = ctx.prevReport ?: ctx.nextReport
-                                        Text(
-                                            "سینه کار: ${face?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: "—"}",
-                                            color = TextSecondary, fontSize = 11.sp
-                                        )
-                                        if (p.elevDiff.isNotBlank()) {
-                                            Text("اختلاف تراز: ${p.elevDiff}", color = TextSecondary, fontSize = 11.sp)
-                                        }
-                                        Row(
-                                            Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.End
-                                        ) {
-                                            IconButton(onClick = {
-                                                // UTM → اگر lat/lon نداریم از x,y به‌عنوان نمایش
-                                                try {
-                                                    val uri = Uri.parse(
-                                                        String.format(
-                                                            java.util.Locale.US,
-                                                            "https://nshn.ir/?lat=%.6f&lng=%.6f",
-                                                            // تقریبی: اگر مختصات جغرافیایی نیست، باز هم لینک بساز با تبدیل ساده نمی‌کنیم — از PendingMapGoto
-                                                            p.y, p.x
-                                                        )
-                                                    )
-                                                    // مسیر بهتر: باز کردن نقشه تونل
-                                                    onNavigate(Routes.SURVEY_TUNNEL_MAP)
-                                                } catch (_: Exception) {
-                                                    onNavigate(Routes.SURVEY_TUNNEL_MAP)
-                                                }
-                                            }) {
-                                                Icon(Icons.Filled.Navigation, "مسیریاب", tint = WorkPrimary, modifier = Modifier.size(20.dp))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // —— پیشرفت تونل ——
-                    if (isProgress) {
-                        Text(
-                            "وضعیت پیشرفت تونل",
-                            color = WorkPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }
-                                .padding(vertical = 4.dp)
-                        )
-                        val entries = remember(debouncedQuery) { TunnelReportStore.allEntries(context).takeLast(8).reversed() }
-                        if (entries.isEmpty()) {
-                            Text("گزارشی ثبت نشده", color = TextMuted, fontSize = 12.sp)
-                        } else {
-                            entries.forEach { e ->
-                                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(10.dp)) {
-                                        Text(
-                                            "${e.dateLabel} · شفت${e.shaft}/${e.side}",
-                                            fontWeight = FontWeight.Medium, color = TextPrimary, fontSize = 13.sp
-                                        )
-                                        Text(
-                                            String.format(
-                                                java.util.Locale.US,
-                                                "km %.3f · روزانه %.1f · شفت %.1f · مانده %.1f",
-                                                e.km, e.dailyProgress, e.shaftProgress, e.remaining
-                                            ),
-                                            color = TextSecondary, fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // —— مطالبات ——
-                    if (isClaims) {
-                        val employers = remember(debouncedQuery) {
-                            ProjectStore.employerProfiles(context, "").filter {
-                                // بجز تونل
-                                !it.employer.contains("تونل") && it.sessions.none { s -> s.name.contains("تونل") }
-                            }
-                        }
-                        val total = employers.sumOf { it.totalClaims }
-                        Text(
-                            "مطالبات کارفرمایان — جمع کل: ${moneyM(total)}",
-                            color = WorkPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { onNavigate(Routes.FIN_PROJECT_RECEIVABLES) }
-                                .padding(vertical = 4.dp)
-                        )
-                            employers.filter { it.totalClaims > 0.01 }.take(40).forEach { emp ->
-                            Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(10.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            emp.employer,
-                                            Modifier
-                                                .weight(1f)
-                                                .clickable { expandedEmp = if (expandedEmp == emp.employer) null else emp.employer },
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimary,
-                                            fontSize = 13.sp
-                                        )
-                                        Text(moneyM(emp.totalClaims), color = WorkPrimary, fontSize = 12.sp)
-                                        IconButton(onClick = { callPhone(emp.phone) }) {
-                                            Icon(Icons.Filled.Phone, null, tint = WorkPrimary, modifier = Modifier.size(18.dp))
-                                        }
-                                        IconButton(onClick = { smsClaims(emp.phone, emp.totalClaims) }) {
-                                            Icon(Icons.Filled.Sms, null, tint = WorkPrimary, modifier = Modifier.size(18.dp))
-                                        }
-                                    }
-                                    if (expandedEmp == emp.employer) {
-                                        emp.sessions.forEach { s ->
-                                            Text(
-                                                "${s.name} · ${moneyM(s.remaining)}",
-                                                color = TextSecondary,
-                                                fontSize = 12.sp,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        PendingClientsNav.openProject(s.name)
-                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                                    }
-                                                    .padding(vertical = 4.dp, horizontal = 4.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // —— جستجوی کارفرما / پروژه (همیشه اگر کوئری متنی باشد) ——
-                    if (!isProgress && !isClaims && typePrefix == null) {
-                        val emps = remember(debouncedQuery) {
-                            ProjectStore.employerProfiles(context, query)
-                        }
-                        val projs = remember(debouncedQuery) {
-                            ProjectStore.projectProfiles(context, query)
-                        }
-                        if (emps.isNotEmpty()) {
-                            Text("کارفرمایان", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            emps.forEach { emp ->
-                                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(10.dp)) {
-                                        Row {
-                                            Text(
-                                                emp.employer,
-                                                Modifier
-                                                    .weight(1f)
-                                                    .clickable {
-                                                        PendingClientsNav.openEmployer(emp.employer)
-                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                                    },
-                                                fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp
-                                            )
-                                            Text(
-                                                "${moneyM(emp.sessions.sumOf { it.amount })} / ${moneyM(emp.totalClaims)}",
-                                                color = TextSecondary, fontSize = 11.sp
-                                            )
-                                        }
-                                        emp.sessions.forEach { s ->
-                                            Text(
-                                                "· ${s.name}  ${moneyM(s.amount)} / ${moneyM(s.remaining)}",
-                                                color = TextMuted, fontSize = 11.sp,
-                                                modifier = Modifier
-                                                    .clickable {
-                                                        PendingClientsNav.openProject(s.name)
-                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                                    }
-                                                    .padding(start = 6.dp, top = 2.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (projs.isNotEmpty()) {
-                            Text("پروژه‌ها", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            projs.forEach { pr ->
-                                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(10.dp)) {
-                                        Row {
-                                            Text(
-                                                pr.name,
-                                                Modifier
-                                                    .weight(1f)
-                                                    .clickable {
-                                                        PendingClientsNav.openProject(pr.name)
-                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                                    },
-                                                fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp
-                                            )
-                                            Text(
-                                                "${moneyM(pr.sessions.sumOf { it.amount })} / ${moneyM(pr.totalClaims)}",
-                                                color = TextSecondary, fontSize = 11.sp
-                                            )
-                                        }
-                                        Text(pr.employer, color = TextMuted, fontSize = 11.sp)
-                                        pr.sessions.take(12).forEach { s ->
-                                            val settled = if (s.remaining <= 0.01) "تسویه" else "مانده ${moneyM(s.remaining)}"
-                                            Text(
-                                                "${s.year}/${s.month}/${s.day} — $settled",
-                                                color = TextSecondary, fontSize = 11.sp,
-                                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // برنامه‌های منو
-                    if (filteredItems.isNotEmpty()) {
-                        Text(
-                            "برنامه‌ها (${filteredItems.size})",
-                            color = TextSecondary,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
-                    }
-                }
+            // اگر جستجو فعال است، نتایج را نشان بده؛ وگرنه منوی بخش
+            if (query.isNotEmpty()) {
+                Text(
+                    "نتایج جستجو (${filteredItems.size})",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
             }
-
 
             if (searchQuery.trim().isEmpty()) {
             // ---- عنوان بخش ----

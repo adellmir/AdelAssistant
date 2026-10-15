@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.TunnelMonthRow
 import com.adel.assistant.data.formatEn
@@ -138,7 +139,7 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
                 DropdownMenuItem(text = { Text("خارج کردن CSV") }, onClick = {
                     showMenu = false
                     val text = TunnelFinanceStore.exportCsvText(context)
-                    val uri = FileExport.exportTextToDocuments(context, "Tunel-financial.csv", text)
+                    val uri = ExportHub.exportText(context, "Tunel-financial.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خروجی"
                 })
             }

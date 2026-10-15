@@ -14,7 +14,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,9 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
-import com.adel.assistant.data.openNeshanNav
+import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.ui.PendingProjectEdit
-import com.adel.assistant.ui.PendingClientsNav
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -51,11 +49,6 @@ fun ClientsProjectsScreen(
     var searchProject by remember { mutableStateOf("") }
     var searchEmployer by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        PendingClientsNav.consumeTab()?.let { tab = it }
-        PendingClientsNav.consumeProjectSearch()?.let { searchProject = it }
-        PendingClientsNav.consumeEmployerSearch()?.let { searchEmployer = it }
-    }
     var tick by remember { mutableStateOf(0) }
 
     var editEmployerOld by remember { mutableStateOf<String?>(null) }
@@ -150,7 +143,7 @@ fun ClientsProjectsScreen(
                                     color = if (s.hasLocation) color else TextPrimary,
                                     fontSize = 12.sp,
                                     modifier = Modifier.clickable {
-                                        if (s.hasLocation) openNeshanNav(context, s)
+                                        if (s.hasLocation) ProjectLocation.openNavigation(context, s)
                                         else {
                                             manageProject = ProjectStore.projectProfiles(context)
                                                 .firstOrNull { it.name == s.name }
@@ -185,7 +178,7 @@ fun ClientsProjectsScreen(
                                 IconButton(
                                     onClick = {
                                         val withLoc = p.sessions.firstOrNull { it.hasLocation }
-                                        if (withLoc != null) openNeshanNav(context, withLoc)
+                                        if (withLoc != null) ProjectLocation.openNavigation(context, withLoc)
                                         else {
                                             manageProject = p
                                             showLocFor = p.name
@@ -250,7 +243,7 @@ fun ClientsProjectsScreen(
                             Text(if (locSample != null) "تغییر موقعیت" else "ثبت موقعیت")
                         }
                         if (locSample != null) {
-                            OutlinedButton(onClick = { openNeshanNav(context, locSample) }) {
+                            OutlinedButton(onClick = { ProjectLocation.openNavigation(context, locSample) }) {
                                 Text("مسیریاب")
                             }
                         }

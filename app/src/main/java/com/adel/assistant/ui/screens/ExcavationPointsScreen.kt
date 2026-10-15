@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.toEnglishDigits
@@ -94,7 +95,7 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         }
         val name = "excavation_${fromYear}${fromMonth.padStart(2, '0')}${fromDay.padStart(2, '0')}_" +
             "${toYear}${toMonth.padStart(2, '0')}${toDay.padStart(2, '0')}.txt"
-        val uri = FileExport.exportTextToDocuments(context, name, body, "text/plain")
+        val uri = ExportHub.exportText(context, name, body, "text/plain")
         status = if (uri != null) "TXT ذخیره شد (${list.size} نقطه)" else "خطا در ذخیره TXT"
         return uri != null
     }
@@ -107,7 +108,7 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         val dxf = buildExcavationDxf(list)
         val name = "excavation_${fromYear}${fromMonth.padStart(2, '0')}${fromDay.padStart(2, '0')}_" +
             "${toYear}${toMonth.padStart(2, '0')}${toDay.padStart(2, '0')}.dxf"
-        val uri = FileExport.exportTextToDocuments(context, name, dxf, "application/dxf")
+        val uri = ExportHub.exportText(context, name, dxf, "application/dxf")
         status = if (uri != null) "DXF ذخیره شد (${list.size} نقطه)" else "خطا در ذخیره DXF"
         return uri != null
     }

@@ -131,7 +131,7 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                 OutlinedButton(onClick = {
                     result?.let {
                         val text = TopographyEngine.exportDxf(it)
-                        FileExport.exportTextToDocuments(context, "topography.dxf", text, "application/dxf")
+                        ExportHub.exportText(context, "topography.dxf", text, "application/dxf")
                         message = "DXF توپوگرافی ذخیره شد"
                     }
                 }, enabled = result != null, modifier = Modifier.weight(1f)) {

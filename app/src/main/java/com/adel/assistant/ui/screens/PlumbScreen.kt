@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.PlumbColumn
 import com.adel.assistant.data.PlumbNeighbor
 import com.adel.assistant.data.PlumbProject
@@ -67,7 +68,6 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     var month by remember { mutableStateOf(todayJ.second.toString()) }
     var year by remember { mutableStateOf(todayJ.first.toString()) }
     var importMsg by remember { mutableStateOf("") }
-    var importTargetId by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     var openProject by remember { mutableStateOf<PlumbProject?>(null) }
     var openMode by remember { mutableStateOf("report") } // report | control
@@ -119,37 +119,6 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
     }
 
-    val jsonPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri == null) {
-            importTargetId = null
-            return@rememberLauncherForActivityResult
-        }
-        try {
-            val text = context.contentResolver.openInputStream(uri)?.use {
-                BufferedReader(InputStreamReader(it)).readText()
-            } ?: return@rememberLauncherForActivityResult
-            val imported = PlumbStore.importOneJson(context, text)
-            if (imported != null) {
-                // اگر برای پروژه مشخص بود و id متفاوت، همان داده‌ها با id هدف
-                val target = importTargetId
-                if (target != null && target != imported.id) {
-                    val merged = imported.copy(id = target, updatedAt = System.currentTimeMillis())
-                    PlumbStore.upsert(context, merged)
-                    importMsg = "پایگاه پروژه به‌روز شد: ${merged.name}"
-                } else {
-                    importMsg = "پروژه وارد شد: ${imported.name}"
-                }
-                refresh()
-            } else {
-                importMsg = "فایل JSON پروژه معتبر نبود"
-            }
-        } catch (e: Exception) {
-            importMsg = "خطا ورود: ${e.message}"
-        } finally {
-            importTargetId = null
-        }
-    }
-
     Column(
         Modifier.fillMaxSize().background(Background).padding(12.dp)
     ) {
@@ -161,11 +130,11 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             Spacer(Modifier.weight(1f))
             TextButton(onClick = {
                 csvPicker.launch(arrayOf("text/*", "text/csv", "*/*"))
-            }) { Text("ورود پایگاه CSV", color = color) }
+            }) { Text("ورود CSV", color = color) }
             TextButton(onClick = {
                 val csv = PlumbStore.exportCsv(context)
-                FileExport.exportTextToDocuments(context, "plumb_projects.csv", csv, "text/csv")
-            }) { Text("خروجی همه CSV", color = color) }
+                ExportHub.exportText(context, "plumb_projects.csv", csv, "text/csv")
+            }) { Text("CSV", color = color) }
             TextButton(onClick = {
                 try {
                     val bos = ByteArrayOutputStream()
@@ -177,7 +146,7 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         zos.write(PlumbStore.exportJson(context).toByteArray(Charsets.UTF_8))
                         zos.closeEntry()
                     }
-                    FileExport.exportBytesToDocuments(
+                    ExportHub.exportBytes(
                         context, "plumb_backup.zip", bos.toByteArray(), "application/zip"
                     )
                     importMsg = "زیپ پشتیبان ذخیره شد"
@@ -249,32 +218,6 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                                 },
                                 enabled = p.letterCount > 0 && p.columns.isNotEmpty()
                             ) { Text("پایش", color = Color(0xFFFFB74D)) }
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TextButton(onClick = {
-                                try {
-                                    val json = PlumbStore.exportOneJson(p)
-                                    val safe = p.name.replace(Regex("""[^A-Za-z0-9_\u0600-\u06FF-]+"""), "_").ifBlank { "plumb" }
-                                    FileExport.exportTextToDocuments(
-                                        context, "${safe}_plumb_db.json", json, "application/json"
-                                    )
-                                    importMsg = "خروجی پایگاه «${p.name}» ذخیره شد"
-                                } catch (e: Exception) {
-                                    importMsg = "خطا خروجی: ${e.message}"
-                                }
-                            }) { Text("خروجی پایگاه", color = color, fontSize = 11.sp) }
-                            TextButton(onClick = {
-                                importTargetId = p.id
-                                jsonPicker.launch(arrayOf("application/json", "text/*", "*/*"))
-                            }) { Text("ورود پایگاه", color = Color(0xFF81C995), fontSize = 11.sp) }
-                            TextButton(onClick = {
-                                PlumbStore.delete(context, p.id)
-                                refresh()
-                                importMsg = "پروژه حذف شد"
-                            }) { Text("حذف", color = Color(0xFFCF6679), fontSize = 11.sp) }
                         }
                         Text(
                             "گزارش: ${p.reportYear}/${p.reportMonth}/${p.reportDay}  ·  پایش: ${p.controlYear}/${p.controlMonth}/${p.controlDay}",
@@ -762,13 +705,13 @@ private fun PlumbWorkspace(
                         },
                         "صدور DXF" to {
                             val dxf = buildPlumbDxf(p, mode, showBeforeAfter)
-                            FileExport.exportTextToDocuments(context, "${p.name}_plumb.dxf", dxf, "application/dxf")
+                            ExportHub.exportText(context, "${p.name}_plumb.dxf", dxf, "application/dxf")
                             showSettings = false
                             message = "DXF ذخیره شد"
                         },
                         "صدور PDF/اشتراک متن" to {
                             val txt = buildPlumbText(p)
-                            FileExport.exportTextToDocuments(context, "${p.name}_plumb.txt", txt, "text/plain")
+                            ExportHub.exportText(context, "${p.name}_plumb.txt", txt, "text/plain")
                             try {
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"

@@ -42,6 +42,7 @@ import com.adel.assistant.data.ContourSet
 import com.adel.assistant.data.CutFillCell
 import com.adel.assistant.data.VolumeAnalysis
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.PointImport
 import kotlinx.coroutines.Dispatchers
@@ -432,7 +433,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         r?.existingName ?: "سطح۱",
                         r?.designName ?: "سطح۲"
                     )
-                    FileExport.exportTextToDocuments(
+                    ExportHub.exportText(
                         context, "volume_profile.txt", text, "text/plain"
                     )
                     showProfileDialog = false
@@ -550,7 +551,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                     contours = contours,
                     textSizeM = 0.05
                 )
-                val uri = FileExport.exportTextToDocuments(
+                val uri = ExportHub.exportText(
                     context, "volume_map.dxf", dxf, "application/dxf"
                 )
                 message = if (uri != null) "DXF ذخیره شد" else "خطا DXF"
@@ -884,7 +885,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         boundaryPoints,
                         breaklines
                     )
-                    val uri = FileExport.exportTextToDocuments(
+                    val uri = ExportHub.exportText(
                         context, "volume_session.json", json, "application/json"
                     )
                     message = if (uri != null) "نشست ذخیره شد" else "خطا ذخیره نشست"
@@ -1009,7 +1010,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         val cf = cutFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
                         val ff = fillFactor.replace(',', '.').toDoubleOrNull() ?: 1.0
                         val text = VolumeEngine.reportText("تحلیل", r, cf, ff)
-                        FileExport.exportTextToDocuments(context, "volume_analysis.txt", text, "text/plain")
+                        ExportHub.exportText(context, "volume_analysis.txt", text, "text/plain")
                         message = "گزارش TXT ذخیره شد"
                     },
                     modifier = Modifier.weight(1f)
@@ -1021,7 +1022,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                                 .map { it.name.ifBlank { "S" } to it.points },
                             contours, 0.05
                         )
-                        FileExport.exportTextToDocuments(context, "volume_contour.dxf", dxf, "application/dxf")
+                        ExportHub.exportText(context, "volume_contour.dxf", dxf, "application/dxf")
                         message = "DXF ذخیره شد"
                     },
                     modifier = Modifier.weight(1f)
@@ -1051,7 +1052,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                             breaklineCount = breaklines.size
                         )
                     }
-                    val uri = FileExport.exportBytesToDocuments(
+                    val uri = ExportHub.exportBytes(
                         context, "volume_report.pdf", bytes, "application/pdf"
                     )
                     message = if (uri != null) "PDF ذخیره شد" else "خطا در PDF"
@@ -1076,7 +1077,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         boundary = boundaryUsed.ifEmpty { boundaryPoints },
                         pairLabel = label
                     )
-                    FileExport.exportTextToDocuments(
+                    ExportHub.exportText(
                         context, "volume_cutfill.dxf", dxf, "application/dxf"
                     )
                     message = "DXF Cut/Fill ذخیره شد (${cells.size} سلول)"

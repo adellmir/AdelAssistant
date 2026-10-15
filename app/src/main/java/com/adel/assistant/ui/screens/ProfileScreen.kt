@@ -191,7 +191,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                             OutlinedButton(onClick = {
                                 val ss = surfaces.mapNotNull { ProfileEngine.buildSurface(it.name, it.points) }
                                 val csv = ProfileEngine.csv(r, ss)
-                                FileExport.exportTextToDocuments(context, "profile.csv", csv, "text/csv")
+                                ExportHub.exportText(context, "profile.csv", csv, "text/csv")
                                 message = "CSV ذخیره شد"
                             }, modifier = Modifier.weight(1f)) { Text("خروجی CSV") }
                             Button(onClick = { showDxfSettings = true }, modifier = Modifier.weight(1f)) {

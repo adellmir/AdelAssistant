@@ -1,6 +1,5 @@
 package com.adel.assistant.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
-import com.adel.assistant.data.openNeshanNav
+import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -114,7 +113,6 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
             items((1..monthLength).toList()) { d ->
                 val hasProject = markedDays.contains(d)
                 val selected = selectedDay == d
-                val isToday = year == today.first && month == today.second && d == today.third
                 Surface(
                     modifier = Modifier
                         .aspectRatio(1f)
@@ -124,8 +122,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                         selected -> color
                         hasProject -> color.copy(alpha = 0.25f)
                         else -> SurfaceColor
-                    },
-                    border = if (isToday) BorderStroke(2.dp, Color.White) else null
+                    }
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(formatEn("%d", d), style = MaterialTheme.typography.bodySmall,
@@ -166,7 +163,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (p.hasLocation) color else Color.Unspecified,
                                     modifier = Modifier.clickable {
-                                        if (p.hasLocation) openNeshanNav(context, p.lat, p.lon)
+                                        if (p.hasLocation) ProjectLocation.openNavigation(context, p)
                                     }
                                 )
                                 Text(formatEn("مبلغ: %.0f", p.amount), style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))

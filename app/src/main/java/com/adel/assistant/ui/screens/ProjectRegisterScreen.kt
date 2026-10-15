@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,11 +30,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.CalendarHelper
+import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.ui.PendingProjectEdit
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
@@ -51,7 +53,6 @@ fun ProjectRegisterScreen(
     initialDay: String? = null,
     initialMonth: String? = null,
     initialYear: String? = null,
-    initialRow: String? = null,
     onInvoice: (List<ProjectEntry>) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -65,9 +66,6 @@ fun ProjectRegisterScreen(
     var minute by remember { mutableStateOf("0") }
     var name by remember { mutableStateOf("") }
     var locLat by remember { mutableStateOf(0.0) }
-    var showGotoDialog by remember { mutableStateOf(false) }
-    var gotoLine by remember { mutableStateOf("") }
-    var gotoZone by remember { mutableStateOf("40") }
     var locLon by remember { mutableStateOf(0.0) }
     var locLink by remember { mutableStateOf("") }
     var showLocationPicker by remember { mutableStateOf(false) }
@@ -83,6 +81,24 @@ fun ProjectRegisterScreen(
     var statusMsg by remember { mutableStateOf("") }
     var confirmCallFor by remember { mutableStateOf<ProjectEntry?>(null) }
     var confirmDeleteFor by remember { mutableStateOf<ProjectEntry?>(null) }
+
+    LaunchedEffect(Unit) {
+        val id = PendingProjectEdit.rowId
+        if (!id.isNullOrBlank()) {
+            PendingProjectEdit.rowId = null
+            val e = ProjectStore.all(context).firstOrNull { it.row == id }
+            if (e != null) {
+                day = e.day; month = e.month; year = e.year
+                hour = e.hour; minute = e.minute
+                name = e.name; employer = e.employer; phone = e.phone
+                amount = if (e.amount == e.amount.toLong().toDouble()) e.amount.toLong().toString() else e.amount.toString()
+                description = e.description
+                locLat = e.lat; locLon = e.lon; locLink = e.neshanLink
+                editingRow = e.row
+            }
+        }
+    }
+
 
     fun clearForm() {
         day = today.third.toString()
@@ -102,29 +118,6 @@ fun ProjectRegisterScreen(
     }
 
     BackHandler(enabled = editingRow != null) { clearForm() }
-
-    LaunchedEffect(initialRow) {
-        val row = initialRow?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        val p = ProjectStore.all(context).firstOrNull { it.row == row } ?: return@LaunchedEffect
-        day = p.day
-        month = p.month
-        year = p.year
-        hour = p.hour
-        minute = p.minute
-        name = p.name
-        employer = p.employer
-        phone = p.phone
-        amount = if (p.amount == p.amount.toLong().toDouble()) p.amount.toLong().toString() else p.amount.toString()
-        description = p.description
-        editingRow = p.row
-        try {
-            locLat = p.lat
-            locLon = p.lon
-            locLink = p.neshanLink
-        } catch (_: Throwable) {}
-        statusMsg = "ویرایش پروژه ردیف ${p.row}"
-    }
-
 
     val importLauncher = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
         if (uri != null) {
@@ -260,7 +253,7 @@ fun ProjectRegisterScreen(
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
                     val text = FileExport.readAsCsvText(context, "projects")
-                    val uri = FileExport.exportTextToDocuments(context, "projects.csv", text)
+                    val uri = ExportHub.exportText(context, "projects.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })
             }
@@ -321,15 +314,12 @@ fun ProjectRegisterScreen(
             modifier = Modifier.padding(top = 6.dp)
         ) {
             OutlinedButton(onClick = { showLocationPicker = true }) {
-                Text(if (locLat != 0.0 || locLon != 0.0) "موقعیت ثبت‌شده ✓" else "ثبت موقعیت روی نقشه")
+                Text(if (locLat != 0.0 || locLon != 0.0 || locLink.isNotBlank()) "موقعیت ثبت‌شده ✓" else "ثبت موقعیت روی نقشه")
             }
-            if (locLat != 0.0 || locLon != 0.0) {
+            if (locLat != 0.0 || locLon != 0.0 || locLink.isNotBlank()) {
                 TextButton(onClick = {
-                    com.adel.assistant.data.openNeshanNav(context, locLat, locLon)
+                    ProjectLocation.openNavigation(context, locLat, locLon, locLink)
                 }) { Text("نشان") }
-            }
-            IconButton(onClick = { showGotoDialog = true }) {
-                Icon(Icons.Filled.MyLocation, contentDescription = "برو به", tint = color)
             }
         }
 
@@ -423,6 +413,8 @@ fun ProjectRegisterScreen(
                                 phone = p.phone
                                 locLat = p.lat
                                 locLon = p.lon
+                                locLink = p.neshanLink
+                                locLon = p.lon
                                 editingRow = p.row
                             }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = Color(0xFF7C8A6B))
@@ -487,51 +479,4 @@ fun ProjectRegisterScreen(
             dismissButton = { TextButton(onClick = { confirmDeleteFor = null }) { Text("انصراف") } }
         )
     }
-
-    if (showGotoDialog) {
-        AlertDialog(
-            onDismissRequest = { showGotoDialog = false },
-            title = { Text("برو به مختصات روی نقشه") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        gotoLine, { gotoLine = it },
-                        label = { Text("مختصات (E N یا lat,lon)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        gotoZone, { gotoZone = it.filter { c -> c.isDigit() }.take(2) },
-                        label = { Text("Zone UTM") },
-                        singleLine = true,
-                        modifier = Modifier.width(100.dp)
-                    )
-                    Text("مثال: 512345.6 3954321.2 یا 35.7,51.4", fontSize = MaterialTheme.typography.bodySmall.fontSize)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val parsed = com.adel.assistant.data.CoordGoto.parse(gotoLine)
-                    if (parsed == null) {
-                        statusMsg = "مختصات نامعتبر"
-                        return@TextButton
-                    }
-                    val z = gotoZone.toIntOrNull() ?: 40
-                    val (e, n, zz) = com.adel.assistant.data.CoordGoto.toUtm(parsed, z)
-                    com.adel.assistant.data.PendingMapGoto.set(e, n, zz)
-                    com.adel.assistant.data.DeepLinkHolder.setRoute(
-                        com.adel.assistant.navigation.Routes.TOOL_MAP2
-                    )
-                    showGotoDialog = false
-                    statusMsg = "نقشه به E=${String.format(java.util.Locale.US, "%.2f", e)} باز می‌شود"
-                    onBack()
-                }) { Text("برو به نقشه") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGotoDialog = false }) { Text("انصراف") }
-            }
-        )
-    }
-
-
 }

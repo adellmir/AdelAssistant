@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.PointConverter
@@ -140,7 +141,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
         val name = base.trim().ifBlank { "gsi_export" }.let {
             if (it.endsWith(".$ext", true)) it else "$it.$ext"
         }
-        val ok = FileExport.exportTextToDocuments(context, name, body) != null
+        val ok = ExportHub.exportText(context, name, body) != null
         status = if (ok) "ذخیره شد: $name (${list.size} نقطه)" else "خطا در ذخیره"
         showExportNameDialog = false
     }

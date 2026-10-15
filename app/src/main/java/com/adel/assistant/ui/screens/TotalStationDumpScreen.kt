@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.PointImport
@@ -158,7 +159,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
 
     fun saveRaw(text: String) {
         val name = "ts_${if (brand == 1) "sanding" else "raw"}_${stamp()}.txt"
-        FileExport.exportBytesToDocuments(
+        ExportHub.exportBytes(
             context, name, text.toByteArray(Charsets.UTF_8), "text/plain"
         )
     }
@@ -183,7 +184,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                         "*11$id 81..10+${f(p.x)} 82..10+${f(p.y)} 83..10+${f(p.z)} "
                     } + "\r\n"
                 }
-                FileExport.exportBytesToDocuments(
+                ExportHub.exportBytes(
                     context, "$base.gsi", body.toByteArray(Charsets.UTF_8), "text/plain"
                 )
                 status = "GSI ذخیره شد ($base.gsi) — ${points.size} نقطه"
@@ -192,7 +193,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                 val body = points.joinToString("\n") {
                     String.format(Locale.US, "%s %.4f %.4f %.4f %s", it.id, it.x, it.y, it.z, it.code)
                 } + "\n"
-                FileExport.exportBytesToDocuments(
+                ExportHub.exportBytes(
                     context, "$base.txt", body.toByteArray(Charsets.UTF_8), "text/plain"
                 )
                 status = "TXT ذخیره شد — ${points.size} نقطه"
@@ -209,7 +210,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                         )
                     }
                 }
-                FileExport.exportBytesToDocuments(
+                ExportHub.exportBytes(
                     context, "$base.csv", body.toByteArray(Charsets.UTF_8), "text/csv"
                 )
                 status = "CSV ذخیره شد — ${points.size} نقطه"
@@ -241,7 +242,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
                 p(0, "ENDSEC"); p(0, "EOF")
-                FileExport.exportBytesToDocuments(
+                ExportHub.exportBytes(
                     context, "$base.dxf", sb.toString().toByteArray(Charsets.UTF_8), "application/dxf"
                 )
                 status = "DXF ذخیره شد — ${points.size} نقطه"

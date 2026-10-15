@@ -1,5 +1,7 @@
 package com.adel.assistant.data
 
+import com.adel.assistant.data.ExportHub
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -68,7 +70,7 @@ object MonitoringExport {
         val tag = if (mode == "coord") "coord" else "axial"
         val name = "monitoring_${tag}_${project.name}_${epoch.year}${epoch.month}${epoch.day}.xlsx"
             .replace(" ", "_")
-        return FileExport.exportBytesToDocuments(
+        return ExportHub.exportBytes(
             context, name, out,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )

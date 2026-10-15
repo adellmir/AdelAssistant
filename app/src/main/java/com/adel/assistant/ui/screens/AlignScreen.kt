@@ -20,6 +20,7 @@ import com.adel.assistant.data.AlignPair
 import com.adel.assistant.data.AlignPoint
 import com.adel.assistant.data.AlignTransform
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.PointImport
@@ -287,7 +288,7 @@ private fun AlignCoordinateTab(color: Color) {
                                         else -> GsiParser.toGsi(surveyPts)
                                     }
                                     val fname = if (base.lowercase().endsWith(".$kind")) base else "$base.$kind"
-                                    val ok = FileExport.exportTextToDocuments(
+                                    val ok = ExportHub.exportText(
                                         context, fname, body,
                                         if (kind == "dxf") "application/dxf" else "text/plain"
                                     ) != null

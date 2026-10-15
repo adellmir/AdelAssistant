@@ -1,5 +1,7 @@
 package com.adel.assistant.data
 
+import com.adel.assistant.data.ExportHub
+
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -58,7 +60,7 @@ object InvoiceExport {
             if (outputBytes.isEmpty()) return null
             val name = "invoice_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
                 .replace(" ", "_")
-            FileExport.exportBytesToDocuments(
+            ExportHub.exportBytes(
                 context,
                 name,
                 outputBytes,
@@ -72,7 +74,7 @@ object InvoiceExport {
     fun exportPdfAndShare(context: Context, data: InvoiceData): Uri? {
         val bytes = buildPdf(data)
         val name = "invoice_${data.letterNo.ifBlank { "draft" }}.pdf".replace(" ", "_")
-        val uri = FileExport.exportBytesToDocuments(context, name, bytes, "application/pdf")
+        val uri = ExportHub.exportBytes(context, name, bytes, "application/pdf")
         try {
             val cache = File(context.cacheDir, name)
             cache.writeBytes(bytes)

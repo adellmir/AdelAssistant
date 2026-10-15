@@ -6,6 +6,8 @@ import android.net.Uri
 /**
  * فضای یکپارچهٔ خروجی فایل.
  * همهٔ Exportها باید از اینجا بروند تا مسیر Documents و نام فایل یکسان بماند.
+ *
+ * قانون: نام فایل از UI پرسیده می‌شود؛ این لایه فقط ذخیره می‌کند.
  */
 object ExportHub {
 
@@ -22,6 +24,13 @@ object ExportHub {
         bytes: ByteArray,
         mimeType: String
     ): Uri? = FileExport.exportBytesToDocuments(context, fileName, bytes, mimeType)
+
+    fun exportDxf(context: Context, fileName: String, dxfBody: String): Uri? {
+        val name = fileName.trim().ifBlank { "export" }.let {
+            if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
+        }
+        return exportText(context, name, dxfBody, "application/dxf")
+    }
 
     fun exportPoints(
         context: Context,
@@ -49,5 +58,10 @@ object ExportHub {
         val body = PointImport.writeGsiList(points, extension)
         val name = if (fileName.contains('.')) fileName else "$fileName.$extension"
         return exportText(context, name, body)
+    }
+
+    fun exportCsv(context: Context, fileName: String, text: String): Uri? {
+        val name = if (fileName.lowercase().endsWith(".csv")) fileName else "$fileName.csv"
+        return exportText(context, name, text, "text/csv")
     }
 }

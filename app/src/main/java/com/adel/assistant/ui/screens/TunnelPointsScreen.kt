@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.TunnelReportStore.TunnelPoint
 import com.adel.assistant.data.filterNumericInput
@@ -41,7 +41,6 @@ import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
-import com.adel.assistant.ui.PendingTunnelLookup
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -69,33 +68,6 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
     var myLocationResult by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        PendingTunnelLookup.consumePointNo()?.let { no ->
-            pointNo = no
-            results = TunnelReportStore.allPoints(context).filter { it.pointNo == no || it.pointNo.contains(no) }
-            results.firstOrNull()?.let { p ->
-                km = formatEn("%.4f", p.km); x = formatEn("%.4f", p.x); y = formatEn("%.4f", p.y); z = formatEn("%.4f", p.z)
-                elevDiff = p.elevDiff; slope = p.slope; description = p.type
-                contextKm = p.km
-            }
-        }
-        PendingTunnelLookup.consumeKm()?.let { k ->
-            km = k
-            val kd = k.replace(',', '.').toDoubleOrNull()
-            if (kd != null) {
-                val near = TunnelReportStore.allPoints(context).minByOrNull { kotlin.math.abs(it.km - kd) }
-                if (near != null) {
-                    results = listOf(near)
-                    pointNo = near.pointNo
-                    x = formatEn("%.4f", near.x); y = formatEn("%.4f", near.y); z = formatEn("%.4f", near.z)
-                    elevDiff = near.elevDiff; slope = near.slope; description = near.type
-                    contextKm = near.km
-                }
-            }
-        }
-    }
-
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -268,7 +240,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
                     val text = FileExport.readAsCsvText(context, "tunnel_points")
-                    val uri = FileExport.exportTextToDocuments(context, "tunnel_points.txt", text)
+                    val uri = ExportHub.exportText(context, "tunnel_points.txt", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })
             }

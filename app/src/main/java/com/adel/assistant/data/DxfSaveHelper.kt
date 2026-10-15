@@ -8,7 +8,7 @@ object DxfSaveHelper {
         val name = fileName.trim().ifBlank { "export" }.let {
             if (it.lowercase().endsWith(".dxf")) it else "$it.dxf"
         }
-        return FileExport.exportTextToDocuments(context, name, dxfBody, "application/dxf")
+        return ExportHub.exportDxf(context, name, dxfBody)
     }
 
     fun queueOpenInMap(dxfBody: String, displayName: String) {

@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.ui.ScreenTopBar
@@ -58,7 +59,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
             IconButton(onClick = {
                 val text = TunnelFinanceStore.exportCsvText(context)
-                val uri = FileExport.exportTextToDocuments(context, "tunnel_financial.csv", text, "text/csv")
+                val uri = ExportHub.exportText(context, "tunnel_financial.csv", text, "text/csv")
                 statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا"
             }) { Icon(Icons.Filled.Settings, null, tint = Color(0xFFAAB697)) }
             TextButton(onClick = {

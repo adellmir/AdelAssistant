@@ -1,5 +1,7 @@
 package com.adel.assistant.data
 
+import com.adel.assistant.data.ExportHub
+
 import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
@@ -45,7 +47,7 @@ object LetterExport {
         if (out.size < template.size / 2) return null
         val name = "letter_${data.letterNo.ifBlank { System.currentTimeMillis().toString() }}.xlsx"
             .replace(" ", "_")
-        return FileExport.exportBytesToDocuments(
+        return ExportHub.exportBytes(
             context, name, out,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
@@ -54,7 +56,7 @@ object LetterExport {
     fun exportPdfAndShare(context: Context, data: LetterData): Uri? {
         val bytes = buildPdf(data)
         val name = "letter_${data.letterNo.ifBlank { "draft" }}.pdf".replace(" ", "_")
-        val uri = FileExport.exportBytesToDocuments(context, name, bytes, "application/pdf")
+        val uri = ExportHub.exportBytes(context, name, bytes, "application/pdf")
         try {
             val cache = File(context.cacheDir, name)
             cache.writeBytes(bytes)

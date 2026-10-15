@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.FileExport
+import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.WorkingDraftStore
@@ -250,7 +251,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 DropdownMenuItem(text = { Text("خارج کردن") }, onClick = {
                     showMenu = false
                     val text = FileExport.readAsCsvText(context, "survey_tunnel_report")
-                    val uri = FileExport.exportTextToDocuments(context, "survey_tunnel_report.csv", text)
+                    val uri = ExportHub.exportText(context, "survey_tunnel_report.csv", text)
                     statusMsg = if (uri != null) "در Documents/AdelAssistant ذخیره شد" else "خطا در خارج کردن"
                 })
             }
@@ -391,7 +392,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                         }
                         Text(
                             formatEn(
-                                "کیلومتر: %.3f  پیشرفت روز: %.3f  پیشرفت شفت: %.3f  مانده: %.3f",
+                                "ک:%.3f  پ.روز:%.3f  پ.شفت:%.3f  مانده:%.3f",
                                 r.km, r.dailyProgress, r.shaftProgress, r.remaining
                             ),
                             style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B)
