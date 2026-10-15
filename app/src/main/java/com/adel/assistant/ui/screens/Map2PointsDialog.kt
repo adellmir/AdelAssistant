@@ -77,35 +77,15 @@ fun Map2PointsDialog(
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) {
-            // لغو انتخاب فایل — دیالوگ باز بماند تا دوباره انتخاب شود
-            if (!filePicked && points.isEmpty()) {
-                message = "فایلی انتخاب نشد — دوباره «انتخاب فایل» را بزنید"
-            }
+            if (!filePicked && points.isEmpty()) onDismiss()
             return@rememberLauncherForActivityResult
         }
         try {
-            var name = uri.lastPathSegment.orEmpty()
-            try {
-                context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-                    val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (idx >= 0 && c.moveToFirst()) name = c.getString(idx) ?: name
-                }
-            } catch (_: Exception) { }
+            val name = PointImport.resolveDisplayName(context, uri)
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
-            if (bytes.isEmpty()) {
-                message = "فایل خالی یا غیرقابل خواندن"
-                return@rememberLauncherForActivityResult
-            }
-            var parsed = PointConverter.readBytes(bytes, name)
+            val parsed = PointImport.readBytes(bytes, name)
             if (parsed.isEmpty()) {
-                // تلاش با نام جعلی txt/dat/gsi
-                for (fake in listOf("points.txt", "points.dat", "points.gsi", "points.kml")) {
-                    parsed = PointConverter.readBytes(bytes, fake)
-                    if (parsed.isNotEmpty()) { name = fake; break }
-                }
-            }
-            if (parsed.isEmpty()) {
-                message = "نقطه‌ای خوانده نشد — فرمت را بررسی کنید (txt/dat/gsi/kml)"
+                message = "نقطه‌ای خوانده نشد"
                 return@rememberLauncherForActivityResult
             }
             val base = System.currentTimeMillis()

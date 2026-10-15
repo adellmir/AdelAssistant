@@ -30,6 +30,7 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.KmlParser
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.ToolPrimary
@@ -60,30 +61,11 @@ fun DxfConverterScreen(onBack: () -> Unit, onOpenTopography: () -> Unit = {}) {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     val bytes = stream.readBytes()
                     val lower = name.lowercase()
-                    val parsedPoints: List<SurveyPoint> = when {
-                        lower.endsWith(".kml") || lower.endsWith(".kmz") ->
-                            KmlParser.parseBytes(bytes, name).points
-                        lower.endsWith(".gsi") ||
-                            bytes.toString(Charsets.UTF_8).trimStart().startsWith("*11") -> {
-                            val gsi = GsiParser.parse(bytes.toString(Charsets.UTF_8))
-                            gsi.map { g ->
-                                SurveyPoint(
-                                    id = g.name,
-                                    x = g.e,
-                                    y = g.n,
-                                    z = g.z,
-                                    code = g.code.ifBlank { g.name }
-                                )
-                            }
-                        }
-                        else -> {
-                            // DAT/TXT/CSV/IDX و سایر
-                            try {
-                                PointConverter.readBytes(bytes, name)
-                            } catch (_: Exception) {
-                                DxfPointParser.parse(ByteArrayInputStream(bytes), name).points
-                            }
-                        }
+                    // یکپارچه: PointImport (DAT/GSI/KML/TXT/…)
+                    val parsedPoints: List<SurveyPoint> = try {
+                        PointImport.readBytes(bytes, name)
+                    } catch (_: Exception) {
+                        emptyList()
                     }
                     points = parsedPoints
                     val uniqueCodes = parsedPoints.map { codeBase(it.code) }.distinct().filter { it.isNotBlank() }

@@ -59,7 +59,7 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         try {
             val name = uri.lastPathSegment ?: "points.dat"
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
-            val parsedAll = PointConverter.readBytes(bytes, name).map { VolPoint(it.id, it.x, it.y, it.z, it.code) }
+            val parsedAll = PointImport.readBytes(bytes, name).map { VolPoint(it.id, it.x, it.y, it.z, it.code) }
             val tp = parsedAll.filter { codeBase(it.code) == "tp" }
             val parsed = if (tp.size >= 3) tp else parsedAll
             if (parsed.size >= 3) {

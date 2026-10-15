@@ -35,6 +35,7 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.PointImport
 import java.nio.charset.Charset
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,54 +80,8 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun parseAny(bytes: ByteArray, fileName: String): List<GsiPoint> {
-        val name = fileName.lowercase()
-        // 1) GSI
-        if (name.endsWith(".gsi") || name.contains(".gsi")) {
-            val t = bytes.toString(Charsets.UTF_8)
-            val g = GsiParser.parse(t)
-            if (g.isNotEmpty()) return g
-        }
-        // 2) DAT via PointConverter (N Y X Z)
-        if (name.endsWith(".dat") || name.contains(".dat")) {
-            val sp = try {
-                PointConverter.readBytes(bytes, "file.dat")
-            } catch (_: Exception) {
-                emptyList()
-            }
-            if (sp.isNotEmpty()) {
-                return sp.mapIndexed { i, p ->
-                    GsiPoint(id = System.nanoTime() + i, name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
-                }
-            }
-            val d = GsiParser.parseDat(bytes.toString(Charsets.UTF_8))
-            if (d.isNotEmpty()) return d
-        }
-        // 3) PointConverter general (auto DAT detect)
-        try {
-            val sp = PointConverter.readBytes(bytes, fileName)
-            if (sp.isNotEmpty()) {
-                return sp.mapIndexed { i, p ->
-                    GsiPoint(id = System.nanoTime() + i, name = p.id, e = p.x, n = p.y, z = p.z, code = p.code)
-                }
-            }
-        } catch (_: Exception) {
-        }
-        val text = try {
-            bytes.toString(Charsets.UTF_8)
-        } catch (_: Exception) {
-            bytes.toString(Charset.defaultCharset())
-        }
-        // 4) GSI by content
-        if (text.trimStart().startsWith("*11") || text.contains("81..") || text.contains("*41")) {
-            val g = GsiParser.parse(text)
-            if (g.isNotEmpty()) return g
-        }
-        // 5) DAT then TXT
-        val dat = GsiParser.parseDat(text)
-        if (dat.isNotEmpty()) return dat
-        val txt = GsiParser.parseTxt(text)
-        if (txt.isNotEmpty()) return txt
-        return GsiParser.parse(text)
+        // یکپارچه: همه فرمت‌ها از PointImport
+        return PointImport.readBytesAsGsi(bytes, fileName)
     }
 
     val picker = rememberLauncherForActivityResult(

@@ -22,6 +22,8 @@ import com.adel.assistant.data.AlignTransform
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.GsiPoint
+import com.adel.assistant.data.PointImport
+import com.adel.assistant.data.toGsiPoints
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -68,27 +70,14 @@ private fun AlignCoordinateTab(color: Color) {
     var eZ by remember { mutableStateOf("") }
 
     fun loadText(text: String, fileName: String = ""): List<GsiPoint> {
-        val lower = fileName.lowercase()
-        if (lower.endsWith(".dat")) {
-            val b = GsiParser.parseDat(text)
-            if (b.isNotEmpty()) return b
-        }
-        if (lower.endsWith(".gsi")) {
-            val g = GsiParser.parse(text)
-            if (g.isNotEmpty()) return g
-        }
-        val a = GsiParser.parseTxt(text)
-        if (a.isNotEmpty()) return a
-        val b = GsiParser.parseDat(text)
-        if (b.isNotEmpty()) return b
-        return GsiParser.parse(text)
+        // یکپارچه: PointImport (DAT=N Y X Z و GSI و TXT)
+        return com.adel.assistant.data.PointImport.readText(text, fileName).toGsiPoints()
     }
 
     val picker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
-            val pts = loadText(text, uri.lastPathSegment.orEmpty())
+            val pts = com.adel.assistant.data.PointImport.readAsGsi(context, uri)
             if (loadTarget == "control") {
                 controlPts = pts
                 status = "کنترل: ${pts.size} نقطه"

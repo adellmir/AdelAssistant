@@ -15,21 +15,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.GsiParser
-import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
@@ -37,16 +35,21 @@ import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 /**
  * تخلیه دوربین / توتال‌استیشن از طریق بلوتوث
- * نسخه ۱: اتصال SPP، دریافت جریان داده، وارد کردن فایل GSI/TXT، پیش‌نمایش نقاط
- * لیست جاب داخلی دستگاه (مثل Tivan) نیاز به پروتکل اختصاصی سازنده دارد و در نسخه بعد تکمیل می‌شود.
+ *
+ * حالت Sanding: دریافت فایل روی SPP، پارس GSI/TXT، خروجی GSI / TXT / CSV / DXF
+ * (مشابه جریان Tivan برای ماژول Sanding — بدون پروتکل جاب لیکا)
  */
 @SuppressLint("MissingPermission")
 @Composable
@@ -55,7 +58,9 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val sppUuid = remember { UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") }
 
-    var status by remember { mutableStateOf("دستگاه را جفت (Pair) کن، بعد از لیست انتخاب کن.") }
+    // 0=عمومی  1=Sanding
+    var brand by remember { mutableStateOf(1) }
+    var status by remember { mutableStateOf("برند Sanding: دوربین را Pair کن، ارسال فایل را از روی دستگاه شروع کن، بعد اتصال و دریافت.") }
     var devices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
     var selected by remember { mutableStateOf<BluetoothDevice?>(null) }
     var connecting by remember { mutableStateOf(false) }
@@ -64,6 +69,8 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     var rawText by remember { mutableStateOf("") }
     var points by remember { mutableStateOf<List<SurveyPoint>>(emptyList()) }
     var socketRef by remember { mutableStateOf<BluetoothSocket?>(null) }
+    var receivedBytes by remember { mutableStateOf(0) }
+    var showExportDialog by remember { mutableStateOf(false) }
 
     fun hasConnectPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -89,118 +96,184 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
         }
         val adapter = btAdapter()
         if (adapter == null) {
-            status = "بلوتوث در این دستگاه پشتیبانی نمی‌شود"
+            status = "بلوتوث پشتیبانی نمی‌شود"
             return
         }
         if (!adapter.isEnabled) {
-            status = "بلوتوث خاموش است — از تنظیمات روشن کن"
+            status = "بلوتوث خاموش است"
             return
         }
-        devices = adapter.bondedDevices?.toList()?.sortedBy { it.name ?: it.address } ?: emptyList()
-        status = if (devices.isEmpty()) {
-            "دستگاه جفت‌شده نیست. اول در تنظیمات اندروید با دوربین Pair کن."
+        val all = adapter.bondedDevices?.toList().orEmpty()
+        // در حالت Sanding دستگاه‌هایی که نام مرتبط دارند بالاتر
+        devices = if (brand == 1) {
+            all.sortedWith(
+                compareByDescending<BluetoothDevice> {
+                    val n = (it.name ?: "").lowercase()
+                    n.contains("sand") || n.contains("sts") || n.contains("ts") || n.contains("total")
+                }.thenBy { it.name ?: it.address }
+            )
         } else {
-            "${devices.size} دستگاه جفت‌شده — یکی را انتخاب کن"
+            all.sortedBy { it.name ?: it.address }
+        }
+        status = if (devices.isEmpty()) {
+            "دستگاه جفت‌شده نیست — اول در تنظیمات اندروید Pair کن"
+        } else {
+            "${devices.size} دستگاه جفت‌شده"
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        if (result.values.all { it }) {
-            refreshBonded()
-        } else {
-            status = "برای تخلیه، مجوز بلوتوث لازم است"
-        }
-    }
+    ) { refreshBonded() }
 
     fun requestPermissions() {
-        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permLauncher.launch(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                )
             )
         } else {
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN
-            )
+            permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
         }
-        permissionLauncher.launch(perms)
     }
 
-    fun parseReceived(text: String) {
-        rawText = text
-        val ext = when {
-            text.contains("*11") || text.contains("81..") || text.contains("82..") -> "gsi"
-            else -> "txt"
+    fun parseReceived(text: String): List<SurveyPoint> {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        val name = when {
+            trimmed.lines().any { it.trimStart().startsWith("*") } -> "dump.gsi"
+            brand == 1 -> "sanding.txt"
+            else -> "dump.txt"
         }
-        points = try {
-            PointConverter.read(text, ext)
-        } catch (_: Exception) {
+        return try {
+            PointImport.readText(trimmed, name)
+        } catch (_: Throwable) {
             emptyList()
         }
-        status = if (points.isEmpty()) {
-            "داده دریافت شد (${text.length} کاراکتر) ولی نقطه شناخته نشد — فرمت را در مبدل چک کن"
-        } else {
-            "${points.size} نقطه خوانده شد"
-        }
     }
 
-    fun saveReceived(text: String) {
-        try {
-            // بایگانی خام (زاویه/فاصله) در txt
-            val rawName = "dump_raw_${System.currentTimeMillis()}.txt"
-            FileExport.exportBytesToDocuments(
-                context, rawName, text.toByteArray(Charsets.UTF_8), "text/plain"
-            )
-            if (points.isNotEmpty()) {
-                // GSI مختصات مطلق به سبک BAHAR برای ورود به دوربین
-                val gsiPts = points.map { pt ->
-                    GsiPoint(name = pt.id.ifBlank { "P" }, e = pt.x, n = pt.y, z = pt.z, code = pt.code)
+    fun stamp(): String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+
+    fun saveRaw(text: String) {
+        val name = "ts_${if (brand == 1) "sanding" else "raw"}_${stamp()}.txt"
+        FileExport.exportBytesToDocuments(
+            context, name, text.toByteArray(Charsets.UTF_8), "text/plain"
+        )
+    }
+
+    fun exportPoints(fmt: String) {
+        if (points.isEmpty()) {
+            status = "نقطه‌ای برای خروجی نیست"
+            return
+        }
+        val base = "sanding_${stamp()}"
+        when (fmt) {
+            "gsi" -> {
+                val gsiPts = points.map {
+                    com.adel.assistant.data.GsiPoint(name = it.id, e = it.x, n = it.y, z = it.z, code = it.code)
                 }
-                val gsiText = GsiParser.toGsi(gsiPts)
-                val gsiName = "points_${System.currentTimeMillis()}.gsi"
+                val body = try {
+                    GsiParser.toGsi(gsiPts)
+                } catch (_: Throwable) {
+                    points.joinToString("\r\n") { p ->
+                        val id = p.id.filter { it.isDigit() }.ifEmpty { "0" }.padStart(16, '0')
+                        fun f(v: Double) = String.format(Locale.US, "%.0f", v * 1000.0).padStart(16, '0').takeLast(16)
+                        "*11$id 81..10+${f(p.x)} 82..10+${f(p.y)} 83..10+${f(p.z)} "
+                    } + "\r\n"
+                }
                 FileExport.exportBytesToDocuments(
-                    context, gsiName, gsiText.toByteArray(Charsets.UTF_8), "text/plain"
+                    context, "$base.gsi", body.toByteArray(Charsets.UTF_8), "text/plain"
                 )
-                status = "ذخیره: gsi/$gsiName + txt/$rawName — ${points.size} نقطه (فرمت دوربین)"
-            } else {
-                status = "ذخیره خام txt/$rawName — نقطه مختصاتی برای GSI تشخیص داده نشد"
+                status = "GSI ذخیره شد ($base.gsi) — ${points.size} نقطه"
             }
-        } catch (e: Exception) {
-            try {
-                val f = File(context.getExternalFilesDir(null), "dump_${System.currentTimeMillis()}.txt")
-                f.writeText(text)
-                status = "ذخیره در حافظه اپ: ${f.absolutePath}"
-            } catch (e2: Exception) {
-                status = "خطا در ذخیره: ${e2.message}"
+            "txt" -> {
+                val body = points.joinToString("\n") {
+                    String.format(Locale.US, "%s %.4f %.4f %.4f %s", it.id, it.x, it.y, it.z, it.code)
+                } + "\n"
+                FileExport.exportBytesToDocuments(
+                    context, "$base.txt", body.toByteArray(Charsets.UTF_8), "text/plain"
+                )
+                status = "TXT ذخیره شد — ${points.size} نقطه"
+            }
+            "csv" -> {
+                val body = buildString {
+                    append("Point,East,North,Elev,Code\n")
+                    points.forEach {
+                        append(
+                            String.format(
+                                Locale.US, "%s,%.4f,%.4f,%.4f,%s\n",
+                                it.id, it.x, it.y, it.z, it.code.replace(",", " ")
+                            )
+                        )
+                    }
+                }
+                FileExport.exportBytesToDocuments(
+                    context, "$base.csv", body.toByteArray(Charsets.UTF_8), "text/csv"
+                )
+                status = "CSV ذخیره شد — ${points.size} نقطه"
+            }
+            "dxf" -> {
+                val sb = StringBuilder()
+                fun p(c: Int, v: String) { sb.append(c).append("\r\n").append(v).append("\r\n") }
+                fun fmt(v: Double) = String.format(Locale.US, "%.4f", v)
+                p(0, "SECTION"); p(2, "HEADER"); p(9, "\$ACADVER"); p(1, "AC1009"); p(0, "ENDSEC")
+                p(0, "SECTION"); p(2, "TABLES")
+                p(0, "TABLE"); p(2, "LAYER"); p(70, "2")
+                p(0, "LAYER"); p(2, "POINTS"); p(70, "0"); p(62, "1"); p(6, "CONTINUOUS")
+                p(0, "LAYER"); p(2, "CODES"); p(70, "0"); p(62, "3"); p(6, "CONTINUOUS")
+                p(0, "ENDTAB"); p(0, "ENDSEC")
+                p(0, "SECTION"); p(2, "ENTITIES")
+                points.forEach { q ->
+                    val s = 0.15
+                    p(0, "LINE"); p(8, "POINTS")
+                    p(10, fmt(q.x - s)); p(20, fmt(q.y - s)); p(30, fmt(q.z))
+                    p(11, fmt(q.x + s)); p(21, fmt(q.y + s)); p(31, fmt(q.z))
+                    p(0, "LINE"); p(8, "POINTS")
+                    p(10, fmt(q.x - s)); p(20, fmt(q.y + s)); p(30, fmt(q.z))
+                    p(11, fmt(q.x + s)); p(21, fmt(q.y - s)); p(31, fmt(q.z))
+                    val label = listOf(q.id, q.code).filter { it.isNotBlank() }.joinToString(" ")
+                    if (label.isNotBlank()) {
+                        p(0, "TEXT"); p(8, "CODES")
+                        p(10, fmt(q.x)); p(20, fmt(q.y)); p(30, fmt(q.z))
+                        p(40, "0.5"); p(1, label)
+                    }
+                }
+                p(0, "ENDSEC"); p(0, "EOF")
+                FileExport.exportBytesToDocuments(
+                    context, "$base.dxf", sb.toString().toByteArray(Charsets.UTF_8), "application/dxf"
+                )
+                status = "DXF ذخیره شد — ${points.size} نقطه"
             }
         }
+        showExportDialog = false
     }
 
     fun disconnect() {
-        try {
-            socketRef?.close()
-        } catch (_: Exception) {
-        }
+        try { socketRef?.close() } catch (_: Exception) {}
         socketRef = null
         connected = false
         receiving = false
     }
 
+    /**
+     * اتصال SPP و دریافت تا:
+     * - قطع از سمت دستگاه، یا
+     * - سکوت بیش از idleMs بعد از حداقل یک بایت (مناسب ارسال فایل Sanding)
+     */
     fun connectAndReceive(device: BluetoothDevice) {
         scope.launch {
             connecting = true
-            status = "در حال اتصال به ${device.name ?: device.address}..."
+            receiving = false
+            receivedBytes = 0
+            status = "اتصال به ${device.name ?: device.address}…"
             try {
                 withContext(Dispatchers.IO) {
                     disconnect()
                     val socket = try {
                         device.createRfcommSocketToServiceRecord(sppUuid)
                     } catch (_: Exception) {
-                        // fallback reflection sometimes needed on older devices
                         device.javaClass
                             .getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
                             .invoke(device, 1) as BluetoothSocket
@@ -208,124 +281,150 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                     btAdapter()?.cancelDiscovery()
                     socket.connect()
                     socketRef = socket
-                    connected = true
-                    receiving = true
-                    status = "متصل شد — در حال دریافت داده (از دستگاه ارسال/دانلود را بزن)..."
-                    val buffer = ByteArray(4096)
-                    val out = StringBuilder()
+                    withContext(Dispatchers.Main) {
+                        connected = true
+                        receiving = true
+                        status = if (brand == 1)
+                            "متصل — از روی دوربین Sanding ارسال فایل (GSI/TXT) را بزن"
+                        else
+                            "متصل — در حال دریافت…"
+                    }
                     val input = socket.inputStream
-                    // read with idle timeout loops
-                    var idleRounds = 0
-                    while (receiving && socket.isConnected && idleRounds < 30) {
-                        val available = input.available()
+                    val buf = ByteArray(4096)
+                    val out = StringBuilder()
+                    val idleMs = if (brand == 1) 2500L else 8000L
+                    var lastDataAt = System.currentTimeMillis()
+                    var gotAny = false
+                    // تا وقتی coroutine فعال و receiving
+                    while (isActive && receiving) {
+                        val available = try { input.available() } catch (_: Exception) { -1 }
+                        if (available < 0) break
                         if (available > 0) {
-                            val n = input.read(buffer, 0, minOf(buffer.size, available))
-                            if (n > 0) {
-                                out.append(String(buffer, 0, n, Charsets.ISO_8859_1))
-                                idleRounds = 0
-                                status = "دریافت... ${out.length} بایت"
+                            val n = input.read(buf, 0, minOf(buf.size, available))
+                            if (n <= 0) break
+                            gotAny = true
+                            lastDataAt = System.currentTimeMillis()
+                            val chunk = String(buf, 0, n, Charsets.ISO_8859_1)
+                            out.append(chunk)
+                            val total = out.length
+                            withContext(Dispatchers.Main) {
+                                receivedBytes = total
+                                if (total % 8000 < n) {
+                                    status = "دریافت… ${total} بایت"
+                                }
                             }
                         } else {
-                            Thread.sleep(200)
-                            idleRounds++
+                            if (gotAny && System.currentTimeMillis() - lastDataAt > idleMs) {
+                                // پایان ارسال فایل
+                                break
+                            }
+                            delay(40)
                         }
                     }
                     val text = out.toString()
                     withContext(Dispatchers.Main) {
+                        rawText = text
                         if (text.isNotBlank()) {
-                            parseReceived(text)
-                            saveReceived(text)
+                            saveRaw(text)
+                            val pts = parseReceived(text)
+                            points = pts
+                            status = if (pts.isNotEmpty()) {
+                                "تمام — ${pts.size} نقطه از ${text.length} بایت"
+                            } else {
+                                "خام ذخیره شد (${text.length} بایت) — نقطه مختصاتی تشخیص داده نشد؛ فایل را در مبدل باز کن"
+                            }
                         } else {
-                            status = "اتصالی برقرار شد ولی داده‌ای نیامد. از منوی دوربین ارسال فایل را بزن یا از «از فایل» استفاده کن."
+                            status = "داده‌ای دریافت نشد — ارسال از روی دوربین را چک کن"
                         }
                         receiving = false
                     }
                 }
             } catch (e: IOException) {
-                status = "خطای اتصال/دریافت: ${e.message}\nاگر دستگاه پروتکل اختصاصی دارد، فایل را با بلوتوث سیستم به گوشی بفرست و از «از فایل» باز کن."
-                connected = false
+                status = "خطای ارتباط: ${e.message ?: "قطع شد"}"
                 receiving = false
+                connected = false
             } catch (e: Exception) {
                 status = "خطا: ${e.message}"
-                connected = false
                 receiving = false
+                connected = false
             } finally {
                 connecting = false
+                try { socketRef?.close() } catch (_: Exception) {}
             }
         }
     }
 
-    val openFile = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        try {
-            val name = uri.lastPathSegment ?: "import.txt"
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-            parseReceived(text)
-            saveReceived(text)
-            status = "از فایل وارد شد ($name) — ${points.size} نقطه"
-        } catch (e: Exception) {
-            status = "خطا در خواندن فایل: ${e.message}"
-        }
-    }
-
     LaunchedEffect(Unit) {
-        if (hasConnectPermission()) refreshBonded()
-        else status = "برای شروع، مجوز بلوتوث را بده"
+        if (hasConnectPermission()) refreshBonded() else requestPermissions()
     }
 
     Column(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .background(Background)
-            .padding(horizontal = 16.dp)
+            .padding(12.dp)
     ) {
         ScreenTopBar(title = "تخلیه دوربین", color = color, onBack = onBack)
 
-        Text(
-            "سندینگ / توتال‌استیشن از طریق بلوتوث. ابتدا در تنظیمات گوشی Pair کن.",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            Button(
+        // برند
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = brand == 1,
                 onClick = {
-                    if (hasConnectPermission()) refreshBonded() else requestPermissions()
+                    brand = 1
+                    status = "حالت Sanding: Pair → ارسال فایل از دوربین → اتصال و دریافت → خروجی"
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = color),
-                modifier = Modifier.weight(1f)
-            ) { Text("مجوز / تازه‌سازی") }
-            OutlinedButton(
-                onClick = { openFile.launch(arrayOf("*/*", "text/*", "application/octet-stream")) },
-                modifier = Modifier.weight(1f)
-            ) { Text("از فایل") }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                status,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = TextPrimary
+                label = { Text("Sanding", fontSize = 13.sp) }
+            )
+            FilterChip(
+                selected = brand == 0,
+                onClick = {
+                    brand = 0
+                    status = "حالت عمومی: دریافت جریان خام بلوتوث"
+                },
+                label = { Text("عمومی", fontSize = 13.sp) }
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("دستگاه‌های جفت‌شده", style = MaterialTheme.typography.titleSmall, color = color)
+        if (brand == 1) {
+            Text(
+                "راهنما Sanding: ۱) بلوتوث دوربین را Pair کنید  ۲) روی دوربین ارسال/Export فایل را بزنید  ۳) اینجا اتصال و دریافت  ۴) خروجی GSI/TXT/CSV/DXF",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
+
+        Text(status, color = TextPrimary, fontSize = 13.sp)
+        if (receivedBytes > 0) {
+            Text("حجم: $receivedBytes بایت | نقاط: ${points.size}", color = TextSecondary, fontSize = 11.sp)
+        }
+
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(onClick = {
+                if (!hasConnectPermission()) requestPermissions() else refreshBonded()
+            }) { Text("بروز لیست") }
+            if (points.isNotEmpty()) {
+                Button(
+                    onClick = { showExportDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = color)
+                ) { Text("خروجی (${points.size})") }
+            }
+        }
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(devices, key = { it.address }) { dev ->
-                val name = dev.name ?: "(بدون نام)"
                 val isSel = selected?.address == dev.address
+                val name = dev.name ?: "(بدون نام)"
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = if (isSel) color.copy(alpha = 0.2f) else SurfaceColor,
@@ -333,7 +432,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                         .fillMaxWidth()
                         .clickable { selected = dev }
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(Modifier.padding(12.dp)) {
                         Text(name, color = TextPrimary)
                         Text(dev.address, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
@@ -341,33 +440,31 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
             }
             if (points.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("پیش‌نمایش نقاط (${points.size})", color = color)
+                    Spacer(Modifier.height(8.dp))
+                    Text("پیش‌نمایش (${points.size})", color = color)
                 }
-                items(points.take(50), key = { it.id + it.x }) { p ->
+                items(points.take(80), key = { it.id + "_" + it.x }) { p ->
                     Text(
-                        "${p.id} | ${p.code} | X=${p.x} Y=${p.y} Z=${p.z}",
+                        "${p.id} | ${p.code} | E=${"%.3f".format(Locale.US, p.x)} N=${"%.3f".format(Locale.US, p.y)} Z=${"%.3f".format(Locale.US, p.z)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
                 }
-                if (points.size > 50) {
-                    item { Text("… و ${points.size - 50} نقطه دیگر", color = TextSecondary) }
+                if (points.size > 80) {
+                    item { Text("… و ${points.size - 80} نقطه دیگر", color = TextSecondary) }
                 }
             }
         }
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
         ) {
             Button(
                 onClick = {
                     val dev = selected
                     if (dev == null) {
-                        status = "اول یک دستگاه از لیست انتخاب کن"
+                        status = "اول دستگاه را انتخاب کن"
                         return@Button
                     }
                     if (!hasConnectPermission()) {
@@ -379,16 +476,51 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                 enabled = !connecting && !receiving,
                 colors = ButtonDefaults.buttonColors(containerColor = color),
                 modifier = Modifier.weight(1f)
-            ) { Text(if (connecting || receiving) "در حال کار..." else "اتصال و دریافت") }
-
+            ) {
+                Text(
+                    when {
+                        connecting -> "اتصال…"
+                        receiving -> "دریافت…"
+                        else -> "اتصال و دریافت"
+                    }
+                )
+            }
             OutlinedButton(
                 onClick = {
                     receiving = false
                     disconnect()
                     status = "قطع شد"
                 },
-                modifier = Modifier.weight(0.6f)
+                modifier = Modifier.weight(0.55f)
             ) { Text("قطع") }
         }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text("خروجی Sanding / نقاط") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${points.size} نقطه — فرمت را انتخاب کن", fontSize = 13.sp)
+                    listOf(
+                        "gsi" to "GSI (سازگار Sanding/Leica)",
+                        "txt" to "TXT (شماره E N Z کد)",
+                        "csv" to "CSV",
+                        "dxf" to "DXF نقاط"
+                    ).forEach { (k, label) ->
+                        Button(
+                            onClick = { exportPoints(k) },
+                            colors = ButtonDefaults.buttonColors(containerColor = color),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(label) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportDialog = false }) { Text("بستن") }
+            }
+        )
     }
 }

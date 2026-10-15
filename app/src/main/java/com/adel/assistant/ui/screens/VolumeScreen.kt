@@ -43,6 +43,7 @@ import com.adel.assistant.data.CutFillCell
 import com.adel.assistant.data.VolumeAnalysis
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.PointImport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,7 +133,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: return emptyList()
         val pts: List<SurveyPoint> = try {
-            PointConverter.readBytes(bytes, name)
+            PointImport.readBytes(bytes, name)
         } catch (_: Exception) {
             emptyList()
         }

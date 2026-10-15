@@ -63,6 +63,7 @@ import com.adel.assistant.data.TunnelMapBgStore
 import com.adel.assistant.data.TunnelLayerPrefs
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.PointConverter
+import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.TunnelBenchmarkPoint
 import com.adel.assistant.data.TunnelBenchmarkStore
 import com.adel.assistant.data.DxfModel
@@ -621,6 +622,61 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             }
+            // —— تارگت مرکزی ثبت نقطه ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
+                val inv = if (baseMap != TunnelBaseMap.NONE) Color.White else Color.Black
+                Canvas(Modifier.fillMaxSize()) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { registerFromCrosshair() },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
+                        TextButton(
+                            onClick = {
+                                if (editHintId != null) {
+                                    crosshairEditOverlayId = editHintId
+                                    crosshairDimId = editHintId
+                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairDimId = null
+                                    crosshairEditOverlayId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
+                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+
             dimMsg?.let { msg ->
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -947,64 +1003,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                 }
             }
-            // —— تارگت مرکزی ثبت نقطه ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
-                val inv = Color(0xFFFFEB3B)
-                val invShadow = Color.Black
-                Canvas(Modifier.fillMaxSize().zIndex(40f)) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 56f
-                    val gap = 14f
-                    drawLine(inv, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(inv, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(inv, radius = 3f, center = Offset(cx, cy), style = Stroke(1.5f))
-                }
-                Surface(
-                    color = Color(0xCC111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp).zIndex(50f).zIndex(50f)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            onClick = { registerFromCrosshair() },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) { Text("ثبت", color = color, fontSize = 12.sp) }
-                        TextButton(
-                            onClick = {
-                                if (editHintId != null) {
-                                    crosshairEditOverlayId = editHintId
-                                    crosshairDimId = editHintId
-                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairDimId = null
-                                    crosshairEditOverlayId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 11.sp)
-                            Text(formatEn("N %.3f", cw.second), color = Color.White, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-
-
-
-
         }
 
         if (overlays.isNotEmpty()) {
@@ -1464,10 +1462,9 @@ private fun TunnelBenchmarkImportDialog(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "points.txt"
-            val ext = name.substringAfterLast('.', "txt").lowercase()
-            val text = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: return@rememberLauncherForActivityResult
-            val parsed = PointConverter.read(text, ext)
+            val name = PointImport.resolveDisplayName(context, uri)
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
+            val parsed = PointImport.readBytes(bytes, name)
             if (parsed.isEmpty()) {
                 message = "نقطه‌ای خوانده نشد"
                 return@rememberLauncherForActivityResult

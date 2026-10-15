@@ -66,7 +66,7 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@forEach
                 val name = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.ifBlank { "سطح ${surfaces.size + loaded.size + 1}" }
                     ?: "سطح ${surfaces.size + loaded.size + 1}"
-                val pts = PointConverter.readBytes(bytes, uri.lastPathSegment ?: "points.txt")
+                val pts = PointImport.readBytes(bytes, uri.lastPathSegment ?: "points.txt")
                     .map { VolPoint(it.id, it.x, it.y, it.z, it.code) }
                 if (pts.size >= 3) loaded += ProfileSurfaceSlot(name, pts)
             } catch (_: Exception) { }

@@ -18,6 +18,7 @@ import com.adel.assistant.data.PendingMapOpen
 import com.adel.assistant.ui.PointsSpreadsheet
 import com.adel.assistant.data.GsiPoint
 import com.adel.assistant.data.GsiParser
+import com.adel.assistant.data.PointImport
 
 import android.Manifest
 import android.content.Context
@@ -532,10 +533,8 @@ LaunchedEffect(profileMode) {
     val mapAlignFilePicker = rememberLauncherForActivityResult(com.adel.assistant.data.AdelDocuments.OpenDocumentContract()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
-            val pts = GsiParser.parseTxt(text).ifEmpty {
-                GsiParser.parseDat(text).ifEmpty { GsiParser.parse(text) }
-            }
+            // یکپارچه: PointImport — منطق ترسیم نقشه دست نخورده
+            val pts = PointImport.readAsGsi(context, uri)
             if (pts.isEmpty()) {
                 message = "فایل نقطه خالی بود"
                 return@rememberLauncherForActivityResult
@@ -736,13 +735,7 @@ LaunchedEffect(profileMode) {
     }
 
     fun requestExit() {
-        // اگر ترسیمی/تغییری نبود مستقیم خارج شو
-        val hasWork = docDirty || drawings.any { it.name != "_CAD" || it.model.lines.isNotEmpty() || it.model.texts.isNotEmpty() || it.model.circles.isNotEmpty() }
-        if (!hasWork) {
-            onBack()
-            return
-        }
-        showExitSaveDialog = true
+showExitSaveDialog = true // همیشه بپرس: ماندن / پاک / ذخیره
     }
 
     BackHandler { requestExit() }
@@ -925,11 +918,15 @@ LaunchedEffect(profileMode) {
                 message = if (selected != null) "شیء انتخاب شد" else "چیزی انتخاب نشد"
             }
             CadTool.MeasureDist -> {
-                cadTool = CadTool.None
-                measureMode = true
-                measureA = null; measureB = null
-                distanceMsg = null
-                message = "اندازه‌گذاری: دو نقطه را لمس کن"
+                if (draftPts.isEmpty()) {
+                    draftPts = listOf(p)
+                    distanceMsg = "نقطه دوم فاصله"
+                } else {
+                    val a = draftPts[0]
+                    val d = CadEngine.hypot(p.first - a.first, p.second - a.second)
+                    distanceMsg = "فاصله: ${"%.3f".format(java.util.Locale.US, d)} m"
+                    draftPts = emptyList()
+                }
             }
             CadTool.MeasureAngle -> {
                 draftPts = draftPts + p
@@ -940,24 +937,23 @@ LaunchedEffect(profileMode) {
                 } else distanceMsg = "نقطه ${draftPts.size + 1} از ۳ (رأس وسط)"
             }
             CadTool.MeasureArea -> {
-                cadTool = CadTool.None
-                areaMode = true
-                areaFinished = false
-                areaPts = listOf(p)
-                distanceMsg = null
-                message = "مساحت: رأس ۱ — ادامه دهید"
+                draftPts = draftPts + p
+                if (draftPts.size >= 3) {
+                    val ar = CadEngine.polygonArea(draftPts)
+                    distanceMsg = "مساحت موقت: ${"%.3f".format(java.util.Locale.US, ar)} m² — دوباره بزن برای بستن"
+                } else distanceMsg = "رأس ${draftPts.size} — حداقل ۳"
             }
             CadTool.DrawLine -> {
                 if (draftPts.isEmpty()) {
                     draftPts = listOf(p)
-                    message = "خط پیوسته — نقطه بعدی (لغو = بستن منو)"
+                    message = "نقطه دوم خط"
                 } else {
-                    val a = draftPts.last()
+                    val a = draftPts[0]
                     mutateCad { m ->
                         m.copy(lines = m.lines + DxfLine(a.first, a.second, p.first, p.second, drawLayer, 1))
                     }
-                    draftPts = listOf(p)
-                    message = "خط پیوسته ادامه دارد — نقطه بعدی یا لغو"
+                    draftPts = emptyList()
+                    message = "خط ترسیم شد"
                 }
             }
             CadTool.DrawPoly -> {
@@ -1169,7 +1165,7 @@ LaunchedEffect(profileMode) {
         val a = measureA; val b = measureB
         if (a != null && b != null) {
             val d = DxfParser.horizontalDistance(a.first, a.second, b.first, b.second)
-            distanceMsg = null; message = String.format(java.util.Locale.US, "فاصله افقی: %.3f m", d)
+            distanceMsg = "فاصله افقی: ${"%.3f".format(java.util.Locale.US, d)} متر — لمس نزدیک نقطه = کشیدن"
         }
     }
 
@@ -1205,8 +1201,91 @@ LaunchedEffect(profileMode) {
 
     Box(Modifier.fillMaxSize().background(Background)) {
 
-            // قطب‌نمای چرخش حذف شد
-
+            // —— تارگت مرکزی + نوار ثبت ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
+                // علامت تارگت وسط صفحه
+                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 18f
+                    val gap = 6f
+                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
+                            Text("ثبت", color = color, fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = {
+                                if (crosshairEditId != null) {
+                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
+                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairEditId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(
+                                String.format(java.util.Locale.US, "E %.3f", cw.first),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                            Text(
+                                String.format(java.util.Locale.US, "N %.3f", cw.second),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+            // —— قطب‌نمای چرخش نقشه ——
+            if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color(0xCC222222),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 90.dp)
+                        .size(44.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .clickable { mapRotationDeg = 0f; message = "چرخش نقشه صفر شد" },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("N", color = Color.Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        // نشان زاویه
+                        Text(
+                            String.format(java.util.Locale.US, "%.0f°", mapRotationDeg),
+                            color = Color.White.copy(0.7f),
+                            fontSize = 8.sp,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp)
+                        )
+                    }
+                }
+            }
 
 
             if (showCompass) {
@@ -1271,8 +1350,10 @@ LaunchedEffect(profileMode) {
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
-                            // چرخش نقشه غیرفعال (تایل ماهواره‌ای را خراب می‌کند)
-
+                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
+                            if (kotlin.math.abs(rotation) > 1e-4f) {
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
+                            }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
                             if (newScale != oldScale) {
@@ -1439,18 +1520,7 @@ LaunchedEffect(profileMode) {
                                     if (areaMode && !areaFinished) {
                                         val p = snapWorld(raw.first, raw.second)
                                         areaPts = areaPts + p
-                                        if (areaPts.size >= 3) {
-                                            var ar = 0.0
-                                            val nn = areaPts.size
-                                            for (ii in 0 until nn) {
-                                                val jj = (ii + 1) % nn
-                                                ar += areaPts[ii].first * areaPts[jj].second - areaPts[jj].first * areaPts[ii].second
-                                            }
-                                            ar = kotlin.math.abs(ar) / 2.0
-                                            message = String.format(java.util.Locale.US, "پلیگون بسته · %d رأس · %.2f m²", areaPts.size, ar)
-                                        } else {
-                                            message = "مساحت: ${areaPts.size} رأس (حداقل ۳)"
-                                        }
+                                        message = "مساحت: ${areaPts.size} رأس"
                                         return@detectTapGestures
                                     }
                                     if (linePickMode) {
@@ -1504,13 +1574,13 @@ if (zoomWindowMode) {
                                         val db = kotlin.math.hypot(tap.x - pb.x, tap.y - pb.y)
                                         if (da < 36f || db < 36f) {
                                             measureDragTarget = if (da <= db) "A" else "B"
-                                            distanceMsg = null; message = "نقطه ${measureDragTarget} را بکش"
+                                            distanceMsg = "نقطه ${measureDragTarget} را بکش؛ برای نقطه جدید دوباره اندازه را بزن"
                                             return@detectTapGestures
                                         }
                                     }
                                     if (measureA == null || (measureB != null && measureDragTarget == null)) {
                                         measureA = p; measureB = null; measureDragTarget = null
-                                        distanceMsg = null; message = "نقطه اول؛ نقطه دوم را لمس کن"
+                                        distanceMsg = "نقطه اول (حساس به عارضه)؛ نقطه دوم را لمس کن"
                                     } else if (measureB == null) {
                                         measureB = p
                                         updateMeasureDistance()
@@ -1777,7 +1847,7 @@ if (zoomWindowMode) {
                         val al = worldToScreen(areaPts.last().first, areaPts.last().second)
                         drawLine(Color(0xFFCE93D8), al, a0, 2f)
                     }
-                    if (areaPts.size >= 3) {
+                    if (areaFinished && areaPts.size >= 3) {
                         var a = 0.0
                         val n = areaPts.size
                         for (i in 0 until n) {
@@ -1910,8 +1980,11 @@ if (zoomWindowMode) {
                 Text(message, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
             }
         }
-        // نوار اعلان فاصله تکراری CAD حذف شد
-
+        distanceMsg?.let {
+            Surface(shape = RoundedCornerShape(16.dp), color = color, modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp)) {
+                Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+            }
+        }
 
         if (editingPointId != null) {
             Surface(
@@ -1961,16 +2034,14 @@ if (zoomWindowMode) {
         fun closeMenus() { menuOpen = false; menuGroup = null; showOsnapPanel = false; showCoordSub = false; showAreaSub = false }
         fun exitAllTools() {
             cadTool = CadTool.None
-            draftPts = emptyList()
             measureMode = false
-            pathMode = false; pathEdit = false; pathFinished = false; pathPts = emptyList()
-            areaMode = false; areaEdit = false; areaFinished = false; areaPts = emptyList()
+            pathMode = false; pathEdit = false; pathFinished = false
+            areaMode = false; areaEdit = false; areaFinished = false
             linePickMode = false
             profileDrawMode = false
             zoomWindowMode = false
             annotMode = ""
             mapAlignPick = null
-            distanceMsg = null
             closeMenus()
             message = ""
         }
@@ -2344,73 +2415,6 @@ if (zoomWindowMode) {
             containerColor = color,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp)
         ) { Icon(Icons.Filled.MyLocation, "موقعیت من", tint = Color.White) }
-
-            // —— تارگت مرکزی + نوار ثبت ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val invStroke = Color(0xFFFFEB3B)
-                val invShadow = Color.Black
-                // علامت تارگت وسط صفحه — روی همه لایه‌ها
-                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp).zIndex(50f)) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 56f
-                    val gap = 14f
-                    val stroke = 5f
-                    drawLine(invShadow, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke + 3f)
-                    drawLine(invShadow, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke + 3f)
-                    drawLine(invShadow, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke + 3f)
-                    drawLine(invShadow, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke + 3f)
-                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), stroke)
-                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), stroke)
-                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke)
-                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke)
-                    drawCircle(invShadow, radius = 12f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
-                    drawCircle(invStroke, radius = 10f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(3.5f))
-                }
-                Surface(
-                    color = Color(0xCC111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
-                        .zIndex(60f)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
-                            Text("ثبت", color = color, fontSize = 12.sp)
-                        }
-                        TextButton(
-                            onClick = {
-                                if (crosshairEditId != null) {
-                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
-                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairEditId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(
-                                String.format(java.util.Locale.US, "E %.3f", cw.first),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                            Text(
-                                String.format(java.util.Locale.US, "N %.3f", cw.second),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
 
         // نوار مختصات و ابزار فعال
         Surface(
