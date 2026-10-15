@@ -1,0 +1,13 @@
+<!-- ویجت مسیریاب شفت/پروژه ۱×۳ -->
+        <receiver
+            android:name=".widget.AdelNavWidgetProvider"
+            android:exported="true"
+            android:label="مسیریاب شفت و پروژه">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.adel.assistant.widget.TOGGLE_SHAFTS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/adel_nav_widget_info" />
+        </receiver>

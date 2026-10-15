@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/nav_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="6dp"
+    android:background="#E61A1F16"
+    android:layoutDirection="rtl">
+
+    <TextView
+        android:id="@+id/nav_title_tunnel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="تونل ▼"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:paddingBottom="2dp" />
+
+    <LinearLayout
+        android:id="@+id/nav_shafts_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <TextView android:id="@+id/nav_shaft_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="شفت ۱" android:textColor="#FFE8EDE0" android:textSize="12sp" android:paddingTop="2dp" android:paddingBottom="2dp" />
+        <TextView android:id="@+id/nav_shaft_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="شفت ۲" android:textColor="#FFE8EDE0" android:textSize="12sp" android:paddingTop="2dp" android:paddingBottom="2dp" />
+        <TextView android:id="@+id/nav_shaft_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="شفت ۳" android:textColor="#FFE8EDE0" android:textSize="12sp" android:paddingTop="2dp" android:paddingBottom="2dp" />
+        <TextView android:id="@+id/nav_shaft_4" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="شفت ۴" android:textColor="#FFE8EDE0" android:textSize="12sp" android:paddingTop="2dp" android:paddingBottom="2dp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/nav_title_projects"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="پروژه‌ها"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:paddingTop="6dp"
+        android:paddingBottom="2dp" />
+
+    <TextView android:id="@+id/nav_proj_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="1dp" />
+    <TextView android:id="@+id/nav_proj_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="1dp" />
+    <TextView android:id="@+id/nav_proj_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="1dp" />
+    <TextView android:id="@+id/nav_proj_4" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="1dp" />
+    <TextView android:id="@+id/nav_proj_5" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="1dp" />
+    <TextView android:id="@+id/nav_proj_6" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFE8EDE0" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="1dp" />
+</LinearLayout>

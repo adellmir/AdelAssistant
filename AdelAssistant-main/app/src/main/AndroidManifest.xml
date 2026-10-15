@@ -11,11 +11,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
@@ -65,11 +60,6 @@
             android:name=".widget.AdelWidgetActionReceiver"
             android:exported="false" />
 
-        <service
-            android:name=".service.TrackRecordService"
-            android:exported="false"
-            android:foregroundServiceType="location" />
-
         <receiver
             android:name=".widget.AdelToolsWidgetProvider"
             android:exported="true"
@@ -81,6 +71,20 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/adel_tools_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".widget.AdelNavWidgetProvider"
+            android:exported="true"
+            android:label="مسیریاب شفت و پروژه">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.adel.assistant.widget.TOGGLE_SHAFTS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/adel_nav_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

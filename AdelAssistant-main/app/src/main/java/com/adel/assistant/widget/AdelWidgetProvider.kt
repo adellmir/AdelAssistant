@@ -1,0 +1,212 @@
+package com.adel.assistant.widget
+
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.view.View
+import android.widget.RemoteViews
+import com.adel.assistant.MainActivity
+import com.adel.assistant.R
+import com.adel.assistant.data.CalendarStore
+import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.data.TaskItem
+import com.adel.assistant.data.TaskStore
+import com.adel.assistant.data.toIntOrNullFa
+import com.adel.assistant.navigation.Routes
+
+class AdelWidgetProvider : AppWidgetProvider() {
+
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        appWidgetIds.forEach { id ->
+            appWidgetManager.updateAppWidget(id, buildViews(context))
+        }
+    }
+
+
+    companion object {
+        const val ACTION_COMPLETE_TASK = "com.adel.assistant.widget.COMPLETE_TASK"
+        const val EXTRA_STORE = "store"
+        const val EXTRA_TITLE = "title"
+        const val EXTRA_CREATED = "created"
+
+        fun getAlpha(context: Context): Int = 153 // 60%
+
+        fun refreshAll(context: Context) {
+            val mgr = AppWidgetManager.getInstance(context)
+            val ids = mgr.getAppWidgetIds(ComponentName(context, AdelWidgetProvider::class.java))
+            if (ids.isNotEmpty()) {
+                val views = buildViews(context)
+                ids.forEach { mgr.updateAppWidget(it, views) }
+            }
+            try { AdelNavWidgetProvider.refreshAll(context) } catch (_: Exception) { }
+            try { AdelToolsWidgetProvider.refreshAll(context) } catch (_: Exception) { }
+        }
+
+        private fun openTasks(context: Context, store: String): List<TaskItem> {
+            return TaskStore.load(context, store)
+                .filter { !it.completed }
+                .sortedByDescending { it.createdAt }
+                .take(3)
+        }
+
+        /** متن + لینک نشان در صورت وجود مختصات */
+        private fun upcomingProjects(context: Context): List<Pair<String, String?>> {
+            val (ty, tm, td) = try {
+                CalendarStore.todayJalali()
+            } catch (_: Exception) {
+                return emptyList()
+            }
+            val todayKey = ty * 10000 + tm * 100 + td
+            return ProjectStore.all(context)
+                .filter { p ->
+                    if (p.name.isBlank() || p.name == "پروژه") return@filter false
+                    val y = p.year.toIntOrNullFa() ?: return@filter false
+                    val m = p.month.toIntOrNullFa() ?: return@filter false
+                    val d = p.day.toIntOrNullFa() ?: 1
+                    y * 10000 + m * 100 + d >= todayKey
+                }
+                .sortedBy { p ->
+                    val y = p.year.toIntOrNullFa() ?: 0
+                    val m = p.month.toIntOrNullFa() ?: 0
+                    val d = p.day.toIntOrNullFa() ?: 0
+                    y * 10000 + m * 100 + d
+                }
+                .take(3)
+                .map { p ->
+                    val hh = (p.hour.toIntOrNullFa() ?: 9).toString().padStart(2, '0')
+                    val mm = (p.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
+                    val label = "${p.name} — ${p.year}/${p.month}/${p.day} $hh:$mm"
+                    label to (if (p.hasLocation) p.neshanUrl else null)
+                }
+        }
+
+        private fun openUrlIntent(context: Context, url: String, requestCode: Int): PendingIntent {
+            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            return PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        /** Intent باز کردن یک Route مشخص داخل MainActivity */
+        private fun openRouteIntent(context: Context, route: String, requestCode: Int): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                // مهم: activity موجود را بالا بیاور و route را بده
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("open_route", route)
+                // action یکتا تا PendingIntentها با هم قاطی نشوند
+                action = "com.adel.assistant.OPEN_$requestCode"
+                data = android.net.Uri.parse(
+                    "adelassistant://open?route=" + android.net.Uri.encode(route)
+                )
+            }
+            return PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        private fun completeIntent(
+            context: Context,
+            store: String,
+            task: TaskItem,
+            requestCode: Int
+        ): PendingIntent {
+            val intent = Intent(context, AdelWidgetActionReceiver::class.java).apply {
+                action = ACTION_COMPLETE_TASK
+                putExtra(EXTRA_STORE, store)
+                putExtra(EXTRA_TITLE, task.title)
+                putExtra(EXTRA_CREATED, task.createdAt)
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        fun buildViews(context: Context): RemoteViews {
+            val views = RemoteViews(context.packageName, R.layout.adel_widget)
+            val alpha = getAlpha(context)
+            val bg = Color.argb(alpha, 0x1A, 0x1F, 0x16)
+            views.setInt(R.id.widget_root, "setBackgroundColor", bg)
+
+            views.setOnClickPendingIntent(
+                R.id.btn_daily_report,
+                openRouteIntent(context, Routes.SURVEY_TUNNEL_REPORT, 101)
+            )
+            views.setOnClickPendingIntent(
+                R.id.btn_project_register,
+                openRouteIntent(context, Routes.SURVEY_PROJECT_REGISTER, 102)
+            )
+            views.setOnClickPendingIntent(
+                R.id.title_project_tasks,
+                openRouteIntent(context, Routes.SURVEY_PROJECT_TASKS, 103)
+            )
+            views.setOnClickPendingIntent(
+                R.id.title_tunnel_tasks,
+                openRouteIntent(context, Routes.SURVEY_TUNNEL_TASKS, 104)
+            )
+
+            val pTasks = openTasks(context, "project_tasks")
+            val tTasks = openTasks(context, "tunnel_tasks")
+            val upcoming = upcomingProjects(context)
+
+            fun bindTask(textId: Int, doneId: Int, task: TaskItem?, store: String, baseCode: Int) {
+                if (task == null) {
+                    views.setTextViewText(textId, if (baseCode % 10 == 1) "تسک باز ندارد" else "")
+                    views.setViewVisibility(doneId, View.GONE)
+                } else {
+                    views.setTextViewText(textId, "• ${task.title}")
+                    views.setViewVisibility(doneId, View.VISIBLE)
+                    views.setOnClickPendingIntent(doneId, completeIntent(context, store, task, baseCode))
+                }
+            }
+
+            bindTask(R.id.project_task_1, R.id.project_task_1_done, pTasks.getOrNull(0), "project_tasks", 201)
+            bindTask(R.id.project_task_2, R.id.project_task_2_done, pTasks.getOrNull(1), "project_tasks", 202)
+            bindTask(R.id.project_task_3, R.id.project_task_3_done, pTasks.getOrNull(2), "project_tasks", 203)
+            bindTask(R.id.tunnel_task_1, R.id.tunnel_task_1_done, tTasks.getOrNull(0), "tunnel_tasks", 301)
+            bindTask(R.id.tunnel_task_2, R.id.tunnel_task_2_done, tTasks.getOrNull(1), "tunnel_tasks", 302)
+            bindTask(R.id.tunnel_task_3, R.id.tunnel_task_3_done, tTasks.getOrNull(2), "tunnel_tasks", 303)
+
+            val u1 = upcoming.getOrNull(0)
+            val u2 = upcoming.getOrNull(1)
+            val u3 = upcoming.getOrNull(2)
+            views.setTextViewText(R.id.upcoming_1, u1?.first ?: "برنامه‌ای نیست")
+            views.setTextViewText(R.id.upcoming_2, u2?.first ?: "")
+            views.setTextViewText(R.id.upcoming_3, u3?.first ?: "")
+            listOf(
+                R.id.upcoming_1 to u1,
+                R.id.upcoming_2 to u2,
+                R.id.upcoming_3 to u3
+            ).forEachIndexed { idx, (viewId, pair) ->
+                val url = pair?.second
+                if (!url.isNullOrBlank()) {
+                    views.setOnClickPendingIntent(viewId, openUrlIntent(context, url, 401 + idx))
+                } else {
+                    views.setOnClickPendingIntent(
+                        viewId,
+                        openRouteIntent(context, Routes.SURVEY_PROJECT_REGISTER, 411 + idx)
+                    )
+                }
+            }
+
+            return views
+        }
+    }
+}
