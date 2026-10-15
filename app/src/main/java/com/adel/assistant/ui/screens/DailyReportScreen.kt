@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.adel.assistant.data.ReportHub
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.CsvStore
 import com.adel.assistant.data.FileExport
@@ -426,12 +427,11 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                     if (uri != null) {
                         statusMsg = "فایل در Documents/AdelAssistant ذخیره شد"
                         try {
-                            val share = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            context.startActivity(Intent.createChooser(share, "اشتراک گزارش روزانه"))
+                            ReportHub.shareUri(
+                                context, uri,
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "اشتراک گزارش روزانه"
+                            )
                         } catch (_: Exception) {
                             statusMsg = "ذخیره شد (اشتراک ممکن نشد)"
                         }

@@ -1,5 +1,7 @@
 package com.adel.assistant.data
-import com.adel.assistant.data.FilePicker
+
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContract
 
 /**
  * فضای یکپارچهٔ انتخاب فایل.
@@ -9,10 +11,18 @@ import com.adel.assistant.data.FilePicker
 object FilePicker {
 
     /** قرارداد SAF — شروع از Documents/AdelAssistant */
-    fun contract() = FilePicker.contract()
+    fun contract(): ActivityResultContract<Array<String>, Uri?> =
+        AdelDocuments.OpenDocumentContract()
 
     /** نقاط نقشه‌برداری: txt dat gsi kml csv … */
-    val POINTS: Array<String> = PointImport.MIME_TYPES
+    val POINTS: Array<String> = arrayOf(
+        "*/*",
+        "text/plain",
+        "text/csv",
+        "application/octet-stream",
+        "application/vnd.google-earth.kml+xml",
+        "application/vnd.google-earth.kmz"
+    )
 
     /** هر فایل */
     val ANY: Array<String> = arrayOf("*/*")

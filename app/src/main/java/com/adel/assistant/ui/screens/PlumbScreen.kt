@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
+import com.adel.assistant.data.ReportHub
 import com.adel.assistant.data.PlumbColumn
 import com.adel.assistant.data.PlumbNeighbor
 import com.adel.assistant.data.PlumbProject
@@ -714,12 +715,7 @@ private fun PlumbWorkspace(
                             val txt = buildPlumbText(p)
                             ExportHub.exportText(context, "${p.name}_plumb.txt", txt, "text/plain")
                             try {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, txt)
-                                    putExtra(Intent.EXTRA_SUBJECT, p.name)
-                                }
-                                context.startActivity(Intent.createChooser(intent, "اشتراک گزارش شاقولی"))
+                                ReportHub.shareText(context, txt, "اشتراک گزارش شاقولی")
                             } catch (_: Exception) {}
                             showSettings = false
                         },
