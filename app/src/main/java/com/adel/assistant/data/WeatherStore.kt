@@ -32,28 +32,6 @@ object WeatherStore {
 
     private val cache = AtomicReference<Snapshot?>(null)
     private const val CACHE_MS = 20 * 60 * 1000L
-    private const val PREF_NAME = "weather_prefs"
-    private const val KEY_LAT = "last_lat"
-    private const val KEY_LON = "last_lon"
-
-    fun saveLastLocation(context: Context, lat: Double, lon: Double) {
-        try {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit().putString(KEY_LAT, lat.toString()).putString(KEY_LON, lon.toString()).apply()
-        } catch (_: Exception) {}
-    }
-
-    fun loadLastLocation(context: Context): Pair<Double, Double>? {
-        return try {
-            val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            val la = sp.getString(KEY_LAT, null)?.toDoubleOrNull() ?: return null
-            val lo = sp.getString(KEY_LON, null)?.toDoubleOrNull() ?: return null
-            la to lo
-        } catch (_: Exception) {
-            null
-        }
-    }
-
 
     fun cached(): Snapshot? {
         val c = cache.get() ?: return null
@@ -62,7 +40,7 @@ object WeatherStore {
     }
 
     fun lastKnownLatLon(context: Context): Pair<Double, Double>? {
-        try {
+        return try {
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             var best: android.location.Location? = null
             for (pr in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
@@ -72,23 +50,19 @@ object WeatherStore {
                 val cur = best
                 if (cur == null || loc.accuracy < cur.accuracy) best = loc
             }
-            if (best != null) {
-                val pair = best.latitude to best.longitude
-                saveLastLocation(context, pair.first, pair.second)
-                return pair
-            }
+            val loc = best ?: return null
+            loc.latitude to loc.longitude
         } catch (_: SecurityException) {
+            null
         } catch (_: Exception) {
+            null
         }
-        // آخرین لوکیشن ذخیره‌شده
-        return loadLastLocation(context)
     }
 
     suspend fun fetch(context: Context, force: Boolean = false): Snapshot? = withContext(Dispatchers.IO) {
         if (!force) cached()?.let { return@withContext it }
         if (API_KEY.isBlank() || API_KEY.startsWith("YOUR_")) return@withContext null
-        // اگر GPS نبود، تهران — تا دما همیشه نمایش داده شود
-        val ll = lastKnownLatLon(context) ?: (35.6892 to 51.3890)
+        val ll = lastKnownLatLon(context) ?: return@withContext null
         val (lat, lon) = ll
         val url = String.format(
             Locale.US,
@@ -117,9 +91,7 @@ object WeatherStore {
                 lat = lat,
                 lon = lon
             )
-            saveLastLocation(context, lat, lon)
-        cache.set(snap)
-            return@withContext snap
+            cache.set(snap)
             snap
         } catch (_: Exception) {
             null
