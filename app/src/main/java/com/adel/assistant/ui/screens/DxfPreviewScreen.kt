@@ -238,6 +238,7 @@ fun DxfPreviewScreen(
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var mapRotationDeg by remember { mutableStateOf(0f) }
+    var rotationEnabled by remember { mutableStateOf(false) } // پیش‌فرض خاموش
     var crosshairMode by remember { mutableStateOf(false) }
     var crosshairEditId by remember { mutableStateOf<Int?>(null) }
     var showGotoDialog by remember { mutableStateOf(false) }
@@ -1178,6 +1179,11 @@ LaunchedEffect(profileMode) {
     // فقط وقتی پس‌زمینه نقشه روشن است؛ debounce تا زوم لگ ندهد
     val tileScaleKey = ((kotlin.math.ln(scale.toDouble().coerceAtLeast(1e-9)) / kotlin.math.ln(1.15)).toInt())
     val tileOffsetKey = Offset((offset.x / 48f).toInt() * 48f, (offset.y / 48f).toInt() * 48f)
+    LaunchedEffect(baseMap) {
+        if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.STREET || baseMap == BaseMap.TOPO) {
+            mapRotationDeg = 0f
+        }
+    }
     LaunchedEffect(baseMap, tileScaleKey, tileOffsetKey, canvasSize, zone) {
         if (baseMap == BaseMap.NONE || canvasSize.x <= 0f) {
             tiles = emptyList()
@@ -1207,64 +1213,6 @@ LaunchedEffect(profileMode) {
 
     Box(Modifier.fillMaxSize().background(Background)) {
 
-            // —— تارگت مرکزی + نوار ثبت ——
-            if (crosshairMode) {
-                val cw = centerWorldSnapped()
-                val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
-                // علامت تارگت وسط صفحه
-                Canvas(Modifier.fillMaxSize().padding(bottom = 76.dp)) {
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val arm = 18f
-                    val gap = 6f
-                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
-                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
-                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
-                }
-                Surface(
-                    color = Color(0xCC111111),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
-                            Text("ثبت", color = color, fontSize = 12.sp)
-                        }
-                        TextButton(
-                            onClick = {
-                                if (crosshairEditId != null) {
-                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
-                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairEditId = null
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
-                        }
-                        Column {
-                            Text(
-                                String.format(java.util.Locale.US, "E %.3f", cw.first),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                            Text(
-                                String.format(java.util.Locale.US, "N %.3f", cw.second),
-                                color = Color.White, fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
             // —— قطب‌نمای چرخش نقشه ——
             if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
                 Surface(
@@ -1356,9 +1304,11 @@ LaunchedEffect(profileMode) {
                             val sw = screenToWorld(centroid.x, centroid.y)
                             statusXY = "X: ${"%.3f".format(java.util.Locale.US, sw.first)}  Y: ${"%.3f".format(java.util.Locale.US, sw.second)}"
                             if (editingPointId != null || pickCoordinateMode || measureDragTarget != null || mapAlignPick != null) return@detectTransformGestures
-                            // چرخش دو انگشتی حول مرکز دید — موقعیت و زوم حفظ
-                            if (kotlin.math.abs(rotation) > 1e-4f) {
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat()) % 360f
+                            // چرخش فقط اگر فعال باشد و پس‌زمینه ساده (نه ماهواره/جاده)
+                            val allowRotate = rotationEnabled && baseMap == BaseMap.NONE
+                            if (allowRotate && kotlin.math.abs(rotation) > 1e-4f) {
+                                // سرعت ۲ برابر کندتر
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.5f) % 360f
                             }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
@@ -1412,12 +1362,12 @@ LaunchedEffect(profileMode) {
                                 },
                                 onTap = { tap ->
                                     if (profilePlacementActive) {
-                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val raw = if (crosshairMode) centerWorldSnapped() else screenToWorld(tap.x, tap.y)
                                         placeProfileAt(raw.first, raw.second)
                                         return@detectTapGestures
                                     }
                                     if (profileAlignmentMode && profileDrawMode) {
-                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val raw = if (crosshairMode) centerWorldSnapped() else screenToWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val last = profileDraftVertices.lastOrNull()
                                         if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.01 / scale.coerceAtLeast(1e-6f))) {
@@ -1427,7 +1377,7 @@ LaunchedEffect(profileMode) {
                                         return@detectTapGestures
                                     }
                                     if (pickCoordinateMode) {
-                                        val raw = screenToWorld(tap.x, tap.y)
+                                        val raw = if (crosshairMode) centerWorldSnapped() else screenToWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val (lat, lon) = UtmGeo.toLatLon(p.first, p.second, zone)
                                         pickedPoints = pickedPoints + PickedPoint(nextPointId, p.first, p.second, lat, lon)
@@ -1441,7 +1391,7 @@ LaunchedEffect(profileMode) {
                                             if (menuOpen) { menuOpen = false; menuGroup = null }
                                             return@detectTapGestures
                                         }
-                                    val raw = screenToWorld(tap.x, tap.y)
+                                    val raw = if (crosshairMode) centerWorldSnapped() else screenToWorld(tap.x, tap.y)
                                     val p = snapWorld(raw.first, raw.second)
                                     // الاین از روی نقشه
                                     mapAlignPick?.let { (rowIdx, side) ->
@@ -1643,7 +1593,7 @@ if (zoomWindowMode) {
                         if (cadTool == CadTool.None) return@pointerInput
                         detectTapGestures(
                             onTap = { tap ->
-                                val raw = screenToWorld(tap.x, tap.y)
+                                val raw = if (crosshairMode) centerWorldSnapped() else screenToWorld(tap.x, tap.y)
                                 processCadPoint(raw)
                             }
                         )
@@ -1976,6 +1926,66 @@ if (zoomWindowMode) {
                 }
             }
         }
+            // —— تارگت مرکزی + نوار ثبت ——
+            if (crosshairMode) {
+                val cw = centerWorldSnapped()
+                val invStroke = if (baseMap == BaseMap.SATELLITE || baseMap == BaseMap.NONE) Color.White else Color.Black
+                // علامت تارگت وسط صفحه
+                Canvas(Modifier.zIndex(30f).fillMaxSize().padding(bottom = 76.dp)) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val arm = 28f
+                    val gap = 6f
+                    drawLine(invStroke, Offset(cx - arm, cy), Offset(cx - gap, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx + gap, cy), Offset(cx + arm, cy), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy - arm), Offset(cx, cy - gap), 2.2f)
+                    drawLine(invStroke, Offset(cx, cy + gap), Offset(cx, cy + arm), 2.2f)
+                    drawCircle(invStroke, radius = 3f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                }
+                Surface(
+                    color = Color(0xCC111111),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .zIndex(31f)
+                        .align(Alignment.TopCenter)
+                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(onClick = { registerCrosshairPoint() }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
+                            Text("ثبت", color = color, fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = {
+                                if (crosshairEditId != null) {
+                                    // شروع ویرایش: نقطه کم‌رنگ می‌ماند تا ثبت جدید
+                                    message = "ویرایش نقطه ${crosshairEditId} — موقعیت جدید را با تارگت بگذارید و ثبت کنید"
+                                } else {
+                                    crosshairMode = false
+                                    crosshairEditId = null
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (crosshairEditId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 12.sp)
+                        }
+                        Column {
+                            Text(
+                                String.format(java.util.Locale.US, "E %.3f", cw.first),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                            Text(
+                                String.format(java.util.Locale.US, "N %.3f", cw.second),
+                                color = Color.White, fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
 
         if (message.isNotBlank()) {
             Surface(
@@ -2106,6 +2116,22 @@ if (zoomWindowMode) {
                                             GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
                                             IconSep()
                                             GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
+                                            GlassIcon(
+                                                Icons.Filled.ScreenRotation,
+                                                "چرخش",
+                                                if (rotationEnabled) Color(0xFF81C995) else Color.White
+                                            ) {
+                                                if (baseMap != BaseMap.NONE) {
+                                                    message = "چرخش فقط روی پس‌زمینه ساده فعال است"
+                                                    rotationEnabled = false
+                                                    mapRotationDeg = 0f
+                                                } else {
+                                                    rotationEnabled = !rotationEnabled
+                                                    if (!rotationEnabled) mapRotationDeg = 0f
+                                                    message = if (rotationEnabled) "چرخش فعال (۲× کندتر)" else "چرخش خاموش"
+                                                }
+                                                closeMenus()
+                                            }
                                         }
                                     }
                                     10 -> { // نقاط (نقشه ۲)
@@ -2155,6 +2181,22 @@ if (zoomWindowMode) {
                                             GlassIcon(Icons.Filled.Layers, "لایه") { showLayers = true; closeMenus() }
                                             IconSep()
                                             GlassIcon(Icons.Filled.Public, "پس‌زمینه") { showBaseMapDialog = true; closeMenus() }
+                                            GlassIcon(
+                                                Icons.Filled.ScreenRotation,
+                                                "چرخش",
+                                                if (rotationEnabled) Color(0xFF81C995) else Color.White
+                                            ) {
+                                                if (baseMap != BaseMap.NONE) {
+                                                    message = "چرخش فقط روی پس‌زمینه ساده فعال است"
+                                                    rotationEnabled = false
+                                                    mapRotationDeg = 0f
+                                                } else {
+                                                    rotationEnabled = !rotationEnabled
+                                                    if (!rotationEnabled) mapRotationDeg = 0f
+                                                    message = if (rotationEnabled) "چرخش فعال (۲× کندتر)" else "چرخش خاموش"
+                                                }
+                                                closeMenus()
+                                            }
                                         }
                                         GlassIcon(Icons.Filled.Crop, "پنجره") {
                                             zoomWindowMode = true; zoomWindowFirst = null

@@ -60,6 +60,10 @@ data class PlumbProject(
     var letterCount: Int = 0,
     var numberCount: Int = 0,
     var factor: Double = 1.0,
+    /** فاصله بین محورهای حرفی (متر) — اندازه letterCount-1؛ خالی = یکنواخت */
+    var letterGaps: MutableList<Double> = mutableListOf(),
+    /** فاصله بین محورهای عددی (متر) — اندازه numberCount-1 */
+    var numberGaps: MutableList<Double> = mutableListOf(),
     var columns: MutableList<PlumbColumn> = mutableListOf(),
     var topN: PlumbNeighbor = PlumbNeighbor(),
     var bottomN: PlumbNeighbor = PlumbNeighbor(),
@@ -91,7 +95,35 @@ data class PlumbProject(
     fun crossCount(): Int = max(letterCount, numberCount)
     fun longSpacing(): Double = 1.0
     fun crossSpacing(): Double = factor.coerceAtLeast(0.01)
+
+    /** موقعیت محور حرفی i در مختصات شبکه (متر از مبدأ) */
+    fun letterAxisPos(i: Int): Double {
+        if (letterGaps.size == (letterCount - 1).coerceAtLeast(0) && letterCount > 1 && letterGaps.isNotEmpty()) {
+            var s = 0.0
+            for (k in 0 until i.coerceIn(0, letterGaps.size)) s += letterGaps[k]
+            return s
+        }
+        val step = if (longIsLetters()) 1.0 else factor.coerceAtLeast(0.01)
+        return i * step
+    }
+
+    fun numberAxisPos(j: Int): Double {
+        if (numberGaps.size == (numberCount - 1).coerceAtLeast(0) && numberCount > 1 && numberGaps.isNotEmpty()) {
+            var s = 0.0
+            for (k in 0 until j.coerceIn(0, numberGaps.size)) s += numberGaps[k]
+            return s
+        }
+        val step = if (longIsLetters()) factor.coerceAtLeast(0.01) else 1.0
+        return j * step
+    }
+
+    fun worldXY(letterIdx: Int, numberIdx: Int): Pair<Double, Double> {
+        val lx = letterAxisPos(letterIdx)
+        val ny = numberAxisPos(numberIdx)
+        return if (longIsLetters()) lx to ny else ny to lx
+    }
 }
+
 
 object PlumbStore {
     private const val FILE = "plumb_projects.json"
@@ -304,36 +336,6 @@ object PlumbStore {
         return out
     }
 
-
-    /** خروجی JSON یک پروژه (پایگاه همان پروژه) */
-    fun exportOneJson(p: PlumbProject): String = toJson(p).toString(2)
-
-    /** ورود JSON یک پروژه — جایگزین یا اضافه */
-    fun importOneJson(ctx: Context, text: String): PlumbProject? {
-        return try {
-            val obj = JSONObject(text.trim())
-            // اگر آرایه بود، اولین را بگیر
-            val project = if (obj.has("name") || obj.has("id")) {
-                parseProject(obj)
-            } else {
-                null
-            }
-            if (project != null) {
-                upsert(ctx, project.copy(updatedAt = System.currentTimeMillis()))
-                project
-            } else {
-                // شاید آرایه باشد
-                val arr = JSONArray(text.trim())
-                if (arr.length() == 0) return null
-                val pr = parseProject(arr.getJSONObject(0))
-                upsert(ctx, pr.copy(updatedAt = System.currentTimeMillis()))
-                pr
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     /** JSON کامل پایگاه برای زیپ پشتیبان */
     fun exportJson(ctx: Context): String {
         val arr = org.json.JSONArray()
@@ -350,6 +352,8 @@ object PlumbStore {
         put("controlDay", p.controlDay); put("controlMonth", p.controlMonth); put("controlYear", p.controlYear)
         put("heightM", p.heightM)
         put("letterCount", p.letterCount); put("numberCount", p.numberCount); put("factor", p.factor)
+        put("letterGaps", JSONArray(p.letterGaps))
+        put("numberGaps", JSONArray(p.numberGaps))
         put("axesVisible", p.axesVisible)
         put("axisALetter", p.axisALetter)
         put("axisANumber", p.axisANumber)
@@ -414,6 +418,12 @@ object PlumbStore {
             letterCount = o.optInt("letterCount"),
             numberCount = o.optInt("numberCount"),
             factor = o.optDouble("factor", 1.0),
+            letterGaps = o.optJSONArray("letterGaps")?.let { a ->
+                MutableList(a.length()) { i -> a.optDouble(i, 1.0) }
+            } ?: mutableListOf(),
+            numberGaps = o.optJSONArray("numberGaps")?.let { a ->
+                MutableList(a.length()) { i -> a.optDouble(i, 1.0) }
+            } ?: mutableListOf(),
             columns = cols,
             topN = parseNeighbor(o.optJSONObject("topN")),
             bottomN = parseNeighbor(o.optJSONObject("bottomN")),

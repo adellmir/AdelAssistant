@@ -255,6 +255,7 @@ private fun PlumbWorkspace(
     var pickColumns by remember { mutableStateOf(false) }
     var showNeighbors by remember { mutableStateOf(false) }
     var showHeight by remember { mutableStateOf(false) }
+    var showAxisSpacing by remember { mutableStateOf(false) }
     var showAxisEdit by remember { mutableStateOf(false) }
     var showBeforeAfter by remember { mutableStateOf(false) }
     var editColumn by remember { mutableStateOf<PlumbColumn?>(null) }
@@ -360,10 +361,10 @@ private fun PlumbWorkspace(
             val longIsLet = p.longIsLetters()
             val longN = p.longCount()
             val crossN = p.crossCount()
-            val ls = p.longSpacing()
-            val cs = p.crossSpacing()
-            val maxX = (longN - 1) * ls
-            val maxY = (crossN - 1) * cs
+            fun longPos(i: Int) = if (longIsLet) p.letterAxisPos(i) else p.numberAxisPos(i)
+            fun crossPos(j: Int) = if (longIsLet) p.numberAxisPos(j) else p.letterAxisPos(j)
+            val maxX = if (longN > 0) longPos(longN - 1) else 0.0
+            val maxY = if (crossN > 0) crossPos(crossN - 1) else 0.0
 
             fun w2s(x: Double, y: Double): Offset =
                 Offset((x * scale + offset.x).toFloat(), (-y * scale + offset.y).toFloat())
@@ -371,7 +372,7 @@ private fun PlumbWorkspace(
             // محورها
             if (p.axesVisible && longN > 0 && crossN > 0) {
                 for (i in 0 until longN) {
-                    val x = i * ls
+                    val x = longPos(i)
                     val a = w2s(x, 0.0)
                     val b = w2s(x, maxY)
                     drawLine(Color(0xFF90A4AE), a, b, 2f)
@@ -388,7 +389,7 @@ private fun PlumbWorkspace(
                     )
                 }
                 for (j in 0 until crossN) {
-                    val y = j * cs
+                    val y = crossPos(j)
                     val a = w2s(0.0, y)
                     val b = w2s(maxX, y)
                     drawLine(Color(0xFF90A4AE), a, b, 2f)
@@ -684,6 +685,74 @@ private fun PlumbWorkspace(
     }
 
     // تنظیمات
+
+    if (showAxisSpacing) {
+        val lCount = (p.letterCount - 1).coerceAtLeast(0)
+        val nCount = (p.numberCount - 1).coerceAtLeast(0)
+        val defL = if (p.longIsLetters()) 1.0 else p.factor.coerceAtLeast(0.01)
+        val defN = if (p.longIsLetters()) p.factor.coerceAtLeast(0.01) else 1.0
+        val letterFields = remember(p.id, p.letterCount) {
+            mutableStateListOf(*Array(lCount) { i ->
+                (p.letterGaps.getOrNull(i) ?: defL).toString()
+            })
+        }
+        val numberFields = remember(p.id, p.numberCount) {
+            mutableStateListOf(*Array(nCount) { i ->
+                (p.numberGaps.getOrNull(i) ?: defN).toString()
+            })
+        }
+        AlertDialog(
+            onDismissRequest = { showAxisSpacing = false },
+            title = { Text("فواصل محوری (متر)") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (lCount > 0) {
+                        Text("بین محورهای حرفی", fontSize = 13.sp)
+                        for (i in 0 until lCount) {
+                            val a = PlumbStore.letterLabel(i)
+                            val b = PlumbStore.letterLabel(i + 1)
+                            OutlinedTextField(
+                                value = letterFields.getOrElse(i) { defL.toString() },
+                                onValueChange = { v -> if (i < letterFields.size) letterFields[i] = v },
+                                label = { Text("$a ↔ $b") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                    if (nCount > 0) {
+                        Text("بین محورهای عددی", fontSize = 13.sp)
+                        for (i in 0 until nCount) {
+                            OutlinedTextField(
+                                value = numberFields.getOrElse(i) { defN.toString() },
+                                onValueChange = { v -> if (i < numberFields.size) numberFields[i] = v },
+                                label = { Text("${i + 1} ↔ ${i + 2}") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                    if (lCount == 0 && nCount == 0) {
+                        Text("تعداد محور کافی نیست")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val lg = letterFields.map { it.replace(',', '.').toDoubleOrNull() ?: defL }.toMutableList()
+                    val ng = numberFields.map { it.replace(',', '.').toDoubleOrNull() ?: defN }.toMutableList()
+                    p = p.copy(letterGaps = lg, numberGaps = ng)
+                    persist()
+                    showAxisSpacing = false
+                    message = "فواصل محوری اعمال شد"
+                }) { Text("تأیید") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAxisSpacing = false }) { Text("لغو") }
+            }
+        )
+    }
+
     if (showSettings) {
         AlertDialog(
             onDismissRequest = { showSettings = false },
@@ -698,6 +767,14 @@ private fun PlumbWorkspace(
                         },
                         "ویرایش محور" to {
                             showAxisEdit = true
+                            showSettings = false
+                        },
+                        "فواصل محوری" to {
+                            if (p.letterCount < 2 && p.numberCount < 2) {
+                                message = "ابتدا تعداد محورها را در ویرایش محور مشخص کنید"
+                            } else {
+                                showAxisSpacing = true
+                            }
                             showSettings = false
                         },
                         (if (p.axesVisible) "عدم نمایش محورها" else "نمایش محورها") to {
@@ -763,11 +840,18 @@ private fun PlumbWorkspace(
                         "ریست" to {
                             p = p.copy(
                                 letterCount = 0, numberCount = 0, factor = 1.0,
+                                letterGaps = mutableListOf(), numberGaps = mutableListOf(),
                                 columns = mutableListOf(), heightM = 22.0
                             )
                             needsGridSetup = true
                             persist()
                             showSettings = false
+                        },
+                        "حذف پروژه" to {
+                            PlumbStore.delete(context, p.id)
+                            showSettings = false
+                            message = "پروژه حذف شد"
+                            onBack()
                         }
                     )
                     settingsItems.forEach { item ->
@@ -1015,38 +1099,19 @@ private fun screenToWorld(tap: Offset, scale: Float, offset: Offset): Pair<Doubl
     return x.toDouble() to y.toDouble()
 }
 
-private fun intersectionWorld(p: PlumbProject, letterIdx: Int, numberIdx: Int): Pair<Double, Double> {
-    val longIsLet = p.longIsLetters()
-    val ls = p.longSpacing()
-    val cs = p.crossSpacing()
-    return if (longIsLet) {
-        letterIdx * ls to numberIdx * cs
-    } else {
-        numberIdx * ls to letterIdx * cs
-    }
-}
+private fun intersectionWorld(p: PlumbProject, letterIdx: Int, numberIdx: Int): Pair<Double, Double> =
+    p.worldXY(letterIdx, numberIdx)
 
-private fun columnWorld(p: PlumbProject, col: PlumbColumn): Pair<Double, Double> {
-    val longIsLet = p.longIsLetters()
-    val ls = p.longSpacing()
-    val cs = p.crossSpacing()
-    return if (longIsLet) {
-        col.letterIdx * ls to col.numberIdx * cs
-    } else {
-        col.numberIdx * ls to col.letterIdx * cs
-    }
-}
+private fun columnWorld(p: PlumbProject, col: PlumbColumn): Pair<Double, Double> =
+    p.worldXY(col.letterIdx, col.numberIdx)
 
 private fun nearestIntersection(p: PlumbProject, world: Pair<Double, Double>): Triple<Int, Int, String>? {
     if (p.letterCount <= 0 || p.numberCount <= 0) return null
-    val longIsLet = p.longIsLetters()
-    val ls = p.longSpacing()
-    val cs = p.crossSpacing()
     var best: Triple<Int, Int, String>? = null
     var bestD = 0.25
     for (li in 0 until p.letterCount) {
         for (ni in 0 until p.numberCount) {
-            val (x, y) = if (longIsLet) li * ls to ni * cs else ni * ls to li * cs
+            val (x, y) = p.worldXY(li, ni)
             val d = hypot(world.first - x, world.second - y)
             if (d < bestD) {
                 bestD = d
@@ -1117,17 +1182,17 @@ private fun buildPlumbDxf(p: PlumbProject, mode: String, beforeAfter: Boolean): 
     val longIsLet = p.longIsLetters()
     val longN = p.longCount()
     val crossN = p.crossCount()
-    val ls = p.longSpacing()
-    val cs = p.crossSpacing()
-    val maxX = (longN - 1) * ls
-    val maxY = (crossN - 1) * cs
+    fun longPos(i: Int) = if (longIsLet) p.letterAxisPos(i) else p.numberAxisPos(i)
+    fun crossPos(j: Int) = if (longIsLet) p.numberAxisPos(j) else p.letterAxisPos(j)
+    val maxX = if (longN > 0) longPos(longN - 1) else 0.0
+    val maxY = if (crossN > 0) crossPos(crossN - 1) else 0.0
     if (p.axesVisible) {
         for (i in 0 until longN) {
-            val x = i * ls
+            val x = longPos(i)
             pair(0, "LINE"); pair(8, "AXES"); pair(10, x); pair(20, 0.0); pair(11, x); pair(21, maxY)
         }
         for (j in 0 until crossN) {
-            val y = j * cs
+            val y = crossPos(j)
             pair(0, "LINE"); pair(8, "AXES"); pair(10, 0.0); pair(20, y); pair(11, maxX); pair(21, y)
         }
     }
