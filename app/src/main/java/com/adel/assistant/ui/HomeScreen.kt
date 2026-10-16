@@ -361,13 +361,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 ) {
                                     val kind = snap?.let { WeatherStore.iconKind(it.conditionId) } ?: WeatherIconKind.Unknown
                                     val icon = when (kind) {
-                                        WeatherIconKind.Clear -> WbSunny
-                                        WeatherIconKind.Clouds -> Cloud
-                                        WeatherIconKind.Rain, WeatherIconKind.Drizzle -> WaterDrop
-                                        WeatherIconKind.Snow -> AcUnit
-                                        WeatherIconKind.Thunder -> Thunderstorm
-                                        WeatherIconKind.Fog -> CloudQueue
-                                        WeatherIconKind.Unknown -> CloudQueue
+                                        WeatherIconKind.Clear -> Icons.Outlined.WbSunny
+                                        WeatherIconKind.Clouds -> Icons.Outlined.Cloud
+                                        WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Icons.Outlined.WaterDrop
+                                        WeatherIconKind.Snow -> Icons.Outlined.AcUnit
+                                        WeatherIconKind.Thunder -> Icons.Outlined.Thunderstorm
+                                        WeatherIconKind.Fog -> Icons.Outlined.CloudQueue
+                                        WeatherIconKind.Unknown -> Icons.Outlined.CloudQueue
                                     }
                                     val iconTint = when (kind) {
                                         WeatherIconKind.Clear -> Color(0xFFFFB74D)
