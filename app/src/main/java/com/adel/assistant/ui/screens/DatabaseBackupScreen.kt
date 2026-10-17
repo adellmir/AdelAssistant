@@ -17,6 +17,7 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.PlumbStore
+import com.adel.assistant.data.MonitoringStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
@@ -44,8 +45,11 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
         return try {
             val dir = dataDir()
             val files = dir.listFiles()?.filter { it.isFile } ?: emptyList()
-            val hasPlumb = File(context.filesDir, "plumb_projects.json").exists()
-            if (files.isEmpty() && !hasPlumb) {
+            val monJson = File(context.filesDir, "monitoring_projects.json")
+            val plumbJson = File(context.filesDir, "plumb_projects.json")
+            val monTplDir = File(context.filesDir, "monitoring_templates")
+            val monTplFiles = monTplDir.listFiles()?.filter { it.isFile } ?: emptyList()
+            if (files.isEmpty() && !plumbJson.exists() && !monJson.exists() && monTplFiles.isEmpty()) {
                 status = "پایگاهی برای خروجی نیست"
                 return null
             }
@@ -57,8 +61,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                     f.inputStream().use { it.copyTo(zos) }
                     zos.closeEntry()
                 }
-                // شاقولی: JSON پروژه + CSV خروجی
-                val plumbJson = File(context.filesDir, "plumb_projects.json")
+                // شاقولی
                 if (plumbJson.exists()) {
                     zos.putNextEntry(ZipEntry("plumb_projects.json"))
                     plumbJson.inputStream().use { it.copyTo(zos) }
@@ -70,15 +73,30 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                     zos.write(csv.toByteArray(Charsets.UTF_8))
                     zos.closeEntry()
                 } catch (_: Exception) {}
-                // JSON خام شاقولی از store
                 try {
                     val json = PlumbStore.exportJson(context)
                     zos.putNextEntry(ZipEntry("plumb_export.json"))
                     zos.write(json.toByteArray(Charsets.UTF_8))
                     zos.closeEntry()
                 } catch (_: Exception) {}
+                // پایش (monitoring)
+                if (monJson.exists()) {
+                    zos.putNextEntry(ZipEntry("monitoring_projects.json"))
+                    monJson.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+                try {
+                    val mcsv = MonitoringStore.exportCsv(context)
+                    zos.putNextEntry(ZipEntry("monitoring_projects.csv"))
+                    zos.write(mcsv.toByteArray(Charsets.UTF_8))
+                    zos.closeEntry()
+                } catch (_: Exception) {}
+                monTplFiles.forEach { f ->
+                    zos.putNextEntry(ZipEntry("monitoring_templates/${f.name}"))
+                    f.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
             }
-            // کپی به Documents
             val bytes = out.readBytes()
             ExportHub.exportBytes(
                 context,
@@ -86,7 +104,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 bytes,
                 "application/zip"
             )
-            status = "خروجی: data + شاقولی (CSV/JSON) → Documents/AdelAssistant"
+            status = "خروجی: data + شاقولی + پایش → Documents/AdelAssistant"
             out
         } catch (e: Exception) {
             status = "خطا: ${e.message}"
@@ -107,7 +125,12 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                         val target = when {
                             name == "plumb_projects.json" || name == "plumb_export.json" ->
                                 File(context.filesDir, "plumb_projects.json")
+                            name == "monitoring_projects.json" ->
+                                File(context.filesDir, "monitoring_projects.json")
+                            name == "monitoring_projects.csv" -> File(dir, name)
                             name == "plumb_projects.csv" -> File(dir, name)
+                            raw.startsWith("monitoring_templates/") ->
+                                File(File(context.filesDir, "monitoring_templates").also { it.mkdirs() }, name)
                             raw.startsWith("data/") -> File(dir, name)
                             else -> File(dir, name)
                         }
@@ -119,7 +142,16 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                     entry = zis.nextEntry
                 }
             }
-            status = "وارد شد: $n فایل"
+            // مسیر قالب پایش را با filesDir نصب جدید اصلاح کن
+            try {
+                val projects = MonitoringStore.loadAll(context)
+                projects.forEach { p ->
+                    val tpl = File(context.filesDir, "monitoring_templates/${p.id}.xlsx")
+                    if (tpl.exists()) p.templatePath = tpl.absolutePath
+                }
+                MonitoringStore.saveAll(context, projects)
+            } catch (_: Exception) {}
+            status = "وارد شد: $n فایل (شامل پایش در صورت وجود)"
         } catch (e: Exception) {
             status = "خطای ورود: ${e.message}"
         }
@@ -146,7 +178,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
         Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "خروجی یکجای همه فایل‌های data (پروژه، تونل، گزارش، تسک، …) و ورود مجدد همان بسته.",
+                    "خروجی یکجای data + شاقولی + پایش (پروژه‌ها، اپوک‌ها، قالب اکسل) و ورود مجدد همان بسته.",
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodySmall
                 )
