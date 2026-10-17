@@ -293,27 +293,19 @@ object TunnelReportStore {
         val km: Double, val elevDiff: String, val slope: String, val type: String
     )
 
-    @Volatile private var pointsCache: List<TunnelPoint>? = null
-
-    fun invalidatePointsCache() { pointsCache = null }
-
     fun allPoints(context: Context): List<TunnelPoint> {
-        pointsCache?.let { return it }
-        val list = CsvStore.readAll(context, POINTS_TXT).mapNotNull { row ->
+        return CsvStore.readAll(context, POINTS_TXT).mapNotNull { row ->
             if (row.size < 8) return@mapNotNull null
             try {
                 TunnelPoint(row[0], row[1].toEnglishDigits().toDouble(), row[2].toEnglishDigits().toDouble(),
                     row[3].toEnglishDigits().toDouble(), row[4].toEnglishDigits().toDouble(), row[5], row[6], row[7])
             } catch (e: Exception) { null }
         }
-        pointsCache = list
-        return list
     }
 
     fun savePoint(context: Context, p: TunnelPoint) {
         CsvStore.appendRow(context, POINTS_TXT, listOf(p.pointNo, p.x.toString(), p.y.toString(),
             p.z.toString(), p.km.toString(), p.elevDiff, p.slope, p.type))
-        invalidatePointsCache()
     }
 
     fun replacePoint(context: Context, oldPointNo: String, updated: TunnelPoint) {
@@ -322,7 +314,6 @@ object TunnelReportStore {
         val rows = all.map { listOf(it.pointNo, it.x.toString(), it.y.toString(), it.z.toString(),
             it.km.toString(), it.elevDiff, it.slope, it.type) }
         CsvStore.overwriteAll(context, POINTS_TXT, rows)
-        invalidatePointsCache()
     }
 
     fun findByKm(context: Context, km: Double): TunnelPoint? {
@@ -346,48 +337,63 @@ object TunnelReportStore {
         allPoints(context).firstOrNull { it.pointNo == pointNo }
 
     /**
-     * هشدار نزدیک شدن به نقطه با توضیح (type غیرخالی).
-     * حرکت به کیلومتر بیشتر: از ۳ متری قبل از نقطه تا عبور.
-     * حرکت به کیلومتر کمتر: از ۳ متری بعد از نقطه (سمت بیشتر) تا عبور.
+     * هشدار/یادآوری اتفاق تونل (type غیرخالی در نقاط).
+     * از ۳ متر قبل تا ۳ متر بعد از نقطه اعلام می‌شود.
      * اگر موردی نباشد null.
      */
     fun specialPointProximityAlert(
         context: Context,
         currentKm: Double,
-        towardLess: Boolean,
+        towardLess: Boolean = false,
         windowMeters: Double = 3.0
     ): String? {
         val specials = allPoints(context).filter { it.type.isNotBlank() }
         if (specials.isEmpty()) return null
 
-        var best: Pair<TunnelPoint, Double>? = null // point to remaining
+        var best: Pair<TunnelPoint, Double>? = null // point to signed distance (current - sp.km)
 
         for (sp in specials) {
-            if (towardLess) {
-                // نزدیک‌شدن از کیلومتر بالاتر: پنجره [sp.km , sp.km + window]
-                // هنوز عبور نکرده: currentKm >= sp.km
-                if (currentKm + 1e-9 >= sp.km && currentKm <= sp.km + windowMeters + 1e-9) {
-                    val remain = (currentKm - sp.km).coerceAtLeast(0.0)
-                    if (best == null || remain < best.second) best = sp to remain
-                }
-            } else {
-                // نزدیک‌شدن از کیلومتر پایین‌تر: پنجره [sp.km - window , sp.km]
-                // هنوز عبور نکرده: currentKm <= sp.km
-                if (currentKm - 1e-9 <= sp.km && currentKm >= sp.km - windowMeters - 1e-9) {
-                    val remain = (sp.km - currentKm).coerceAtLeast(0.0)
-                    if (best == null || remain < best.second) best = sp to remain
+            val dist = currentKm - sp.km
+            if (kotlin.math.abs(dist) <= windowMeters + 1e-9) {
+                if (best == null || kotlin.math.abs(dist) < kotlin.math.abs(best.second)) {
+                    best = sp to dist
                 }
             }
         }
 
         val hit = best ?: return null
-        val (sp, remain) = hit
-        val remainText = if (kotlin.math.abs(remain - remain.toLong().toDouble()) < 1e-6) {
-            remain.toLong().toString()
-        } else {
-            String.format(java.util.Locale.US, "%.1f", remain)
+        val (sp, dist) = hit
+        fun fmt(v: Double): String =
+            if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-6) v.toLong().toString()
+            else String.format(java.util.Locale.US, "%.1f", v)
+
+        return when {
+            kotlin.math.abs(dist) < 0.05 ->
+                "در موقعیت اتفاق «${sp.type}» (نقطه ${sp.pointNo})"
+            dist < 0 ->
+                // هنوز به نقطه نرسیده (کیلومتر کمتر از نقطه)
+                "${fmt(-dist)} متر مانده به «${sp.type}» (${sp.pointNo})"
+            else ->
+                // از نقطه عبور کرده
+                "${fmt(dist)} متر بعد از «${sp.type}» (${sp.pointNo})"
         }
-        return "$remainText متر مانده به «${sp.type}» (${sp.pointNo})"
+    }
+
+    /** اخطار طول حفاری: کمتر از ۵۰ سانت یا بیشتر از ۲ متر (۲۰۰ سانت) */
+    fun lengthExcavationWarning(lengthCm: Double): String? = when {
+        lengthCm <= 0 -> null
+        lengthCm < 50.0 -> "اخطار: طول حفاری کمتر از ۵۰ سانتی‌متر است (${fmtLen(lengthCm)})"
+        lengthCm > 200.0 -> "اخطار: طول حفاری بیشتر از ۲ متر است (${fmtLen(lengthCm)})"
+        else -> null
+    }
+
+    private fun fmtLen(cm: Double): String {
+        return if (cm >= 100.0) {
+            val m = cm / 100.0
+            String.format(java.util.Locale.US, "%.2f م", m)
+        } else {
+            String.format(java.util.Locale.US, "%.0f سانت", cm)
+        }
     }
 
 

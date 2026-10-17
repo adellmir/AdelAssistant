@@ -169,7 +169,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             rows.filterNot { it.shaft == shaft && it.side == side } + newRow
         }
         shaft = ""; side = ""; pointNo = ""; length = ""; deviation = ""; collapse = ""; editingIndex = -1
-        statusMsg = ""
+        statusMsg = TunnelReportStore.lengthExcavationWarning(len) ?: ""
     }
 
     fun startEdit(i: Int) {
@@ -341,7 +341,36 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // هشدار نزدیک شدن به نقطه با توضیح — فقط اگر موردی باشد
+        // اخطار طول حفاری (ورودی جاری)
+        val lengthWarn = remember(length) {
+            val cm = length.toDoubleOrNullFa() ?: return@remember null
+            TunnelReportStore.lengthExcavationWarning(cm)
+        }
+        if (lengthWarn != null) {
+            Text(
+                lengthWarn,
+                color = Color(0xFFFF9800),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp)
+            )
+        }
+        // اخطار طول برای ردیف‌های ثبت‌شده
+        rows.mapNotNull { r -> TunnelReportStore.lengthExcavationWarning(r.lengthCm) }
+            .distinct()
+            .forEach { alert ->
+                Text(
+                    alert,
+                    color = Color(0xFFFF9800),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp)
+                )
+            }
+
+        // یادآوری اتفاق تونل: از ۳ متر قبل تا ۳ متر بعد
         val proximityAlerts = rows.mapNotNull { r ->
             val towardLess = isTowardLess(r.shaft, r.side)
             TunnelReportStore.specialPointProximityAlert(context, r.km, towardLess)
