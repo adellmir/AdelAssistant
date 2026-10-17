@@ -467,23 +467,30 @@ private fun PlumbWorkspace(
             edgeLabel(p.rightN, w2s(maxX + 2.2, maxY / 2), true)
             edgeLabel(p.leftN, w2s(-2.0, maxY / 2), true)
 
-            // بردار محور A→B (برای جهت فلش‌ها)
-            val (axisUx, axisUy, axisRx, axisRy) = if (p.hasAxis()) {
+            // بردار محور نقطه۱(A)→نقطه۲(B) برای جهت فلش‌ها — در فضای صفحه (y رو به پایین)
+            // لاین مثبت: فلش ۲→۱ | لاین منفی: فلش ۱→۲
+            // افست/رفرنس مثبت: چپِ محور ۱→۲ | منفی: راستِ محور ۱→۲
+            val (axisUx, axisUy, axisLeftX, axisLeftY) = if (p.hasAxis()) {
                 val (ax, ay) = intersectionWorld(p, p.axisALetter, p.axisANumber)
                 val (bx, by) = intersectionWorld(p, p.axisBLetter, p.axisBNumber)
                 val dx = bx - ax
                 val dy = by - ay
                 val len = hypot(dx, dy).coerceAtLeast(1e-9)
-                val ux = (dx / len).toFloat()
-                val uy = (dy / len).toFloat()
-                // راستِ جهت A→B در مختصات صفحه (y معکوس در ترسیم)
-                val rx = uy
-                val ry = -ux
-                arrayOf(ux, uy, rx, ry)
+                val wUx = (dx / len).toFloat()
+                val wUy = (dy / len).toFloat()
+                // جهت ۱→۲ روی صفحه (y معکوس)
+                val sUx = wUx
+                val sUy = -wUy
+                // چپِ جهت ۱→۲ در صفحه (چرخش ۹۰° پادساعت‌گرد با y رو به پایین): (-sUy, sUx)
+                val leftX = -sUy
+                val leftY = sUx
+                arrayOf(sUx, sUy, leftX, leftY)
             } else {
-                arrayOf(0f, -1f, -1f, 0f) // پیش‌فرض: لاین بالا/پایین، رفرنس چپ/راست
+                // پیش‌فرض: محور رو به بالا در صفحه → لاین بالا/پایین؛ چپ = غرب
+                arrayOf(0f, -1f, -1f, 0f)
             }
-            val aUx = axisUx; val aUy = axisUy; val aRx = axisRx; val aRy = axisRy
+            val aUx = axisUx; val aUy = axisUy
+            val aLeftX = axisLeftX; val aLeftY = axisLeftY
 
             // ستون‌ها
             p.columns.forEach { col ->
@@ -550,10 +557,10 @@ private fun PlumbWorkspace(
                             isAntiAlias = true
                         }
                     )
-                    // فلش رفرنس: مثبت → چپِ AB ، منفی → راستِ AB
+                    // فلش افست/رفرنس: مثبت → چپِ محور ۱→۲ ، منفی → راستِ محور ۱→۲
                     val ay = y - textH * 0.7f
-                    val sign = if (mm >= 0) -1f else 1f // مثبت به چپ محور
-                    val tip = Offset(pos.x + sign * aRx * 28f, ay + sign * aRy * 28f)
+                    val sign = if (mm >= 0) 1f else -1f
+                    val tip = Offset(pos.x + sign * aLeftX * 28f, ay + sign * aLeftY * 28f)
                     drawArrow(Offset(pos.x, ay), tip, Color(colr))
                 }
 
@@ -579,8 +586,8 @@ private fun PlumbWorkspace(
                         }
                     )
                     drawContext.canvas.nativeCanvas.restore()
-                    // فلش لاین: مثبت → سمت A ، منفی → سمت B
-                    val sign = if (mm >= 0) -1f else 1f // مثبت به سمت A (خلاف A→B)
+                    // فلش لاین: مثبت → از ۲ به ۱ (خلاف محور) ، منفی → از ۱ به ۲ (هم‌جهت محور)
+                    val sign = if (mm >= 0) -1f else 1f
                     val tip = Offset(x + 8f + sign * aUx * 28f, pos.y + sign * aUy * 28f)
                     drawArrow(Offset(x + 8f, pos.y), tip, Color(colr))
                 }
