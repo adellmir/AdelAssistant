@@ -1947,8 +1947,8 @@ if (zoomWindowMode) {
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .zIndex(31f)
-                        .align(Alignment.TopCenter)
-                        .padding(top = 52.dp, start = 8.dp, end = 8.dp)
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 86.dp, start = 8.dp, end = 8.dp)
                 ) {
                     Row(
                         Modifier.padding(horizontal = 8.dp, vertical = 6.dp),

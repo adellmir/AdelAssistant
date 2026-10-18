@@ -1183,6 +1183,29 @@ private fun buildPlumbDxf(p: PlumbProject, mode: String, beforeAfter: Boolean): 
     val sb = StringBuilder()
     fun pair(c: Int, v: String) { sb.append(c).append('\n').append(v).append('\n') }
     fun pair(c: Int, v: Double) { pair(c, String.format(Locale.US, "%.4f", v)) }
+    fun pair(c: Int, v: Int) { pair(c, v.toString()) }
+    fun line(layer: String, x1: Double, y1: Double, x2: Double, y2: Double, aci: Int) {
+        pair(0, "LINE"); pair(8, layer); pair(62, aci)
+        pair(10, x1); pair(20, y1); pair(11, x2); pair(21, y2)
+    }
+    fun text(layer: String, x: Double, y: Double, h: Double, s: String, aci: Int) {
+        pair(0, "TEXT"); pair(8, layer); pair(62, aci)
+        pair(10, x); pair(20, y); pair(40, h); pair(1, s)
+    }
+    /** فلش ساده: بدنه + دو بال سر */
+    fun arrow(layer: String, fx: Double, fy: Double, dirX: Double, dirY: Double, len: Double, aci: Int) {
+        val n = hypot(dirX, dirY).coerceAtLeast(1e-9)
+        val ux = dirX / n
+        val uy = dirY / n
+        val tx = fx + ux * len
+        val ty = fy + uy * len
+        line(layer, fx, fy, tx, ty, aci)
+        val hx = -uy
+        val hy = ux
+        val head = len * 0.28
+        line(layer, tx, ty, tx - ux * head + hx * head * 0.45, ty - uy * head + hy * head * 0.45, aci)
+        line(layer, tx, ty, tx - ux * head - hx * head * 0.45, ty - uy * head - hy * head * 0.45, aci)
+    }
     pair(0, "SECTION"); pair(2, "HEADER"); pair(0, "ENDSEC")
     pair(0, "SECTION"); pair(2, "TABLES"); pair(0, "ENDSEC")
     pair(0, "SECTION"); pair(2, "ENTITIES")
@@ -1193,30 +1216,70 @@ private fun buildPlumbDxf(p: PlumbProject, mode: String, beforeAfter: Boolean): 
     fun crossPos(j: Int) = if (longIsLet) p.numberAxisPos(j) else p.letterAxisPos(j)
     val maxX = if (longN > 0) longPos(longN - 1) else 0.0
     val maxY = if (crossN > 0) crossPos(crossN - 1) else 0.0
+    val tol = p.toleranceMm()
+    // محور ۱(A)→۲(B) در مختصات نقشه (y رو به بالا)
+    val (axisUx, axisUy, leftUx, leftUy) = if (p.hasAxis()) {
+        val (ax, ay) = intersectionWorld(p, p.axisALetter, p.axisANumber)
+        val (bx, by) = intersectionWorld(p, p.axisBLetter, p.axisBNumber)
+        val dx = bx - ax
+        val dy = by - ay
+        val len = hypot(dx, dy).coerceAtLeast(1e-9)
+        val ux = dx / len
+        val uy = dy / len
+        // چپِ جهت ۱→۲ در صفحهٔ نقشه (y بالا): (-uy, ux)
+        arrayOf(ux, uy, -uy, ux)
+    } else {
+        arrayOf(0.0, 1.0, -1.0, 0.0) // پیش‌فرض: محور به بالا، چپ = غرب
+    }
+    val aUx = axisUx; val aUy = axisUy; val aLx = leftUx; val aLy = leftUy
+
     if (p.axesVisible) {
         for (i in 0 until longN) {
             val x = longPos(i)
-            pair(0, "LINE"); pair(8, "AXES"); pair(10, x); pair(20, 0.0); pair(11, x); pair(21, maxY)
+            line("AXES", x, 0.0, x, maxY, 8)
         }
         for (j in 0 until crossN) {
             val y = crossPos(j)
-            pair(0, "LINE"); pair(8, "AXES"); pair(10, 0.0); pair(20, y); pair(11, maxX); pair(21, y)
+            line("AXES", 0.0, y, maxX, y, 8)
+        }
+        if (p.hasAxis()) {
+            val (ax, ay) = intersectionWorld(p, p.axisALetter, p.axisANumber)
+            val (bx, by) = intersectionWorld(p, p.axisBLetter, p.axisBNumber)
+            line("AXIS_REF", ax, ay, bx, by, 2) // زرد
         }
     }
     p.columns.forEach { col ->
         val (cx, cy) = columnWorld(p, col)
         val h = 0.10
-        pair(0, "LINE"); pair(8, "COL"); pair(10, cx - h); pair(20, cy - h); pair(11, cx + h); pair(21, cy - h)
-        pair(0, "LINE"); pair(8, "COL"); pair(10, cx + h); pair(20, cy - h); pair(11, cx + h); pair(21, cy + h)
-        pair(0, "LINE"); pair(8, "COL"); pair(10, cx + h); pair(20, cy + h); pair(11, cx - h); pair(21, cy + h)
-        pair(0, "LINE"); pair(8, "COL"); pair(10, cx - h); pair(20, cy + h); pair(11, cx - h); pair(21, cy - h)
-        pair(0, "TEXT"); pair(8, "COL"); pair(10, cx); pair(20, cy); pair(40, 0.10); pair(1, col.name)
-        val r = if (mode == "control") col.control else col.report
-        r.computedRefMm()?.let {
-            pair(0, "TEXT"); pair(8, "VAL"); pair(10, cx); pair(20, cy + 0.25); pair(40, 0.20); pair(1, fmtMm(it))
+        val colAci = if (col.isWallPlumb) 7 else 4
+        line("COL", cx - h, cy - h, cx + h, cy - h, colAci)
+        line("COL", cx + h, cy - h, cx + h, cy + h, colAci)
+        line("COL", cx + h, cy + h, cx - h, cy + h, colAci)
+        line("COL", cx - h, cy + h, cx - h, cy - h, colAci)
+        text("COL", cx, cy, 0.10, col.name, 7)
+        val reading = if (mode == "control") col.control else col.report
+        fun valAci(mm: Double) = if (PlumbStore.isOutOfTol(mm, tol)) 1 else 3 // قرمز / سبز
+        reading.computedRefMm()?.let { mm ->
+            val aci = valAci(mm)
+            text("VAL_REF", cx, cy + 0.28, 0.18, fmtMm(mm), aci)
+            // افست مثبت → چپ محور ۱→۲ ، منفی → راست
+            val sign = if (mm >= 0) 1.0 else -1.0
+            arrow("ARROW_REF", cx, cy + 0.12, sign * aLx, sign * aLy, 0.22, aci)
         }
-        r.computedLineMm()?.let {
-            pair(0, "TEXT"); pair(8, "VAL"); pair(10, cx + 0.25); pair(20, cy); pair(40, 0.20); pair(1, fmtMm(it))
+        reading.computedLineMm()?.let { mm ->
+            val aci = valAci(mm)
+            text("VAL_LINE", cx + 0.28, cy, 0.18, fmtMm(mm), aci)
+            // لاین مثبت → ۲→۱ (خلاف محور) ، منفی → ۱→۲
+            val sign = if (mm >= 0) -1.0 else 1.0
+            arrow("ARROW_LINE", cx + 0.12, cy, sign * aUx, sign * aUy, 0.22, aci)
+        }
+        if (beforeAfter && mode == "control") {
+            col.report.computedRefMm()?.let { mm ->
+                text("VAL_OLD", cx, cy + 0.48, 0.12, "(${fmtMm(mm)})", 8)
+            }
+            col.report.computedLineMm()?.let { mm ->
+                text("VAL_OLD", cx + 0.48, cy, 0.12, "(${fmtMm(mm)})", 8)
+            }
         }
     }
     pair(0, "ENDSEC"); pair(0, "EOF")
