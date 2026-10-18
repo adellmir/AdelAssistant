@@ -12,6 +12,8 @@ import android.widget.RemoteViews
 import com.adel.assistant.MainActivity
 import com.adel.assistant.R
 import com.adel.assistant.data.CalendarStore
+import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.TaskItem
 import com.adel.assistant.data.TaskStore
@@ -74,9 +76,18 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 }
                 .take(3)
                 .map { p ->
+                    val yi = p.year.toIntOrNullFa() ?: 0
+                    val mi = p.month.toIntOrNullFa() ?: 0
+                    val di = p.day.toIntOrNullFa() ?: 0
+                    val wd = if (yi > 1300 && mi in 1..12 && di in 1..31)
+                        CalendarStore.weekdayNameJalali(yi, mi, di) else ""
                     val hh = (p.hour.toIntOrNullFa() ?: 9).toString().padStart(2, '0')
                     val mm = (p.minute.toIntOrNullFa() ?: 0).toString().padStart(2, '0')
-                    val label = "${p.name} — ${p.year}/${p.month}/${p.day} $hh:$mm"
+                    val dateStr = if (yi > 0) String.format(java.util.Locale.US, "%d/%d/%d", yi, mi, di) else "—"
+                    val label = if (wd.isNotBlank())
+                        "${p.name} - $wd $dateStr - $hh:$mm"
+                    else
+                        "${p.name} - $dateStr - $hh:$mm"
                     label to (if (p.hasLocation) p.neshanUrl else null)
                 }
         }
@@ -196,14 +207,47 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 if (!url.isNullOrBlank()) {
                     views.setOnClickPendingIntent(viewId, openUrlIntent(context, url, 401 + idx))
                 } else {
+                    // بدون آدرس → ثبت پروژه برای پرسیدن موقعیت
                     views.setOnClickPendingIntent(
                         viewId,
-                        openRouteIntent(context, Routes.SURVEY_PROJECT_CALENDAR, 411 + idx)
+                        openRouteIntent(context, Routes.SURVEY_PROJECT_REGISTER, 411 + idx)
                     )
                 }
             }
 
+            // شفت‌ها پایین ویجت — وسط‌چین با لینک نشان در صورت وجود مختصات
+            listOf(
+                R.id.widget_shaft_1 to "1",
+                R.id.widget_shaft_2 to "2",
+                R.id.widget_shaft_3 to "3",
+                R.id.widget_shaft_4 to "4"
+            ).forEach { (vid, name) ->
+                try {
+                    val url = shaftNeshanUrl(context, name)
+                    if (url != null) {
+                        views.setOnClickPendingIntent(vid, openUrlIntent(context, url, 500 + name.toInt()))
+                    } else {
+                        views.setOnClickPendingIntent(
+                            vid,
+                            openRouteIntent(context, "survey/tunnel/map", 510 + name.toInt())
+                        )
+                    }
+                } catch (_: Exception) { }
+            }
+
             return views
+        }
+
+        private fun shaftNeshanUrl(context: Context, shaft: String): String? {
+            return try {
+                val km = TunnelReportStore.shaftFixedKm(context, shaft) ?: return null
+                val pt = TunnelReportStore.findByKm(context, km) ?: return null
+                if (pt.x == 0.0 && pt.y == 0.0) return null
+                val (lat, lon) = UtmGeo.toLatLon(pt.x, pt.y, UtmGeo.DEFAULT_ZONE)
+                String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 }

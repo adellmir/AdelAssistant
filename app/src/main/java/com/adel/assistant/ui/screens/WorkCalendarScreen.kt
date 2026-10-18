@@ -1,5 +1,6 @@
 package com.adel.assistant.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -113,6 +114,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
             items((1..monthLength).toList()) { d ->
                 val hasProject = markedDays.contains(d)
                 val selected = selectedDay == d
+                val isToday = year == today.first && month == today.second && d == today.third
                 Surface(
                     modifier = Modifier
                         .aspectRatio(1f)
@@ -122,7 +124,8 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                         selected -> color
                         hasProject -> color.copy(alpha = 0.25f)
                         else -> SurfaceColor
-                    }
+                    },
+                    border = if (isToday) BorderStroke(2.dp, Color.White) else null
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(formatEn("%d", d), style = MaterialTheme.typography.bodySmall,

@@ -337,9 +337,12 @@ object TunnelReportStore {
         allPoints(context).firstOrNull { it.pointNo == pointNo }
 
     /**
-     * هشدار/یادآوری اتفاق تونل (type غیرخالی در نقاط).
-     * از ۳ متر قبل تا ۳ متر بعد از نقطه اعلام می‌شود.
-     * اگر موردی نباشد null.
+     * یادآوری اتفاق تونل با در نظر گرفتن جهت حفاری.
+     * پنجره: ۳ متر قبل تا ۳ متر بعد از نقطهٔ کددار.
+     * towardLess=true (شفت کمتر / اعداد نقطه رو به کاهش):
+     *   km هنوز بالاتر از نقطه → مانده به ؛ km پایین‌تر → گذشته از
+     * towardLess=false (شفت بیشتر):
+     *   km پایین‌تر از نقطه → مانده به ؛ km بالاتر → گذشته از
      */
     fun specialPointProximityAlert(
         context: Context,
@@ -350,7 +353,7 @@ object TunnelReportStore {
         val specials = allPoints(context).filter { it.type.isNotBlank() }
         if (specials.isEmpty()) return null
 
-        var best: Pair<TunnelPoint, Double>? = null // point to signed distance (current - sp.km)
+        var best: Pair<TunnelPoint, Double>? = null // sp to signed (current - sp.km)
 
         for (sp in specials) {
             val dist = currentKm - sp.km
@@ -360,41 +363,47 @@ object TunnelReportStore {
                 }
             }
         }
-
         val hit = best ?: return null
         val (sp, dist) = hit
         fun fmt(v: Double): String =
             if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-6) v.toLong().toString()
             else String.format(java.util.Locale.US, "%.1f", v)
 
-        return when {
-            kotlin.math.abs(dist) < 0.05 ->
-                "در موقعیت اتفاق «${sp.type}» (نقطه ${sp.pointNo})"
-            dist < 0 ->
-                // هنوز به نقطه نرسیده (کیلومتر کمتر از نقطه)
-                "${fmt(-dist)} متر مانده به «${sp.type}» (${sp.pointNo})"
-            else ->
-                // از نقطه عبور کرده
-                "${fmt(dist)} متر بعد از «${sp.type}» (${sp.pointNo})"
+        if (kotlin.math.abs(dist) < 0.05) {
+            return "در موقعیت اتفاق «${sp.type}» (نقطه ${sp.pointNo})"
+        }
+        // remainingAlong: فاصله تا نقطه در جهت حرکت؛ منفی یعنی گذشته
+        val remainingAlong = if (towardLess) dist else -dist
+        // towardLess: حرکت به km کمتر → قبل از نقطه dist>0 (مانده)، بعد dist<0 (گذشته)
+        // towardMore: حرکت به km بیشتر → قبل از نقطه dist<0 (مانده)، بعد dist>0 (گذشته)
+        return if (remainingAlong > 0) {
+            "${fmt(remainingAlong)} متر مانده به «${sp.type}» (${sp.pointNo})"
+        } else {
+            "${fmt(-remainingAlong)} متر گذشته از «${sp.type}» (${sp.pointNo})"
         }
     }
 
-    /** اخطار طول حفاری: کمتر از ۵۰ سانت یا بیشتر از ۲ متر (۲۰۰ سانت) */
-    fun lengthExcavationWarning(lengthCm: Double): String? = when {
-        lengthCm <= 0 -> null
-        lengthCm < 50.0 -> "اخطار: طول حفاری کمتر از ۵۰ سانتی‌متر است (${fmtLen(lengthCm)})"
-        lengthCm > 200.0 -> "اخطار: طول حفاری بیشتر از ۲ متر است (${fmtLen(lengthCm)})"
+    /**
+     * اخطار پیشرفت حفاری نسبت به روز قبل (متر).
+     * کمتر از ۰٫۵ م یا بیشتر از ۲ م.
+     */
+    fun dailyProgressWarning(progressMeters: Double): String? = when {
+        progressMeters <= 0 -> null
+        progressMeters < 0.5 ->
+            "اخطار پیشرفت حفاری: کمتر از ۵۰ سانتی‌متر (${fmtProg(progressMeters)})"
+        progressMeters > 2.0 ->
+            "اخطار پیشرفت حفاری: بیشتر از ۲ متر (${fmtProg(progressMeters)})"
         else -> null
     }
 
-    private fun fmtLen(cm: Double): String {
-        return if (cm >= 100.0) {
-            val m = cm / 100.0
-            String.format(java.util.Locale.US, "%.2f م", m)
-        } else {
-            String.format(java.util.Locale.US, "%.0f سانت", cm)
-        }
-    }
+    /** سازگاری با فراخوانی‌های قبلی — lengthCm را به متر تبدیل می‌کند فقط اگر progress جدا نباشد */
+    fun lengthExcavationWarning(lengthCm: Double): String? =
+        dailyProgressWarning(lengthCm / 100.0)
+
+    private fun fmtProg(m: Double): String =
+        if (m >= 1.0) String.format(java.util.Locale.US, "%.2f م", m)
+        else String.format(java.util.Locale.US, "%.0f سانت", m * 100.0)
+
 
 
     /** نزدیک‌ترین نقطهٔ محور تونل به مختصات XY (فاصلهٔ اقلیدسی) */

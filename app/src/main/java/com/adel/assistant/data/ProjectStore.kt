@@ -21,9 +21,7 @@ data class ProjectEntry(
     /** طول جغرافیایی WGS84 — ۰ یعنی ثبت نشده */
     val lon: Double = 0.0,
     /** لینک کوتاه/بلند نشان — اگر باشد برای مسیریابی اولویت دارد */
-    val neshanLink: String = "",
-    /** شناسه رویداد تقویم دستگاه */
-    val calendarEventId: String = ""
+    val neshanLink: String = ""
 ) {
     val hasLocation: Boolean get() = lat != 0.0 || lon != 0.0 || neshanLink.isNotBlank()
     /** لینک مسیریاب نشان */
@@ -66,8 +64,7 @@ object ProjectStore {
                     minute = r.getOrElse(12) { "0" },
                     lat = r.getOrElse(13) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     lon = r.getOrElse(14) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
-                    neshanLink = r.getOrElse(15) { "" },
-                    calendarEventId = r.getOrElse(16) { "" }
+                    neshanLink = r.getOrElse(15) { "" }
                 )
             } catch (e: Exception) {
                 null
@@ -81,7 +78,7 @@ object ProjectStore {
                 it.row, it.day, it.month, it.name,
                 it.amount.toString(), it.settled.toString(), it.remaining.toString(),
                 it.employer, it.phone, it.description, it.year, it.hour, it.minute,
-                it.lat.toString(), it.lon.toString(), it.neshanLink, it.calendarEventId
+                it.lat.toString(), it.lon.toString(), it.neshanLink
             )
         }
         CsvStore.overwriteAll(context, CSV, rows)
@@ -186,6 +183,14 @@ object ProjectStore {
         val totalClaims: Double,
         val sessions: List<ProjectEntry>
     )
+
+    /** موقعیت ذخیره‌شده برای یک نام پروژه (اولین ردیف دارای مختصات/لینک) */
+    fun locationForProjectName(context: Context, projectName: String): Triple<Double, Double, String>? {
+        val nm = projectName.trim()
+        if (nm.isBlank()) return null
+        val e = all(context).firstOrNull { it.name.trim() == nm && it.hasLocation } ?: return null
+        return Triple(e.lat, e.lon, e.neshanLink)
+    }
 
     /** ثبت/تغییر موقعیت برای همه ردیف‌های یک نام پروژه */
     fun updateLocationByProjectName(

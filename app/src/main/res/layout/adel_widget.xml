@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="8dp"
+    android:padding="7dp"
     android:background="#991A1F16"
     android:layoutDirection="rtl">
 
@@ -13,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingTop="2dp"
-        android:paddingBottom="2dp"
+        android:paddingBottom="1dp"
         android:text="تسک‌های پروژه ▶"
         android:textColor="#FFB8D48A"
         android:textStyle="bold"
@@ -36,8 +36,8 @@
         android:id="@+id/title_tunnel_tasks"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="4dp"
-        android:paddingBottom="2dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="1dp"
         android:text="تسک‌های تونل ▶"
         android:textColor="#FFB8D48A"
         android:textStyle="bold"
@@ -60,8 +60,8 @@
         android:id="@+id/title_upcoming"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="4dp"
-        android:paddingBottom="2dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="1dp"
         android:text="برنامه کاری پیش‌رو"
         android:textColor="#FFB8D48A"
         android:textStyle="bold"
@@ -76,7 +76,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp">
+        android:layout_marginTop="5dp">
 
         <TextView
             android:id="@+id/btn_daily_report"
@@ -84,7 +84,7 @@
             android:layout_height="36dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:layout_margin="3dp"
+            android:layout_margin="2dp"
             android:background="#FF3D5A3A"
             android:textColor="#FFFFFFFF"
             android:textSize="14sp"
@@ -97,11 +97,29 @@
             android:layout_height="36dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:layout_margin="3dp"
+            android:layout_margin="2dp"
             android:background="#FF4A6B3A"
             android:textColor="#FFFFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
             android:text="ثبت پروژه" />
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_shafts_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="4dp"
+        android:paddingTop="2dp">
+        <TextView android:id="@+id/widget_shaft_1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="شفت ۱" android:textColor="#FF8FCB5A" android:textSize="12sp" android:padding="4dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text=" / " android:textColor="#FF7A8570" android:textSize="12sp" />
+        <TextView android:id="@+id/widget_shaft_2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="شفت ۲" android:textColor="#FF8FCB5A" android:textSize="12sp" android:padding="4dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text=" / " android:textColor="#FF7A8570" android:textSize="12sp" />
+        <TextView android:id="@+id/widget_shaft_3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="شفت ۳" android:textColor="#FF8FCB5A" android:textSize="12sp" android:padding="4dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text=" / " android:textColor="#FF7A8570" android:textSize="12sp" />
+        <TextView android:id="@+id/widget_shaft_4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="شفت ۴" android:textColor="#FF8FCB5A" android:textSize="12sp" android:padding="4dp" />
+    </LinearLayout>
+
 </LinearLayout>

@@ -169,7 +169,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             rows.filterNot { it.shaft == shaft && it.side == side } + newRow
         }
         shaft = ""; side = ""; pointNo = ""; length = ""; deviation = ""; collapse = ""; editingIndex = -1
-        statusMsg = TunnelReportStore.lengthExcavationWarning(len) ?: ""
+        statusMsg = TunnelReportStore.dailyProgressWarning(newRow.dailyProgress) ?: ""
     }
 
     fun startEdit(i: Int) {
@@ -341,14 +341,18 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // اخطار طول حفاری (ورودی جاری)
-        val lengthWarn = remember(length) {
+        // اخطار پیشرفت حفاری (نسبت به روز قبل) برای ورودی جاری
+        val progressWarn = remember(length, pointNo, shaft, side, year, month, day) {
             val cm = length.toDoubleOrNullFa() ?: return@remember null
-            TunnelReportStore.lengthExcavationWarning(cm)
+            if (pointNo.isBlank() || shaft.isBlank() || side.isBlank() || cm <= 0) return@remember null
+            val v = TunnelReportStore.computeEntryValues(
+                context, shaft, side, pointNo, cm, todayDateKey()
+            ) ?: return@remember null
+            TunnelReportStore.dailyProgressWarning(v.dailyProgress)
         }
-        if (lengthWarn != null) {
+        if (progressWarn != null) {
             Text(
-                lengthWarn,
+                progressWarn,
                 color = Color(0xFFFF9800),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
@@ -356,8 +360,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                     .padding(bottom = 4.dp)
             )
         }
-        // اخطار طول برای ردیف‌های ثبت‌شده
-        rows.mapNotNull { r -> TunnelReportStore.lengthExcavationWarning(r.lengthCm) }
+        // اخطار پیشرفت برای ردیف‌های ثبت‌شده
+        rows.mapNotNull { r -> TunnelReportStore.dailyProgressWarning(r.dailyProgress) }
             .distinct()
             .forEach { alert ->
                 Text(

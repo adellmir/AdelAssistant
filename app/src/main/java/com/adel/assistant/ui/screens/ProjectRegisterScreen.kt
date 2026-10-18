@@ -158,6 +158,16 @@ fun ProjectRegisterScreen(
             neshanLink = locLink
         )
         ProjectStore.save(context, entry)
+        // آدرس برای همه ثبت‌های هم‌نام (قبلی و بعدی)
+        if (entry.hasLocation) {
+            ProjectStore.updateLocationByProjectName(
+                context, name, locLat, locLon, locLink
+            )
+        } else {
+            ProjectStore.locationForProjectName(context, name)?.let { (la, lo, lk) ->
+                ProjectStore.updateLocationByProjectName(context, name, la, lo, lk)
+            }
+        }
 
         var calMsg = ""
         if (addToCalendar && name.isNotBlank()) {
@@ -288,6 +298,14 @@ fun ProjectRegisterScreen(
                         if (amount.isBlank()) {
                             amount = if (last.amount == last.amount.toLong().toDouble())
                                 last.amount.toLong().toString() else last.amount.toString()
+                        }
+                        if (locLat == 0.0 && locLon == 0.0 && locLink.isBlank() && last.hasLocation) {
+                            locLat = last.lat; locLon = last.lon; locLink = last.neshanLink
+                        }
+                    }
+                    if (locLat == 0.0 && locLon == 0.0 && locLink.isBlank()) {
+                        ProjectStore.locationForProjectName(context, it)?.let { (la, lo, lk) ->
+                            locLat = la; locLon = lo; locLink = lk
                         }
                     }
                 },
@@ -442,7 +460,12 @@ fun ProjectRegisterScreen(
                 locLat = la
                 locLon = lo
                 if (link.isNotBlank()) locLink = link
-                statusMsg = "موقعیت ثبت شد"
+                if (name.isNotBlank()) {
+                    ProjectStore.updateLocationByProjectName(
+                        context, name, la, lo, link.ifBlank { locLink }
+                    )
+                }
+                statusMsg = "موقعیت برای همه ثبت‌های هم‌نام ذخیره شد"
                 showLocationPicker = false
             },
             onDismiss = { showLocationPicker = false }
