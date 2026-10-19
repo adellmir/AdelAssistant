@@ -1554,7 +1554,7 @@ private fun TunnelBenchmarkImportDialog(
                             AdelOutlinedTextField(
                                 value = String.format(java.util.Locale.US, "%.3f", pt.x),
                                 onValueChange = { v ->
-                                    val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
+                                    val d = v.toDoubleOrNullFa() ?: return@AdelOutlinedTextField
                                     rows = rows.toMutableList().also {
                                         it[idx] = pt.copy(x = d) to checked
                                     }
@@ -1566,7 +1566,7 @@ private fun TunnelBenchmarkImportDialog(
                             AdelOutlinedTextField(
                                 value = String.format(java.util.Locale.US, "%.3f", pt.y),
                                 onValueChange = { v ->
-                                    val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
+                                    val d = v.toDoubleOrNullFa() ?: return@AdelOutlinedTextField
                                     rows = rows.toMutableList().also {
                                         it[idx] = pt.copy(y = d) to checked
                                     }
@@ -1578,7 +1578,7 @@ private fun TunnelBenchmarkImportDialog(
                             AdelOutlinedTextField(
                                 value = String.format(java.util.Locale.US, "%.3f", pt.z),
                                 onValueChange = { v ->
-                                    val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
+                                    val d = v.toDoubleOrNullFa() ?: return@AdelOutlinedTextField
                                     rows = rows.toMutableList().also {
                                         it[idx] = pt.copy(z = d) to checked
                                     }

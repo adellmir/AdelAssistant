@@ -5,10 +5,27 @@ import java.io.File
 
 object CsvStore {
 
+    /** گزارش روزانه تونل داخل data/report/ */
+    private val REPORT_NAMES = setOf("survey_tunnel_report")
+
     private fun file(context: Context, name: String): File {
-        val dir = File(context.filesDir, "data")
-        if (!dir.exists()) dir.mkdirs()
-        return File(dir, "$name.csv")
+        val dir = if (name in REPORT_NAMES) {
+            File(context.filesDir, "data/report").also { it.mkdirs() }
+        } else {
+            File(context.filesDir, "data").also { it.mkdirs() }
+        }
+        val f = File(dir, "$name.csv")
+        // مهاجرت از مسیر قدیمی data/survey_tunnel_report.csv
+        if (name in REPORT_NAMES && !f.exists()) {
+            val old = File(File(context.filesDir, "data"), "$name.csv")
+            if (old.exists()) {
+                try {
+                    old.copyTo(f, overwrite = false)
+                } catch (_: Exception) {
+                }
+            }
+        }
+        return f
     }
 
     fun appendRow(context: Context, name: String, columns: List<String>) {

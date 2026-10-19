@@ -61,6 +61,13 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                     f.inputStream().use { it.copyTo(zos) }
                     zos.closeEntry()
                 }
+                // گزارش روزانه: data/report/
+                val reportDir = File(dir, "report")
+                reportDir.listFiles()?.filter { it.isFile }?.forEach { f ->
+                    zos.putNextEntry(ZipEntry("data/report/${f.name}"))
+                    f.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
                 // شاقولی
                 if (plumbJson.exists()) {
                     zos.putNextEntry(ZipEntry("plumb_projects.json"))
@@ -131,7 +138,11 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                             name == "plumb_projects.csv" -> File(dir, name)
                             raw.startsWith("monitoring_templates/") ->
                                 File(File(context.filesDir, "monitoring_templates").also { it.mkdirs() }, name)
-                            raw.startsWith("data/") -> File(dir, name)
+                            raw.startsWith("data/") -> {
+                                val target = File(dir, name)
+                                target.parentFile?.mkdirs()
+                                target
+                            }
                             else -> File(dir, name)
                         }
                         target.parentFile?.mkdirs()

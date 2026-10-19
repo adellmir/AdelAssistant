@@ -124,14 +124,14 @@ object XlsxReportWriter {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/AdelAssistant/report")
             }
             val resolver = context.contentResolver
             val uri = resolver.insert(MediaStore.Files.getContentUri("external"), values)
             uri?.let { resolver.openOutputStream(it)?.use { out -> out.write(bytes) } }
             return uri
         } else {
-            val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "AdelAssistant")
+            val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "AdelAssistant/report")
             if (!dir.exists()) dir.mkdirs()
             val f = java.io.File(dir, fileName)
             f.writeBytes(bytes)

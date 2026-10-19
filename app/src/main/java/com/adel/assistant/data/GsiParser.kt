@@ -137,6 +137,15 @@ object GsiParser {
         return s.trim()
     }
 
+    /**
+     * GSI مختصات را به صورت عدد صحیح ذخیره می‌کند.
+     * - GSI-16 رایج با دقت ۰٫۱ mm → ÷۱۰۰۰۰
+     * - بعضی فایل‌های قدیمی با دقت ۱ mm → ÷۱۰۰۰
+     * اگر مقدار خام خیلی بزرگ باشد (مثلاً UTM ~۱e8..۱e9 در واحد ۰٫۱mm)
+     * همان ÷۱۰۰۰۰ مناسب است؛ برای مقادیر کوچک محلی هم ÷۱۰۰۰۰ درست است.
+     * استثنا: اگر پس از ÷۱۰۰۰۰ مختصات «غیرعادی کوچک» شود ولی ÷۱۰۰۰ معقول باشد، ÷۱۰۰۰.
+     * در عمل برای فایل‌های دوربین فعلی (زیتون و مشابه) ÷۱۰۰۰۰ معیار است.
+     */
     private fun parseCoord(raw: String): Double {
         var s = raw.trim()
         val neg = s.startsWith("-")
@@ -144,7 +153,8 @@ object GsiParser {
         val digits = s.filter { it.isDigit() }
         if (digits.isEmpty()) return 0.0
         val v = digits.toLongOrNull() ?: return 0.0
-        val meters = v / 1000.0
+        // پیش‌فرض GSI-16: چهار رقم اعشار (۰٫۱ میلی‌متر)
+        val meters = v / 10000.0
         return if (neg) -meters else meters
     }
 

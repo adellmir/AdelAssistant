@@ -98,7 +98,8 @@ object FileExport {
             n.contains("survey_tunnel_report") ||
                 n.contains("tunel-report") ||
                 n.contains("tunnel_report") ||
-                Regex("""^b\d{4}\.xlsx$""").matches(n) -> "tunel-report"
+                (n.contains("daily") && n.endsWith(".xlsx")) ||
+                Regex("""^b\d{4}\.xlsx$""").matches(n) -> "report"
             n.startsWith("letter") || n.contains("letter") || n.contains("leter") -> "letter"
             n.startsWith("invoice") || n.contains("invoice") || n.contains("فاکتور") -> "invoice"
             n.startsWith("monitoring") || n.contains("monitoring") -> "letter"
