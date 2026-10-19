@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -616,7 +618,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         onCheckedChange = { toggleCompare(index) },
                         colors = CheckboxDefaults.colors(checkedColor = color)
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = s.name,
                         onValueChange = { v ->
                             surfaces = surfaces.toMutableList().also {
@@ -736,7 +738,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) { Text("ورود DXF/TXT", fontSize = 12.sp) }
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         breaklineStep, { breaklineStep = it },
                         label = { Text("گام m") },
                         modifier = Modifier.width(80.dp),
@@ -760,7 +762,7 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             FilterChip(selected = methodTin, onClick = { methodTin = true }, label = { Text("TIN") })
             Spacer(Modifier.width(8.dp))
             if (!methodTin) {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     gridSize, { gridSize = it },
                     label = { Text("Grid m") },
                     modifier = Modifier.width(90.dp),
@@ -771,12 +773,12 @@ fun VolumeScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 cutFactor, { cutFactor = it }, label = { Text("ضریب Cut") },
                 modifier = Modifier.weight(1f), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 fillFactor, { fillFactor = it }, label = { Text("ضریب Fill") },
                 modifier = Modifier.weight(1f), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
@@ -1140,7 +1142,7 @@ private fun PointAssignScreen(
                 Text("ثبت")
             }
         }
-        OutlinedTextField(
+        AdelOutlinedTextField(
             codeFilter, { codeFilter = it },
             label = { Text("فیلتر کد / شماره") },
             modifier = Modifier.fillMaxWidth(),
@@ -1149,12 +1151,12 @@ private fun PointAssignScreen(
         )
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 rangeFrom, { rangeFrom = it }, label = { Text("از ردیف") },
                 modifier = Modifier.weight(1f), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 rangeTo, { rangeTo = it }, label = { Text("تا ردیف") },
                 modifier = Modifier.weight(1f), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -1604,7 +1606,7 @@ private fun VolumeMapView(
             title = { Text("تنظیمات نقشه") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         contourInterval, onContourInterval,
                         label = { Text("فاصله خطوط تراز (m)") },
                         singleLine = true,

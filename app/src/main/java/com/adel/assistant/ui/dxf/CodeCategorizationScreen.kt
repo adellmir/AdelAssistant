@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.dxf
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 import com.adel.assistant.ui.theme.TextMuted
@@ -284,7 +286,7 @@ private fun CodeCard(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // نام لایه
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     value = setting.layerName,
                     onValueChange = onLayerChange,
                     label = { Text("نام لایه") },

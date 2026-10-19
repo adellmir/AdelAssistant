@@ -23,7 +23,11 @@ fun String.toDoubleOrNullFa(): Double? = this.toEnglishDigits().replace(",", "")
 
 /** فقط رقم (فارسی/انگلیسی) و نقطه‌ی اعشاری را نگه می‌دارد؛ حروف حذف می‌شوند */
 fun filterNumericInput(input: String): String {
-    return input.filter { ch -> ch.isDigit() || ch == '.' || "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩".contains(ch) }
+    // ارقام انگلیسی/فارسی/عربی، نقطه اعشار، منفی، و جداکننده هزارگان
+    return input.filter { ch ->
+        ch.isDigit() || ch == '.' || ch == '-' || ch == ',' || ch == '،' ||
+            "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩".contains(ch)
+    }
 }
 
 /**

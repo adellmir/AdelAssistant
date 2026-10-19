@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -147,35 +149,35 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
-                keyboardOptions = numKb)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("روز کارکرد") }, modifier = Modifier.weight(1f),
-                keyboardOptions = numKb)
-            OutlinedTextField(value = unitPrice, onValueChange = { unitPrice = it }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
                 keyboardOptions = numKb)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = lunchDed, onValueChange = { lunchDed = it }, label = { Text("کسر نهاری") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("روز کارکرد") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = overtime, onValueChange = { overtime = it }, label = { Text("اضافه تایم") }, modifier = Modifier.weight(1f),
-                keyboardOptions = numKb)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = timesheetDed, onValueChange = { timesheetDed = it }, label = { Text("کسر تایم‌شیت") }, modifier = Modifier.weight(1f),
-                keyboardOptions = numKb)
-            OutlinedTextField(value = cameraDed, onValueChange = { cameraDed = it }, label = { Text("کسر دوربین") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = unitPrice, onValueChange = { unitPrice = it }, label = { Text("مبلغ واحد") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = cameraTimeDed, onValueChange = { cameraTimeDed = it }, label = { Text("کسر تایم دوربین") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = lunchDed, onValueChange = { lunchDed = it }, label = { Text("کسر نهاری") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = surveyor, onValueChange = { surveyor = it }, label = { Text("نقشه‌بردار") }, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(value = overtime, onValueChange = { overtime = it }, label = { Text("اضافه تایم") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
         }
-        OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AdelOutlinedTextField(value = timesheetDed, onValueChange = { timesheetDed = it }, label = { Text("کسر تایم‌شیت") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            AdelOutlinedTextField(value = cameraDed, onValueChange = { cameraDed = it }, label = { Text("کسر دوربین") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AdelOutlinedTextField(value = cameraTimeDed, onValueChange = { cameraTimeDed = it }, label = { Text("کسر تایم دوربین") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            AdelOutlinedTextField(value = surveyor, onValueChange = { surveyor = it }, label = { Text("نقشه‌بردار") }, modifier = Modifier.weight(1f))
+        }
+        AdelOutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 
         preview?.let { p ->
             Text(

@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.CompassMath
 import com.adel.assistant.data.LocationStore
@@ -2576,7 +2578,7 @@ if (zoomWindowMode) {
             onDismissRequest = { showCircleRadiusDialog = false; circleCenter = null },
             title = { Text("شعاع دایره (متر)") },
             text = {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     circleRadiusText,
                     { circleRadiusText = it },
                     label = { Text("شعاع") },
@@ -2628,7 +2630,7 @@ if (zoomWindowMode) {
                             Text(item.title)
                         }
                     }
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = zoneText,
                         onValueChange = { zoneText = it.filter(Char::isDigit).take(2) },
                         label = { Text("UTM Zone") },
@@ -2755,7 +2757,7 @@ if (zoomWindowMode) {
                 if (drawings.isEmpty()) Text("نقشه‌ای باز نشده است.")
                 else LazyColumn {
                     item {
-                            OutlinedTextField(layerFilter, { layerFilter = it }, label = { Text("فیلتر نام لایه") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            AdelOutlinedTextField(layerFilter, { layerFilter = it }, label = { Text("فیلتر نام لایه") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         }
                         drawings.filter { it.visible }.forEach { drawing ->
                         item {
@@ -2798,7 +2800,7 @@ if (zoomWindowMode) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("سایز پیش‌فرض نوشته (متر نقشه):")
-                    OutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("سایز") }, singleLine = true)
+                    AdelOutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("سایز") }, singleLine = true)
                     Button(onClick = {
                         annotMode = "dim"; dimDraft = emptyList(); showCoordMenu = false
                         message = "دو سر خط را برای اندازه‌گذاری لمس کن"
@@ -2842,7 +2844,7 @@ if (zoomWindowMode) {
             onDismissRequest = { showAnnotSizeDialog = false; dimDraft = emptyList() },
             title = { Text("سایز نوشته") },
             text = {
-                OutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("ارتفاع متن") }, singleLine = true)
+                AdelOutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("ارتفاع متن") }, singleLine = true)
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -2864,8 +2866,8 @@ if (zoomWindowMode) {
             title = { Text("شماره نقطه") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(annotPointNo, { annotPointNo = it }, label = { Text("شماره (پیش‌فرض +۱)") }, singleLine = true)
-                    OutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("سایز نوشته") }, singleLine = true)
+                    AdelOutlinedTextField(annotPointNo, { annotPointNo = it }, label = { Text("شماره (پیش‌فرض +۱)") }, singleLine = true)
+                    AdelOutlinedTextField(annotTextSize, { annotTextSize = it }, label = { Text("سایز نوشته") }, singleLine = true)
                     if (annotMode == "coord_table") {
                         Text("بعد از چند نقطه، از منوی مختصات «قرار دادن جدول» را بزن")
                     }
@@ -2904,12 +2906,12 @@ if (zoomWindowMode) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("محورها موازی X/Y و روی مختصات رُند (مضرب فاصله) رسم می‌شوند. لایه: GRID", fontSize = 12.sp)
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         gridStepText, { gridStepText = it },
                         label = { Text("فاصله خطوط گرید (متر)") },
                         singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         gridTextHeight, { gridTextHeight = it },
                         label = { Text("اندازه متن مختصات") },
                         singleLine = true, modifier = Modifier.fillMaxWidth()
@@ -3028,7 +3030,7 @@ if (showSaveDxfDialog) {
             onDismissRequest = { showSaveDxfDialog = false },
             title = { Text("ذخیره DXF") },
             text = {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     saveDxfName,
                     { saveDxfName = it },
                     label = { Text("نام فایل (بدون پسوند)") },
@@ -3116,7 +3118,7 @@ if (showSaveDxfDialog) {
                         Checkbox(gridOn, { gridOn = it }); Text("Grid", fontSize = 12.sp)
                     }
                     if (gridOn) {
-                        OutlinedTextField(gridStep.toString(), { v -> v.replace(',','.').toDoubleOrNull()?.let { if (it > 0) gridStep = it } }, label = { Text("گام شبکه") }, singleLine = true)
+                        AdelOutlinedTextField(gridStep.toString(), { v -> v.replace(',','.').toDoubleOrNull()?.let { if (it > 0) gridStep = it } }, label = { Text("گام شبکه") }, singleLine = true)
                     }
                     Text("Osnap", fontWeight = FontWeight.Bold)
                     Row {
@@ -3154,7 +3156,7 @@ if (showSaveDxfDialog) {
         AlertDialog(
             onDismissRequest = { showTextInput = false; draftPts = emptyList() },
             title = { Text("متن") },
-            text = { OutlinedTextField(textDraft, { textDraft = it }, label = { Text("محتوا") }) },
+            text = { AdelOutlinedTextField(textDraft, { textDraft = it }, label = { Text("محتوا") }) },
             confirmButton = {
                 TextButton(onClick = {
                     val pt = draftPts[0]
@@ -3333,7 +3335,7 @@ if (showSaveDxfDialog) {
             title = { Text("برو به") },
             text = {
                 Column(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         gotoLine, { gotoLine = it },
                         label = { Text("مختصات (یک خط)") },
                         placeholder = { Text("E N یا Lat Lon") },
@@ -3344,7 +3346,7 @@ if (showSaveDxfDialog) {
                         // اگر UTM تشخیص داده شد زون بپرس
                     }
                     if (parsed?.isUtm == true) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             gotoZone, { gotoZone = it },
                             label = { Text("زون UTM") },
                             singleLine = true,
@@ -3455,16 +3457,16 @@ if (showSaveDxfDialog) {
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            OutlinedTextField(row[0], { v ->
+                            AdelOutlinedTextField(row[0], { v ->
                                 val m = row.toMutableList(); m[0] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("نام") }, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedTextField(row[1], { v ->
+                            AdelOutlinedTextField(row[1], { v ->
                                 val m = row.toMutableList(); m[1] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("E") }, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedTextField(row[2], { v ->
+                            AdelOutlinedTextField(row[2], { v ->
                                 val m = row.toMutableList(); m[2] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedTextField(row[3], { v ->
+                            AdelOutlinedTextField(row[3], { v ->
                                 val m = row.toMutableList(); m[3] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("Z") }, modifier = Modifier.weight(1f), singleLine = true)
                         }
@@ -3479,16 +3481,16 @@ if (showSaveDxfDialog) {
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            OutlinedTextField(row[4], { v ->
+                            AdelOutlinedTextField(row[4], { v ->
                                 val m = row.toMutableList(); m[4] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("نام") }, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedTextField(row[5], { v ->
+                            AdelOutlinedTextField(row[5], { v ->
                                 val m = row.toMutableList(); m[5] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("E") }, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedTextField(row[6], { v ->
+                            AdelOutlinedTextField(row[6], { v ->
                                 val m = row.toMutableList(); m[6] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("N") }, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedTextField(row[7], { v ->
+                            AdelOutlinedTextField(row[7], { v ->
                                 val m = row.toMutableList(); m[7] = v; mapAlignRows = mapAlignRows.toMutableList().also { it[idx] = m }
                             }, label = { Text("Z") }, modifier = Modifier.weight(1f), singleLine = true)
                         }

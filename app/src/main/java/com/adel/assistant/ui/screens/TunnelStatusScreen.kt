@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -87,14 +89,14 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
 
         Text("بازه تاریخی", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(fromDay, { fromDay = it }, label = { Text("از روز") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(fromMonth, { fromMonth = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(fromYear, { fromYear = it }, label = { Text("سال") }, modifier = Modifier.weight(1.1f), singleLine = true)
+            AdelOutlinedTextField(fromDay, { fromDay = it }, label = { Text("از روز") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(fromMonth, { fromMonth = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(fromYear, { fromYear = it }, label = { Text("سال") }, modifier = Modifier.weight(1.1f), singleLine = true)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(toDay, { toDay = it }, label = { Text("تا روز") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(toMonth, { toMonth = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(toYear, { toYear = it }, label = { Text("سال") }, modifier = Modifier.weight(1.1f), singleLine = true)
+            AdelOutlinedTextField(toDay, { toDay = it }, label = { Text("تا روز") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(toMonth, { toMonth = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(toYear, { toYear = it }, label = { Text("سال") }, modifier = Modifier.weight(1.1f), singleLine = true)
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -138,7 +140,7 @@ private fun ShaftProgressCard(c: ShaftCard) {
             Column(Modifier.weight(1f)) {
                 Text(c.moreLabel, style = MaterialTheme.typography.bodySmall, color = Color(0xFF81C995), fontSize = 12.sp)
                 Text(formatEn("%.3f", c.moreKm), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9BA888), fontSize = 11.sp)
-                Text(formatEn("پیشرفت: %.1f / مانده: %.1f", c.moreProgress, c.moreRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
+                Text(formatEn("پ:%.1f / م:%.1f", c.moreProgress, c.moreRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
             }
             // وسط: فقط شماره شفت
             Text(
@@ -151,7 +153,7 @@ private fun ShaftProgressCard(c: ShaftCard) {
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                 Text(c.lessLabel, style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFB74D), fontSize = 12.sp)
                 Text(formatEn("%.3f", c.lessKm), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9BA888), fontSize = 11.sp)
-                Text(formatEn("پیشرفت: %.1f / مانده: %.1f", c.lessProgress, c.lessRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
+                Text(formatEn("پ:%.1f / م:%.1f", c.lessProgress, c.lessRemain), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B8A8), fontSize = 11.sp)
             }
         }
     }
@@ -185,7 +187,7 @@ private fun buildOverallCards(context: android.content.Context): List<ShaftCard>
     }
 }
 
-/** پیشرفت بازه‌ای: پیشرفت = جابجایی کیلومتر در بازه؛ مانده = تا جبهه مقابل در انتهای بازه */
+/** پیشرفت بازه‌ای: پ = جابجایی کیلومتر در بازه؛ م = مانده تا جبهه مقابل در انتهای بازه */
 private fun buildRangeCards(context: android.content.Context, fromKey: String, toKey: String): List<ShaftCard> {
     val byShaft = TunnelReportStore.TUNNEL_LAYOUT.groupBy { it.first }.toSortedMap()
     return byShaft.map { (shaftName, sides) ->

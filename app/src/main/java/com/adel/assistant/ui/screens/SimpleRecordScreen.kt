@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,7 +57,7 @@ fun SimpleRecordScreen(
             Spacer(modifier = Modifier.height(12.dp))
         } else {
             fields.forEachIndexed { index, label ->
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     value = values[index],
                     onValueChange = { newVal ->
                         values = values.toMutableList().also { it[index] = newVal }

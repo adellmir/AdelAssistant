@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -194,7 +196,7 @@ function getCenter(cb){
             Column(Modifier.fillMaxWidth().height(460.dp)) {
                 Text(status, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     value = linkText,
                     onValueChange = { linkText = it },
                     label = { Text("لینک نشان") },

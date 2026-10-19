@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -162,13 +164,13 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(year, { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(year, { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -282,10 +284,10 @@ private fun PlumbWorkspace(
             title = { Text("تعریف محورها") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(lc, { lc = it }, label = { Text("محور حروف") }, singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(nc, { nc = it }, label = { Text("محور عدد") }, singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(fac, { fac = it }, label = { Text("ضریب") }, singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(h, { h = it }, label = { Text("ارتفاع (m)") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(lc, { lc = it }, label = { Text("محور حروف") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(nc, { nc = it }, label = { Text("محور عدد") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(fac, { fac = it }, label = { Text("ضریب") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(h, { h = it }, label = { Text("ارتفاع (m)") }, singleLine = true, keyboardOptions = numKb)
                 }
             },
             confirmButton = {
@@ -718,7 +720,7 @@ private fun PlumbWorkspace(
                         for (i in 0 until lCount) {
                             val a = PlumbStore.letterLabel(i)
                             val b = PlumbStore.letterLabel(i + 1)
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = letterFields.getOrElse(i) { defL.toString() },
                                 onValueChange = { v -> if (i < letterFields.size) letterFields[i] = v },
                                 label = { Text("$a ↔ $b") },
@@ -730,7 +732,7 @@ private fun PlumbWorkspace(
                     if (nCount > 0) {
                         Text("بین محورهای عددی", fontSize = 13.sp)
                         for (i in 0 until nCount) {
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = numberFields.getOrElse(i) { defN.toString() },
                                 onValueChange = { v -> if (i < numberFields.size) numberFields[i] = v },
                                 label = { Text("${i + 1} ↔ ${i + 2}") },
@@ -883,9 +885,9 @@ private fun PlumbWorkspace(
             title = { Text("ویرایش محور") },
             text = {
                 Column {
-                    OutlinedTextField(lc, { lc = it }, label = { Text("محور حروف") }, keyboardOptions = numKb, singleLine = true)
-                    OutlinedTextField(nc, { nc = it }, label = { Text("محور عدد") }, keyboardOptions = numKb, singleLine = true)
-                    OutlinedTextField(fac, { fac = it }, label = { Text("ضریب") }, keyboardOptions = numKb, singleLine = true)
+                    AdelOutlinedTextField(lc, { lc = it }, label = { Text("محور حروف") }, keyboardOptions = numKb, singleLine = true)
+                    AdelOutlinedTextField(nc, { nc = it }, label = { Text("محور عدد") }, keyboardOptions = numKb, singleLine = true)
+                    AdelOutlinedTextField(fac, { fac = it }, label = { Text("ضریب") }, keyboardOptions = numKb, singleLine = true)
                 }
             },
             confirmButton = {
@@ -914,7 +916,7 @@ private fun PlumbWorkspace(
             title = { Text("ارتفاع (m)") },
             text = {
                 Column {
-                    OutlinedTextField(h, { h = it }, keyboardOptions = numKb, singleLine = true)
+                    AdelOutlinedTextField(h, { h = it }, keyboardOptions = numKb, singleLine = true)
                     Text(
                         "حد مجاز ≈ ${String.format(Locale.US, "%.0f", (h.replace(',', '.').toDoubleOrNull() ?: 22.0) / 600.0 * 1000)} mm",
                         fontSize = 12.sp
@@ -950,25 +952,25 @@ private fun PlumbWorkspace(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(topN, { topN = it })
                         Text("همسایه")
-                        OutlinedTextField(topS, { topS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                        AdelOutlinedTextField(topS, { topS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
                     Text("پایین", fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(botN, { botN = it })
                         Text("همسایه")
-                        OutlinedTextField(botS, { botS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                        AdelOutlinedTextField(botS, { botS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
                     Text("راست", fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(rightN, { rightN = it })
                         Text("همسایه")
-                        OutlinedTextField(rightS, { rightS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                        AdelOutlinedTextField(rightS, { rightS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
                     Text("چپ", fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(leftN, { leftN = it })
                         Text("همسایه")
-                        OutlinedTextField(leftS, { leftS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
+                        AdelOutlinedTextField(leftS, { leftS = it }, label = { Text("خیابان") }, modifier = Modifier.weight(1f), singleLine = true)
                     }
                 }
             },
@@ -1029,9 +1031,9 @@ private fun PlumbWorkspace(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("افست (m) — مقدار mm", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedTextField(refT, { refT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
-                        OutlinedTextField(refB, { refB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
-                        OutlinedTextField(
+                        AdelOutlinedTextField(refT, { refT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                        AdelOutlinedTextField(refB, { refB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                        AdelOutlinedTextField(
                             refV.ifBlank {
                                 val b = d(refB); val t = d(refT)
                                 if (b != null && t != null) String.format(Locale.US, "%.1f", (t - b) * 1000) else ""
@@ -1045,9 +1047,9 @@ private fun PlumbWorkspace(
                     }
                     Text("لاین (m) — مقدار mm", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedTextField(lineT, { lineT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
-                        OutlinedTextField(lineB, { lineB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
-                        OutlinedTextField(
+                        AdelOutlinedTextField(lineT, { lineT = signedFilter(it) }, label = { Text("بالا") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                        AdelOutlinedTextField(lineB, { lineB = signedFilter(it) }, label = { Text("پایین") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii))
+                        AdelOutlinedTextField(
                             lineV.ifBlank {
                                 val b = d(lineB); val t = d(lineT)
                                 if (b != null && t != null) String.format(Locale.US, "%.1f", (t - b) * 1000) else ""

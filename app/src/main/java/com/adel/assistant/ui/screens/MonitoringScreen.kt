@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -95,14 +97,14 @@ fun MonitoringScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
-            OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(name, { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f), singleLine = true)
+            AdelOutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f), singleLine = true)
         }
-        OutlinedTextField(reportNo, { reportNo = it }, label = { Text("شماره گزارش") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb)
+        AdelOutlinedTextField(reportNo, { reportNo = it }, label = { Text("شماره گزارش") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(year, { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(year, { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -350,9 +352,9 @@ private fun NewEpochDialog(color: Color, onDismiss: () -> Unit, onCreated: (MonE
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(year, { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(day, { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(month, { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(year, { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
@@ -416,7 +418,7 @@ private fun BaseEditor(
                 onSave(project.copy(client = client, basePoints = points))
             }, colors = ButtonDefaults.buttonColors(containerColor = color)) { Text("ثبت") }
         }
-        OutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        AdelOutlinedTextField(client, { client = it }, label = { Text("کارفرما") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { filePicker.launch(FilePicker.TEXT_CSV) }) { Text("ورود فایل") }
             if (msg.isNotBlank()) Text(msg, color = Color(0xFFB0B8A8), fontSize = 12.sp)

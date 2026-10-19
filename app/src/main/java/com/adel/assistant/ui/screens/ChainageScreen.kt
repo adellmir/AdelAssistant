@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -104,7 +106,7 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
     ) {
         ScreenTopBar(title = "کیلومتراژ/چینیج", color = color, onBack = onBack)
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
+        AdelOutlinedTextField(
             value = kmInput, onValueChange = { kmInput = com.adel.assistant.data.filterNumericInput(it) },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
             label = { Text("کیلومتراژ") }, modifier = Modifier.fillMaxWidth()

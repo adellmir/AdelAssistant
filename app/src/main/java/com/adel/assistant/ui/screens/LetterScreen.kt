@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -53,21 +55,21 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = dateLabel,
                 onValueChange = { dateLabel = it },
                 label = { Text("تاریخ (مثال ۱۴۰۵/۰۶/۲۴)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = letterNo,
                 onValueChange = { letterNo = it },
                 label = { Text("شماره نامه") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = employer,
                 onValueChange = { employer = it },
                 label = { Text("نام کارفرما") },
@@ -75,7 +77,7 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = body,
                 onValueChange = { body = it },
                 label = { Text("متن نامه") },

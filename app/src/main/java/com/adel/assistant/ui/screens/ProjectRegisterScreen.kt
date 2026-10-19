@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -271,23 +273,23 @@ fun ProjectRegisterScreen(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
-                keyboardOptions = numKb)
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = hour, onValueChange = { hour = it }, label = { Text("ساعت") }, modifier = Modifier.weight(1f),
-                keyboardOptions = numKb)
-            OutlinedTextField(value = minute, onValueChange = { minute = it }, label = { Text("دقیقه") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
                 keyboardOptions = numKb)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(value = hour, onValueChange = { hour = it }, label = { Text("ساعت") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+            AdelOutlinedTextField(value = minute, onValueChange = { minute = it }, label = { Text("دقیقه") }, modifier = Modifier.weight(1f),
+                keyboardOptions = numKb)
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AdelOutlinedTextField(
                 value = name,
                 onValueChange = {
                     name = it
@@ -312,7 +314,7 @@ fun ProjectRegisterScreen(
                 label = { Text("نام پروژه") },
                 modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = employer,
                 onValueChange = { employer = it },
                 label = { Text("کارفرما") },
@@ -320,12 +322,12 @@ fun ProjectRegisterScreen(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
+            AdelOutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ (میلیون)") }, modifier = Modifier.weight(1f), supportingText = { val v = amount.toDoubleOrNullFa(); if (v != null) Text("${formatMoney(v)} میلیون تومان") },
                 keyboardOptions = numKb)
-            OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("شماره تماس") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
         }
-        OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
+        AdelOutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 
         Row(
             verticalAlignment = Alignment.CenterVertically,

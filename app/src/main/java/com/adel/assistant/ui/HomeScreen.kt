@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.OutlinedTextField
+import com.adel.assistant.ui.components.AdelOutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -583,7 +584,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             }
                             .padding(4.dp)
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         placeholder = { Text("جستجو: شفت، پیشرفت، مطالبات، پروژه…", color = TextMuted, fontSize = 13.sp) },

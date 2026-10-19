@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -149,13 +151,13 @@ fun TopographyScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
             title = { Text("فاصله خطوط تراز") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(intervalText, { intervalText = it }, label = { Text("فاصله خطوط تراز (متر)") }, singleLine = true)
+                    AdelOutlinedTextField(intervalText, { intervalText = it }, label = { Text("فاصله خطوط تراز (متر)") }, singleLine = true)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(applyGeoid, { applyGeoid = it })
                         Text("تبدیل ارتفاع با ژئوئید N", fontSize = 12.sp)
                     }
                     if (applyGeoid) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             geoidN, { geoidN = it },
                             label = { Text("N ژئوئید (متر)") },
                             placeholder = { Text("${GeoidHeight.IRAN_DEFAULT_N}") },

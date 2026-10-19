@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Intent
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -259,15 +261,15 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = day, onValueChange = { day = filterNumericInput(it) }, label = { Text("روز") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = month, onValueChange = { month = filterNumericInput(it) }, label = { Text("ماه") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = year, onValueChange = { year = filterNumericInput(it) }, label = { Text("سال") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
@@ -287,22 +289,22 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Text("افزودن پیشرفت شفت", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAB697))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = shaft, onValueChange = { shaft = filterNumericInput(it) }, label = { Text("شفت") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = side, onValueChange = { side = filterNumericInput(it) }, label = { Text("سمت") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = pointNo, onValueChange = { pointNo = filterNumericInput(it) },
                 label = { Text("شماره نقطه") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = length, onValueChange = { length = filterNumericInput(it) },
                 label = { Text("طول (سانتی‌متر)") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
@@ -329,11 +331,11 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") },
                 modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") },
                 modifier = Modifier.weight(1f)
             )

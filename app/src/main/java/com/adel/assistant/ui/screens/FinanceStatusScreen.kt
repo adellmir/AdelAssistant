@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -118,16 +120,16 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text("از تاریخ", color = TextPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(8.dp))
         Text("تا تاریخ", color = TextPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-            OutlinedTextField(toD, { toD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+            AdelOutlinedTextField(toD, { toD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(12.dp))
         Button(

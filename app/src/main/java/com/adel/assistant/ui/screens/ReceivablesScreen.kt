@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -187,14 +189,14 @@ fun ReceivablesScreen(
 
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("نام پروژه") },
                 modifier = Modifier.weight(1f),
                 singleLine = true
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = employer,
                 onValueChange = { employer = it },
                 label = { Text("کارفرما") },
@@ -279,12 +281,12 @@ fun ReceivablesScreen(
             title = { Text("ویرایش مطالبه") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(eName, { eName = it }, label = { Text("نام پروژه") }, singleLine = true)
-                    OutlinedTextField(eEmployer, { eEmployer = it }, label = { Text("کارفرما") }, singleLine = true)
-                    OutlinedTextField(eAmount, { eAmount = it }, label = { Text("مبلغ") }, singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(eSettled, { eSettled = it }, label = { Text("دریافتی") }, singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(ePhone, { ePhone = it }, label = { Text("تلفن") }, singleLine = true, keyboardOptions = numKb)
-                    OutlinedTextField(eDesc, { eDesc = it }, label = { Text("توضیح") })
+                    AdelOutlinedTextField(eName, { eName = it }, label = { Text("نام پروژه") }, singleLine = true)
+                    AdelOutlinedTextField(eEmployer, { eEmployer = it }, label = { Text("کارفرما") }, singleLine = true)
+                    AdelOutlinedTextField(eAmount, { eAmount = it }, label = { Text("مبلغ") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(eSettled, { eSettled = it }, label = { Text("دریافتی") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(ePhone, { ePhone = it }, label = { Text("تلفن") }, singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(eDesc, { eDesc = it }, label = { Text("توضیح") })
                 }
             },
             confirmButton = {

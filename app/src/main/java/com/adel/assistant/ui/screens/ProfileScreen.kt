@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -150,8 +152,8 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
                     }
                     if (surfaces.isEmpty()) Text("هنوز سطحی وارد نشده است.", color = TextSecondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(intervalText, { intervalText = it; recalc() }, label = { Text("فاصله ایستگاه (m)") }, singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(startText, { startText = it; recalc() }, label = { Text("کیلومتر شروع") }, singleLine = true, modifier = Modifier.weight(1f))
+                        AdelOutlinedTextField(intervalText, { intervalText = it; recalc() }, label = { Text("فاصله ایستگاه (m)") }, singleLine = true, modifier = Modifier.weight(1f))
+                        AdelOutlinedTextField(startText, { startText = it; recalc() }, label = { Text("کیلومتر شروع") }, singleLine = true, modifier = Modifier.weight(1f))
                     }
                     Text("مقیاس ترسیم: طولی 1:${hScale.toInt()}  |  عرضی 1:${vScale.toInt()}  |  ضریب ترسیم عرضی = ${"%.2f".format(scale.verticalExaggeration)}", color = TextSecondary, fontSize = 12.sp)
                 }
@@ -216,8 +218,8 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             title = { Text("مقیاس پروفیل") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(horizontalScaleText, { horizontalScaleText = it }, label = { Text("مقیاس طولی 1:") }, singleLine = true)
-                    OutlinedTextField(verticalScaleText, { verticalScaleText = it }, label = { Text("مقیاس عرضی 1:") }, singleLine = true)
+                    AdelOutlinedTextField(horizontalScaleText, { horizontalScaleText = it }, label = { Text("مقیاس طولی 1:") }, singleLine = true)
+                    AdelOutlinedTextField(verticalScaleText, { verticalScaleText = it }, label = { Text("مقیاس عرضی 1:") }, singleLine = true)
                     val hh = horizontalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 1000.0
                     val vv = verticalScaleText.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(1.0) ?: 100.0
                     Text("ضریب ترسیم پروفیل (بزرگنمایی عمودی): ${"%.2f".format(hh / vv)}", fontWeight = FontWeight.Bold)
@@ -234,43 +236,43 @@ fun ProfileScreen(color: Color, onBack: () -> Unit, onOpenMap: (String) -> Unit)
             title = { Text("تنظیمات ترسیم DXF") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfStartChainage,
                         onValueChange = { dxfStartChainage = it },
                         label = { Text("کیلومتر شروع الایمنت") },
                         singleLine = true
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfStationTextSize,
                         onValueChange = { dxfStationTextSize = it },
                         label = { Text("سایز متن کیلومترها") },
                         singleLine = true
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfProfileTextSize,
                         onValueChange = { dxfProfileTextSize = it },
                         label = { Text("سایز متن پروفیل طولی") },
                         singleLine = true
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfTitleTextSize,
                         onValueChange = { dxfTitleTextSize = it },
                         label = { Text("سایز فونت عنوان پروفیل") },
                         singleLine = true
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfLevelTextSize,
                         onValueChange = { dxfLevelTextSize = it },
                         label = { Text("سایز فونت لول / تراز") },
                         singleLine = true
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfRangeFrom,
                         onValueChange = { dxfRangeFrom = it },
                         label = { Text("کیلومتر شروع محدوده ترسیم خطوط (خالی=همه)") },
                         singleLine = true
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = dxfRangeTo,
                         onValueChange = { dxfRangeTo = it },
                         label = { Text("کیلومتر پایان محدوده ترسیم خطوط (خالی=همه)") },

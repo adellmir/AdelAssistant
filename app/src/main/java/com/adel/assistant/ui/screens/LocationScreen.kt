@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -516,13 +518,13 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("ثبت نقطه", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             pointName, { pointName = it },
                             label = { Text("نام") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             pointCode, { pointCode = it },
                             label = { Text("کد") },
                             modifier = Modifier.weight(0.7f),
@@ -534,7 +536,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             Checkbox(autoZone, { autoZone = it })
                             Text("Zone خودکار", fontSize = 12.sp, color = TextSecondary)
                         }
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             zoneText,
                             { zoneText = it.filter { ch -> ch.isDigit() }.take(2) },
                             label = { Text("Zone") },
@@ -575,7 +577,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("برو به روی نقشه", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         gotoCoordLine, { gotoCoordLine = it },
                         label = { Text("مختصات (یک خط)") },
                         placeholder = { Text("E N   یا   Lat Lon") },
@@ -584,7 +586,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                     )
                     val parsed = CoordGoto.parse(gotoCoordLine)
                     if (parsed?.isUtm == true) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             gotoZoneText, { gotoZoneText = it },
                             label = { Text("زون UTM") },
                             singleLine = true,
@@ -622,17 +624,17 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         Text("نیمکره برای UTM→Geo", fontSize = 11.sp, color = TextSecondary)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             manLat, { manLat = it }, label = { Text("Lat") },
                             modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb,
                             supportingText = { Text("اعشاری یا درجه دقیقه ثانیه", fontSize = 10.sp) }
                         )
-                        OutlinedTextField(manLon, { manLon = it }, label = { Text("Lon") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        AdelOutlinedTextField(manLon, { manLon = it }, label = { Text("Lon") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(manE, { manE = it }, label = { Text("Easting") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                        OutlinedTextField(manN, { manN = it }, label = { Text("Northing") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                        OutlinedTextField(manZ, { manZ = it }, label = { Text("Z") }, modifier = Modifier.width(72.dp), singleLine = true, keyboardOptions = numKb)
+                        AdelOutlinedTextField(manE, { manE = it }, label = { Text("Easting") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        AdelOutlinedTextField(manN, { manN = it }, label = { Text("Northing") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                        AdelOutlinedTextField(manZ, { manZ = it }, label = { Text("Z") }, modifier = Modifier.width(72.dp), singleLine = true, keyboardOptions = numKb)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(onClick = { convertGeoToUtm() }, modifier = Modifier.weight(1f)) { Text("Geo→UTM") }
@@ -718,14 +720,14 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         Text("طول مسیر: ${formatEn("%.3f", pathLen)} m", fontSize = 12.sp, color = TextSecondary)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             offsetDist, { offsetDist = it },
                             label = { Text("فاصله m") },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = numKb
                         )
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             offsetAz, { offsetAz = it },
                             label = { Text("آزیموت °") },
                             modifier = Modifier.weight(1f),
@@ -812,7 +814,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ارتفاع ژئوئید (N)", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text("Z_ortho = Z_ellip − N  |  برای دقت بالا N را از مدل محلی وارد کنید", fontSize = 11.sp, color = TextSecondary)
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         geoidNText, { geoidNText = it },
                         label = { Text("N (متر)") },
                         modifier = Modifier.fillMaxWidth(),

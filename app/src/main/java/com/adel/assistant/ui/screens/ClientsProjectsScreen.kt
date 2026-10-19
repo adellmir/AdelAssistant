@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -91,7 +93,7 @@ fun ClientsProjectsScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (tab == 0) {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     value = searchProject,
                     onValueChange = { searchProject = it },
                     label = { Text("جستجوی پروژه") },
@@ -99,7 +101,7 @@ fun ClientsProjectsScreen(
                     modifier = Modifier.weight(1f)
                 )
             } else {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     value = searchEmployer,
                     onValueChange = { searchEmployer = it },
                     label = { Text("جستجوی کارفرما") },
@@ -314,14 +316,14 @@ fun ClientsProjectsScreen(
             title = { Text("ویرایش کارفرما") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = editEmpName,
                         onValueChange = { editEmpName = it },
                         label = { Text("نام کارفرما") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = editEmpPhone,
                         onValueChange = { editEmpPhone = it },
                         label = { Text("شماره تماس") },

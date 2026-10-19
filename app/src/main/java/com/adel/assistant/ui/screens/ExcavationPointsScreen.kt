@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -231,7 +233,7 @@ private fun DateField(
     onChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    OutlinedTextField(
+    AdelOutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label, fontSize = 11.sp) },

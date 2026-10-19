@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -104,15 +106,15 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 nameInput, { nameInput = it }, label = { Text("نام") },
                 modifier = Modifier.weight(.8f), singleLine = true
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 xInput, { xInput = it }, label = { Text("X") },
                 modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 yInput, { yInput = it }, label = { Text("Y") },
                 modifier = Modifier.weight(1.2f), singleLine = true, keyboardOptions = numKb
             )
@@ -135,7 +137,7 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
+        AdelOutlinedTextField(
             value = bulkInput,
             onValueChange = { bulkInput = it },
             label = { Text("ورود چند نقطه‌ای") },
@@ -266,20 +268,20 @@ fun AreaScreen(color: Color, onBack: () -> Unit) {
                             var y by remember(point.key) { mutableStateOf(point.y.toString()) }
                             Spacer(Modifier.height(4.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                OutlinedTextField(
+                                AdelOutlinedTextField(
                                     name, { name = it },
                                     label = { Text("نام") },
                                     modifier = Modifier.weight(.8f),
                                     singleLine = true
                                 )
-                                OutlinedTextField(
+                                AdelOutlinedTextField(
                                     x, { x = it },
                                     label = { Text("X") },
                                     modifier = Modifier.weight(1.1f),
                                     singleLine = true,
                                     keyboardOptions = numKb
                                 )
-                                OutlinedTextField(
+                                AdelOutlinedTextField(
                                     y, { y = it },
                                     label = { Text("Y") },
                                     modifier = Modifier.weight(1.1f),

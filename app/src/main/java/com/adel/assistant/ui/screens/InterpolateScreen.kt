@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -101,21 +103,21 @@ fun InterpolateScreen(color: Color, onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text("نقطه اول (X, Y, Z)", style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(x1, { x1 = it }, label = { Text("X1") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedTextField(y1, { y1 = it }, label = { Text("Y1") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedTextField(z1, { z1 = it }, label = { Text("Z1") }, singleLine = true, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(x1, { x1 = it }, label = { Text("X1") }, singleLine = true, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(y1, { y1 = it }, label = { Text("Y1") }, singleLine = true, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(z1, { z1 = it }, label = { Text("Z1") }, singleLine = true, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(8.dp))
         Text("نقطه دوم (X, Y, Z)", style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(x2, { x2 = it }, label = { Text("X2") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedTextField(y2, { y2 = it }, label = { Text("Y2") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedTextField(z2, { z2 = it }, label = { Text("Z2") }, singleLine = true, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(x2, { x2 = it }, label = { Text("X2") }, singleLine = true, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(y2, { y2 = it }, label = { Text("Y2") }, singleLine = true, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(z2, { z2 = it }, label = { Text("Z2") }, singleLine = true, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(atDistance, { atDistance = it }, label = { Text("فاصله نقطه مجهول از نقطه اول (متر)") }, supportingText = { Text("برای درون‌یابی یک نقطه بین دو نقطه") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        AdelOutlinedTextField(atDistance, { atDistance = it }, label = { Text("فاصله نقطه مجهول از نقطه اول (متر)") }, supportingText = { Text("برای درون‌یابی یک نقطه بین دو نقطه") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(interval, { interval = it }, label = { Text("تقسیم مسیر با فاصله مساوی (متر) - اختیاری") }, supportingText = { Text("مثلاً 10 برای ساخت نقاط میانی هر 10 متر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        AdelOutlinedTextField(interval, { interval = it }, label = { Text("تقسیم مسیر با فاصله مساوی (متر) - اختیاری") }, supportingText = { Text("مثلاً 10 برای ساخت نقاط میانی هر 10 متر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(12.dp))
         Button(onClick = { calculate() }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) { Text("محاسبه و درون‌یابی") }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp)) }

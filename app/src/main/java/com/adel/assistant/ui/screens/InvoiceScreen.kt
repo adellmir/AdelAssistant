@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -183,12 +185,12 @@ fun InvoiceScreen(
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             searchEmployer, { searchEmployer = it },
                             label = { Text("جستجو کارفرما") },
                             modifier = Modifier.weight(1f), singleLine = true
                         )
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             searchName, { searchName = it },
                             label = { Text("جستجو پروژه") },
                             modifier = Modifier.weight(1f), singleLine = true
@@ -232,7 +234,7 @@ fun InvoiceScreen(
             // فرم دستی / ویرایش فقط در mode 0 (بعد از انتخاب پروژه یا از اول دستی)
             if (mode == 0) {
             item {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     employer, { employer = it },
                     label = { Text("نام کارفرما") },
                     supportingText = { Text("در فاکتور: کارفرمای محترم …") },
@@ -240,7 +242,7 @@ fun InvoiceScreen(
                 )
             }
             item {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     letterNo, { letterNo = it },
                     label = { Text("شماره نامه") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true
@@ -253,13 +255,13 @@ fun InvoiceScreen(
             itemsIndexed(lines) { index, line ->
                 Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             line.service,
                             { v -> lines = lines.toMutableList().also { it[index] = line.copy(service = v) } },
                             label = { Text("شرح خدمات") },
                             modifier = Modifier.fillMaxWidth()
                         )
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             line.amount,
                             { v -> lines = lines.toMutableList().also { it[index] = line.copy(amount = v) } },
                             label = { Text("مبلغ") },
@@ -267,7 +269,7 @@ fun InvoiceScreen(
                             singleLine = true,
                             keyboardOptions = numKb
                         )
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             line.note,
                             { v -> lines = lines.toMutableList().also { it[index] = line.copy(note = v) } },
                             label = { Text("توضیحات") },
@@ -297,7 +299,7 @@ fun InvoiceScreen(
             }
 
             item {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     received, { received = it },
                     label = { Text("دریافتی قبلی") },
                     modifier = Modifier.fillMaxWidth(),
@@ -315,11 +317,11 @@ fun InvoiceScreen(
                 }
             }
             item {
-                OutlinedTextField(cardNo, { cardNo = it }, label = { Text("شماره کارت") },
+                AdelOutlinedTextField(cardNo, { cardNo = it }, label = { Text("شماره کارت") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb)
             }
             item {
-                OutlinedTextField(iban, { iban = it }, label = { Text("شماره شبا") },
+                AdelOutlinedTextField(iban, { iban = it }, label = { Text("شماره شبا") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
             }
 

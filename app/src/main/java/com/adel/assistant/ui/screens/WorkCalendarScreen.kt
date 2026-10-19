@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -177,7 +179,7 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                         }
                         if (editingRow == p.row) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = editDescription, onValueChange = { editDescription = it },
                                 label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth()
                             )

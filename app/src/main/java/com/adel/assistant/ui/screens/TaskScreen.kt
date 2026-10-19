@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -110,7 +112,7 @@ fun TaskScreen(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = newTask,
                 onValueChange = { newTask = it },
                 modifier = Modifier.weight(1f),
@@ -208,7 +210,7 @@ fun TaskScreen(
             onDismissRequest = { editingIndex = null },
             title = { Text("ویرایش تسک") },
             text = {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     value = editText,
                     onValueChange = { editText = it },
                     label = { Text("متن تسک") },

@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
@@ -249,34 +251,34 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = pointNo, onValueChange = { pointNo = filterNumericInput(it) }, label = { Text("شماره نقطه") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = km, onValueChange = { km = filterNumericInput(it) }, label = { Text("کیلومتراژ") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = x, onValueChange = { x = filterNumericInput(it) }, label = { Text("X") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = y, onValueChange = { y = filterNumericInput(it) }, label = { Text("Y") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            AdelOutlinedTextField(
                 value = z, onValueChange = { z = filterNumericInput(it) }, label = { Text("Z") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = elevDiff, onValueChange = { elevDiff = it }, label = { Text("اختلاف‌تراز") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = slope, onValueChange = { slope = it }, label = { Text("شیب") }, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(value = elevDiff, onValueChange = { elevDiff = it }, label = { Text("اختلاف‌تراز") }, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(value = slope, onValueChange = { slope = it }, label = { Text("شیب") }, modifier = Modifier.weight(1f))
         }
-        OutlinedTextField(
+        AdelOutlinedTextField(
             value = description, onValueChange = { description = it },
             label = { Text("توضیحات (نوع نقطه)") }, modifier = Modifier.fillMaxWidth()
         )

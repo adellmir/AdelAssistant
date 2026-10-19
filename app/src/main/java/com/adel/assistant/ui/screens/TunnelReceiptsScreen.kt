@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -125,16 +127,16 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("روز") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
+            AdelOutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f),
                 keyboardOptions = numKb)
-            OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
+            AdelOutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("سال") }, modifier = Modifier.weight(1.2f),
                 keyboardOptions = numKb)
         }
-        OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ دریافتی") }, modifier = Modifier.fillMaxWidth(),
+        AdelOutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("مبلغ دریافتی") }, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = numKb)
-        OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
+        AdelOutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth())
 
         Spacer(Modifier.height(8.dp))
         Button(onClick = { save() }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) {

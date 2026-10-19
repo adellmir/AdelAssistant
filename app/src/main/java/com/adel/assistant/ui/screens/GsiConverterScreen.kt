@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -325,7 +327,7 @@ fun GsiConverterScreen(color: Color, onBack: () -> Unit) {
             onDismissRequest = { showExportNameDialog = false },
             title = { Text("نام فایل خروجی") },
             text = {
-                OutlinedTextField(
+                AdelOutlinedTextField(
                     exportBaseName,
                     { exportBaseName = it },
                     label = { Text("نام بدون پسوند") },

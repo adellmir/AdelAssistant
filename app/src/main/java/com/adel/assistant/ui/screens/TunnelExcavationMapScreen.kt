@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -1219,14 +1221,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(draftX, { draftX = filterNumericInput(it) }, label = { Text("X") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(draftY, { draftY = filterNumericInput(it) }, label = { Text("Y") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                        AdelOutlinedTextField(draftX, { draftX = filterNumericInput(it) }, label = { Text("X") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                        AdelOutlinedTextField(draftY, { draftY = filterNumericInput(it) }, label = { Text("Y") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(draftZ, { draftZ = filterNumericInput(it) }, label = { Text("اختلاف تراز") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(draftKm, { draftKm = filterNumericInput(it) }, label = { Text("کیلومتراژ") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                        AdelOutlinedTextField(draftZ, { draftZ = filterNumericInput(it) }, label = { Text("اختلاف تراز") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
+                        AdelOutlinedTextField(draftKm, { draftKm = filterNumericInput(it) }, label = { Text("کیلومتراژ") }, keyboardOptions = numKb, singleLine = true, modifier = Modifier.weight(1f))
                     }
-                    OutlinedTextField(draftD, { draftD = it }, label = { Text("مشخصات نقطه (دستی)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    AdelOutlinedTextField(draftD, { draftD = it }, label = { Text("مشخصات نقطه (دستی)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     TextButton(onClick = {
                         val x = draftX.toDoubleOrNullFa() ?: return@TextButton
                         val y = draftY.toDoubleOrNullFa() ?: return@TextButton
@@ -1510,8 +1512,8 @@ private fun TunnelBenchmarkImportDialog(
                     TextButton(onClick = { applySelection("none") }) { Text("هیچ") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(rangeFrom, { rangeFrom = it }, label = { Text("از") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(rangeTo, { rangeTo = it }, label = { Text("تا") }, modifier = Modifier.weight(1f), singleLine = true)
+                    AdelOutlinedTextField(rangeFrom, { rangeFrom = it }, label = { Text("از") }, modifier = Modifier.weight(1f), singleLine = true)
+                    AdelOutlinedTextField(rangeTo, { rangeTo = it }, label = { Text("تا") }, modifier = Modifier.weight(1f), singleLine = true)
                     TextButton(onClick = { applySelection("range") }) { Text("بازه") }
                 }
                 if (message.isNotBlank()) {
@@ -1538,7 +1540,7 @@ private fun TunnelBenchmarkImportDialog(
                                 },
                                 modifier = Modifier.size(32.dp)
                             )
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = pt.name,
                                 onValueChange = { v ->
                                     rows = rows.toMutableList().also {
@@ -1549,7 +1551,7 @@ private fun TunnelBenchmarkImportDialog(
                                 singleLine = true,
                                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
                             )
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = String.format(java.util.Locale.US, "%.3f", pt.x),
                                 onValueChange = { v ->
                                     val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
@@ -1561,7 +1563,7 @@ private fun TunnelBenchmarkImportDialog(
                                 singleLine = true,
                                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
                             )
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = String.format(java.util.Locale.US, "%.3f", pt.y),
                                 onValueChange = { v ->
                                     val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField
@@ -1573,7 +1575,7 @@ private fun TunnelBenchmarkImportDialog(
                                 singleLine = true,
                                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
                             )
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = String.format(java.util.Locale.US, "%.3f", pt.z),
                                 onValueChange = { v ->
                                     val d = v.toDoubleOrNullFa() ?: return@OutlinedTextField

@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -277,7 +279,7 @@ fun Map2PointsDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             value = textSize,
                             onValueChange = { textSize = it },
                             label = { Text("سایز", fontSize = 10.sp) },
@@ -373,7 +375,7 @@ fun Map2PointsDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        OutlinedTextField(
+                        AdelOutlinedTextField(
                             value = lineTextSize,
                             onValueChange = { lineTextSize = it },
                             label = { Text("سایز متن نقطه", fontSize = 10.sp) },
@@ -415,7 +417,7 @@ fun Map2PointsDialog(
                                             fontSize = 13.sp,
                                             maxLines = 2
                                         )
-                                        OutlinedTextField(
+                                        AdelOutlinedTextField(
                                             value = s.layerName.ifBlank { code },
                                             onValueChange = { v ->
                                                 codeSettings = codeSettings + (code to s.copy(layerName = v))
@@ -610,7 +612,7 @@ fun Map2PointsDialog(
                             }
                         }
                     }
-                    OutlinedTextField(
+                    AdelOutlinedTextField(
                         value = draftSymbolSize,
                         onValueChange = { draftSymbolSize = it },
                         label = { Text("سایز نماد (قطر/ضلع)") },

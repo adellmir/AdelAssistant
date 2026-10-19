@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -237,10 +239,10 @@ private fun AlignCoordinateTab(color: Color) {
             title = { Text("ویرایش نقطه") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(eName, { eName = it }, label = { Text("نام") }, singleLine = true)
-                    OutlinedTextField(eE, { eE = it }, label = { Text("E (X)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    OutlinedTextField(eN, { eN = it }, label = { Text("N (Y)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    OutlinedTextField(eZ, { eZ = it }, label = { Text("Z") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    AdelOutlinedTextField(eName, { eName = it }, label = { Text("نام") }, singleLine = true)
+                    AdelOutlinedTextField(eE, { eE = it }, label = { Text("E (X)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    AdelOutlinedTextField(eN, { eN = it }, label = { Text("N (Y)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    AdelOutlinedTextField(eZ, { eZ = it }, label = { Text("Z") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 }
             },
             confirmButton = {
@@ -275,7 +277,7 @@ private fun AlignCoordinateTab(color: Color) {
             title = { Text("ذخیره خروجی الاین") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(saveName, { saveName = it }, label = { Text("نام فایل") }, singleLine = true)
+                    AdelOutlinedTextField(saveName, { saveName = it }, label = { Text("نام فایل") }, singleLine = true)
                     Text("فرمت را انتخاب کن:", fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("txt", "dat", "dxf", "gsi").forEach { kind ->

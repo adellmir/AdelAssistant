@@ -1,5 +1,7 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.ui.components.AdelOutlinedTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,8 +44,8 @@ fun ProjectEventsScreen(color: Color, onBack: () -> Unit) {
         ScreenTopBar(title = "ثبت وقایع پروژه", color = color, onBack = onBack)
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("نام پروژه") }, modifier = Modifier.weight(1f))
+            AdelOutlinedTextField(value = employer, onValueChange = { employer = it }, label = { Text("کارفرما") }, modifier = Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = { search() }, colors = ButtonDefaults.buttonColors(containerColor = color), modifier = Modifier.fillMaxWidth()) {
@@ -73,7 +75,7 @@ fun ProjectEventsScreen(color: Color, onBack: () -> Unit) {
                         }
                         if (editingRow == p.row) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedTextField(
+                            AdelOutlinedTextField(
                                 value = editText, onValueChange = { editText = it },
                                 label = { Text("متن واقعه") }, modifier = Modifier.fillMaxWidth()
                             )
