@@ -22,7 +22,6 @@ import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.ExcavationPointsScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
 import com.adel.assistant.ui.screens.DxfPreviewScreen
-import com.adel.assistant.ui.screens.Map2Screen
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
 import com.adel.assistant.ui.screens.InterpolateScreen
@@ -43,6 +42,7 @@ import com.adel.assistant.ui.screens.TunnelReceiptsScreen
 import com.adel.assistant.ui.screens.TunnelStatusScreen
 import com.adel.assistant.ui.screens.TunnelWorklogScreen
 import com.adel.assistant.ui.screens.VolumeScreen
+import com.adel.assistant.ui.screens.Map2Screen
 import com.adel.assistant.ui.screens.TopographyScreen
 import com.adel.assistant.ui.screens.ProfileScreen
 import com.adel.assistant.ui.screens.WorkCalendarScreen
@@ -138,7 +138,15 @@ fun AppNavigation() {
             )
         }
                 composable(Routes.SURVEY_PROJECT_CLIENTS) {
-            ClientsProjectsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+            ClientsProjectsScreen(
+                color = WorkPrimary,
+                onBack = { navController.popBackStack() },
+                onEditProject = { navController.navigate(Routes.SURVEY_PROJECT_REGISTER) },
+                onInvoice = { list ->
+                    InvoiceLaunch.preselected = list
+                    navController.navigate(Routes.FIN_PROJECT_INVOICE)
+                }
+            )
         }
 composable(Routes.SURVEY_PROJECT_EVENTS) {
             ProjectEventsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
@@ -204,7 +212,6 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         composable(Routes.TOOL_ALIGN) {
             AlignScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
-
         composable(Routes.TOOL_MAP2) {
             Map2Screen(
                 color = ToolPrimary,
@@ -217,7 +224,6 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
                 onOpenDxf = { navController.navigate(Routes.TOOL_DXF) }
             )
         }
-
         composable(Routes.TOOL_DXF) {
             DxfConverterScreen(onBack = { navController.popBackStack() }, onOpenTopography = { navController.navigate(Routes.TOOL_TOPOGRAPHY) })
         }

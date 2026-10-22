@@ -1296,6 +1296,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         val neshan = try { UtmGeo.neshanIntentUri(lat, lon) } catch (_: Throwable) {
             formatEn("https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
         }
+        val ctxInfo = remember(p.km, p.pointNo) { TunnelReportStore.kmContext(context, p.km) }
+        val nearestEv = remember(p.x, p.y, tunnelPts) {
+            tunnelPts.filter { it.type.isNotBlank() && it.pointNo != p.pointNo }
+                .minByOrNull { kotlin.math.hypot(it.x - p.x, it.y - p.y) }
+        }
         AlertDialog(
             onDismissRequest = { infoTunnelPt = null },
             title = { Text("نقطه ${p.pointNo}") },
@@ -1319,6 +1324,43 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         Column(Modifier.padding(10.dp)) {
                             Text(coordTxt, fontSize = 13.sp, color = Color.White)
                             Text("فاصله لمس ≤ ۵۰ cm", fontSize = 10.sp, color = Color(0xFF7C8A6B))
+                        }
+                    }
+                    // فواصل: شفت طرفین، سینه کار، اتفاق
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF22262A),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("فواصل", color = color, fontSize = 12.sp)
+                            val prevS = ctxInfo.prevShaft
+                            val nextS = ctxInfo.nextShaft
+                            Text(
+                                "شفت قبل: " + (prevS?.let { "${it.label} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—"),
+                                fontSize = 12.sp, color = Color(0xFFB0BEC5)
+                            )
+                            Text(
+                                "شفت بعد: " + (nextS?.let { "${it.label} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—"),
+                                fontSize = 12.sp, color = Color(0xFFB0BEC5)
+                            )
+                            val face = ctxInfo.prevReport ?: ctxInfo.nextReport
+                            Text(
+                                "سینه کار حفاری: " + (face?.let { "${it.extra.ifBlank { it.pointNo }} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—"),
+                                fontSize = 12.sp, color = Color(0xFFB0BEC5)
+                            )
+                            val coded = ctxInfo.prevCoded ?: ctxInfo.nextCoded
+                            Text(
+                                "نزدیک‌ترین اتفاق (کیلومتر): " + (coded?.let { "«${it.extra.ifBlank { it.label }}» ${it.pointNo} (${formatEn("%.1f", it.distanceM)} m)" } ?: "—"),
+                                fontSize = 12.sp, color = Color(0xFFB0BEC5)
+                            )
+                            nearestEv?.let { ev ->
+                                val dxy = kotlin.math.hypot(ev.x - p.x, ev.y - p.y)
+                                Text(
+                                    "نزدیک‌ترین اتفاق (مختصات): «${ev.type}» ${ev.pointNo} (${formatEn("%.2f", dxy)} m)",
+                                    fontSize = 12.sp, color = Color(0xFFCE93D8)
+                                )
+                            }
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

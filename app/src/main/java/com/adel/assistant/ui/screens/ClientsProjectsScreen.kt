@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +46,8 @@ private fun moneyM(v: Double): String {
 fun ClientsProjectsScreen(
     color: Color,
     onBack: () -> Unit,
-    onEditProject: (() -> Unit)? = null
+    onEditProject: (() -> Unit)? = null,
+    onInvoice: ((List<ProjectEntry>) -> Unit)? = null
 ) {
     val context = LocalContext.current
     var searchProject by remember { mutableStateOf("") }
@@ -191,6 +193,18 @@ fun ClientsProjectsScreen(
                                     Icon(Icons.Filled.NearMe, "مسیریاب", tint = color)
                                 }
                                 IconButton(
+                                    onClick = {
+                                        val sessions = ProjectStore.all(context)
+                                            .filter { it.name.trim() == p.name.trim() }
+                                            .sortedByDescending { it.dateSortKey }
+                                        if (sessions.isEmpty()) return@IconButton
+                                        onInvoice?.invoke(sessions)
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Filled.ReceiptLong, "صدور فاکتور", tint = color)
+                                }
+                                IconButton(
                                     onClick = { manageProject = p },
                                     modifier = Modifier.size(32.dp)
                                 ) {
@@ -248,6 +262,12 @@ fun ClientsProjectsScreen(
                             OutlinedButton(onClick = { ProjectLocation.openNavigation(context, locSample) }) {
                                 Text("مسیریاب")
                             }
+                        }
+                        if (onInvoice != null) {
+                            OutlinedButton(onClick = {
+                                onInvoice.invoke(sessions)
+                                manageProject = null
+                            }) { Text("صدور فاکتور") }
                         }
                     }
                     Divider()
