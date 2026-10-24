@@ -133,6 +133,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showEvents by remember { mutableStateOf(TunnelLayerPrefs.showEvents(context)) }
     var infoTunnelPt by remember { mutableStateOf<TunnelReportStore.TunnelPoint?>(null) }
     var crosshairMode by remember { mutableStateOf(false) }
+    var showGotoDialog by remember { mutableStateOf(false) }
+    var gotoLine by remember { mutableStateOf("") }
+    var gotoZone by remember { mutableStateOf("40") }
+    var gotoMarker by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var crosshairEditOverlayId by remember { mutableStateOf<String?>(null) }
     var crosshairDimId by remember { mutableStateOf<String?>(null) }
     var layerColors by remember { mutableStateOf(TunnelLayerPrefs.loadColors(context)) }
