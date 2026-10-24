@@ -157,6 +157,9 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
                 onBack = { navController.popBackStack() },
                 onAddProject = { d, m, y ->
                     navController.navigate("${Routes.SURVEY_PROJECT_REGISTER}/$d/$m/$y")
+                },
+                onEditProject = {
+                    navController.navigate(Routes.SURVEY_PROJECT_REGISTER)
                 }
             )
         }

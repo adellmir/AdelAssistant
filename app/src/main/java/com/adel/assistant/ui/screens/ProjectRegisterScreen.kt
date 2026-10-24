@@ -138,9 +138,25 @@ fun ProjectRegisterScreen(
     fun doRegister() {
         val amt = amount.toDoubleOrNullFa() ?: 0.0
         val rowId = editingRow ?: ProjectStore.nextRowId(context)
-        val existingSettled = editingRow?.let { id ->
-            ProjectStore.all(context).firstOrNull { it.row == id }?.settled
-        } ?: 0.0
+        val existing = editingRow?.let { id ->
+            ProjectStore.all(context).firstOrNull { it.row == id }
+        }
+        val existingSettled = existing?.settled ?: 0.0
+        // اگر ویرایش است و تاریخ عوض شده، رویداد قدیمی تقویم پاک شود
+        if (existing != null && addToCalendar) {
+            try {
+                val oy = existing.year.toIntOrNull() ?: today.first
+                val om = existing.month.toIntOrNull() ?: today.second
+                val od = existing.day.toIntOrNull() ?: today.third
+                CalendarHelper.deleteEventByTitleAndDay(
+                    context,
+                    title = "پروژه: ${existing.name}",
+                    yearJalali = oy,
+                    monthJalali = om,
+                    dayJalali = od
+                )
+            } catch (_: Exception) { }
+        }
         val entry = ProjectEntry(
             row = rowId,
             day = day,

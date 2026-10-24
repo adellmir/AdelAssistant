@@ -32,7 +32,9 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.data.formatEn
+import com.adel.assistant.ui.PendingProjectEdit
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.data.CalendarHelper
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
@@ -44,7 +46,12 @@ private val PERSIAN_MONTHS = listOf(
 )
 
 @Composable
-fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: Int, month: Int, year: Int) -> Unit)? = null) {
+fun WorkCalendarScreen(
+    color: Color,
+    onBack: () -> Unit,
+    onAddProject: ((day: Int, month: Int, year: Int) -> Unit)? = null,
+    onEditProject: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val today = remember { CalendarStore.todayJalali() }
@@ -52,8 +59,6 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
     var month by remember { mutableStateOf(today.second) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
     var dayProjects by remember { mutableStateOf(listOf<ProjectEntry>()) }
-    var editingRow by remember { mutableStateOf<String?>(null) }
-    var editDescription by remember { mutableStateOf("") }
     var statusMsg by remember { mutableStateOf("") }
 
     val markedDays = remember(year, month) { ProjectStore.daysWithProjectsIn(context, month.toString(), year.toString()) }
@@ -160,9 +165,9 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(dayProjects) { p ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Column(Modifier = Modifier.padding(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(Modifier = Modifier.weight(1f)) {
                                 Text(
                                     "${p.name} — ${p.employer}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -171,32 +176,50 @@ fun WorkCalendarScreen(color: Color, onBack: () -> Unit, onAddProject: ((day: In
                                         if (p.hasLocation) ProjectLocation.openNavigation(context, p)
                                     }
                                 )
-                                Text(formatEn("مبلغ: %.0f", p.amount), style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B))
+                                Text(
+                                    formatEn("مبلغ: %.0f  |  %s:%s", p.amount, p.hour.ifBlank { "9" }, p.minute.padStart(2, '0')),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF7C8A6B)
+                                )
+                                if (p.description.isNotBlank()) {
+                                    Text(
+                                        p.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF9E9E9E)
+                                    )
+                                }
                             }
-                            IconButton(onClick = { editingRow = p.row; editDescription = p.description }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش", tint = color)
+                            IconButton(onClick = {
+                                PendingProjectEdit.rowId = p.row
+                                if (onEditProject != null) onEditProject.invoke()
+                                else statusMsg = "مسیر ویرایش در دسترس نیست"
+                            }) {
+                                Icon(Icons.Outlined.Edit, contentDescription = "ویرایش کامل", tint = color)
                             }
-                        }
-                        if (editingRow == p.row) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            AdelOutlinedTextField(
-                                value = editDescription, onValueChange = { editDescription = it },
-                                label = { Text("توضیحات") }, modifier = Modifier.fillMaxWidth()
-                            )
-                            Button(
-                                onClick = {
-                                    ProjectStore.save(context, p.copy(description = editDescription))
-                                    editingRow = null
-                                    statusMsg = "ثبت شد"
-                                    selectDay(selectedDay!!)
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = color),
-                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                            ) { Text("ثبت") }
+                            IconButton(onClick = {
+                                val y = p.year.toIntOrNull() ?: year
+                                val m = p.month.toIntOrNull() ?: month
+                                val d = p.day.toIntOrNull() ?: (selectedDay ?: 1)
+                                try {
+                                    CalendarHelper.deleteEventByTitleAndDay(
+                                        context,
+                                        title = "پروژه: ${p.name}",
+                                        yearJalali = y,
+                                        monthJalali = m,
+                                        dayJalali = d
+                                    )
+                                } catch (_: Exception) { }
+                                ProjectStore.delete(context, p.row)
+                                statusMsg = "پروژه حذف شد"
+                                selectedDay?.let { selectDay(it) }
+                            }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = Color(0xFFCF6679))
+                            }
                         }
                     }
                 }
             }
+
         }
     }
 }
