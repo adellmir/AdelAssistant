@@ -59,6 +59,7 @@ import androidx.core.content.ContextCompat
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.ExportHub
+import com.adel.assistant.data.CoordGoto
 import com.adel.assistant.data.MapOverlayPoint
 import com.adel.assistant.data.MapOverlayStore
 import com.adel.assistant.data.ReportEntry
@@ -586,6 +587,18 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                                 }
                                 Text("نقطه", color = if (crosshairMode) color else Color.White, fontSize = 9.sp)
                             }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(
+                                    onClick = {
+                                        showGotoDialog = true
+                                        menuOpen = false
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Search, "برو به", tint = Color.White, modifier = Modifier.size(22.dp))
+                                }
+                                Text("برو به", color = Color.White, fontSize = 9.sp)
+                            }
                             IconButton(onClick = { editMode = !editMode }, modifier = Modifier.size(40.dp)) {
                                 Icon(if (editMode) Icons.Outlined.Close else Icons.Outlined.Edit, null, tint = if (editMode) color else Color.White, modifier = Modifier.size(22.dp))
                             }
@@ -969,6 +982,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                 }
+                // مارکر برو به
+                gotoMarker?.let { (ex, ny) ->
+                    val s = worldToScreen(ex, ny)
+                    drawCircle(Color(0xFFE53935), 16f, s)
+                    drawCircle(Color.White, 7f, s)
+                    drawCircle(Color(0xFFE53935), 3.5f, s)
+                    drawLine(Color(0xFFE53935), Offset(s.x, s.y - 28f), Offset(s.x, s.y - 12f), 3f)
+                }
             }
             // —— تارگت مرکزی + نوار ثبت (بالای Canvas نقشه تا قابل‌دیدن و قابل‌لمس باشد) ——
             if (crosshairMode) {
@@ -1289,6 +1310,63 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("انصراف") } }
         )
     }
+
+    if (showGotoDialog) {
+        val numKb = androidx.compose.foundation.text.KeyboardOptions(
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+        )
+        AlertDialog(
+            onDismissRequest = { showGotoDialog = false },
+            title = { Text("برو به مختصات") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AdelOutlinedTextField(
+                        gotoLine,
+                        { gotoLine = it },
+                        label = { Text("E N یا Lat Lon (فاصله/ویرگول)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    AdelOutlinedTextField(
+                        gotoZone,
+                        { gotoZone = it },
+                        label = { Text("زون UTM") },
+                        singleLine = true,
+                        keyboardOptions = numKb,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("UTM: رقم صحیح ≥۴  |  جغرافیایی: رقم صحیح ≤۳", fontSize = 11.sp, color = Color(0xFF9E9E9E))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val pr = CoordGoto.parse(gotoLine)
+                    if (pr == null) {
+                        status = "مختصات نامعتبر"
+                        return@TextButton
+                    }
+                    val z = gotoZone.toIntOrNull() ?: zone
+                    val (e, n, zz) = CoordGoto.toUtm(pr, z)
+                    gotoMarker = e to n
+                    // مرکز و زوم روی نقطه
+                    if (canvasSize.x > 0f) {
+                        val targetScale = (scale * 1.2f).coerceIn(0.01f, 5000f)
+                        scale = targetScale
+                        offset = Offset(
+                            canvasSize.x / 2f - (e * scale).toFloat(),
+                            canvasSize.y / 2f + (n * scale).toFloat()
+                        )
+                    }
+                    showGotoDialog = false
+                    status = formatEn("برو به E=%.3f N=%.3f", e, n)
+                }) { Text("برو", color = color) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGotoDialog = false; gotoMarker = null }) { Text("بستن") }
+            }
+        )
+    }
+
     infoTunnelPt?.let { p ->
         val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
         val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)

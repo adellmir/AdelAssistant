@@ -244,6 +244,7 @@ fun DxfPreviewScreen(
     var crosshairMode by remember { mutableStateOf(false) }
     var crosshairEditId by remember { mutableStateOf<Int?>(null) }
     var showGotoDialog by remember { mutableStateOf(false) }
+    var gotoMarker by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var gotoLine by remember { mutableStateOf("") }
     var gotoZone by remember { mutableStateOf("40") }
     var gotoSort by remember { mutableStateOf(0) }
@@ -470,6 +471,7 @@ LaunchedEffect(profileMode) {
         PendingMapGoto.consume()?.let { (e, n, z) ->
             zoneText = z.toString()
             centerOnUtm(e, n, 17)
+            gotoMarker = e to n
             message = "برو به: E=${"%.3f".format(java.util.Locale.US, e)} N=${"%.3f".format(java.util.Locale.US, n)}"
         }
     }
@@ -1926,6 +1928,14 @@ if (zoomWindowMode) {
                     drawCircle(Color(0xFF2196F3), 12f, s)
                     drawCircle(Color.White, 5f, s)
                 }
+                // مارکر «برو به»
+                gotoMarker?.let { (ex, ny) ->
+                    val s = worldToScreen(ex, ny)
+                    drawCircle(Color(0xFFE53935), 16f, s)
+                    drawCircle(Color.White, 7f, s)
+                    drawCircle(Color(0xFFE53935), 3.5f, s)
+                    drawLine(Color(0xFFE53935), Offset(s.x, s.y - 28f), Offset(s.x, s.y - 12f), 3f)
+                }
             }
         }
             // —— تارگت مرکزی + نوار ثبت ——
@@ -3368,6 +3378,7 @@ if (showSaveDxfDialog) {
                             ) {
                                 TextButton(onClick = {
                                     centerOnUtm(sp.x, sp.y, 17)
+                                    gotoMarker = sp.x to sp.y
                                     showGotoDialog = false
                                     message = "برو به ${sp.id}"
                                 }, contentPadding = PaddingValues(4.dp)) {
@@ -3393,6 +3404,7 @@ if (showSaveDxfDialog) {
                     val (e, n, zz) = CoordGoto.toUtm(pr, z)
                     zoneText = zz.toString()
                     centerOnUtm(e, n, 17)
+                    gotoMarker = e to n
                     showGotoDialog = false
                     message = "برو به مختصات"
                 }) { Text("برو") }

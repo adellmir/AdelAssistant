@@ -605,7 +605,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             val (e, n, zz) = CoordGoto.toUtm(pr, z)
                             PendingMapGoto.set(e, n, zz)
                             DeepLinkHolder.setRoute(Routes.TOOL_MAP2)
-                            status = "در حال باز کردن نقشه…"
+                            status = formatEn("برو به نقشه — مارکر روی E=%.3f N=%.3f", e, n)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         modifier = Modifier.fillMaxWidth()

@@ -165,9 +165,9 @@ fun WorkCalendarScreen(
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(dayProjects) { p ->
                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier = Modifier.padding(10.dp)) {
+                    Column(modifier = Modifier.padding(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier = Modifier.weight(1f)) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "${p.name} — ${p.employer}",
                                     style = MaterialTheme.typography.bodySmall,
