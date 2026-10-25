@@ -42,6 +42,19 @@ import java.util.zip.ZipOutputStream
 fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     var status by remember { mutableStateOf("") }
+    AppearanceStore.ensureLoaded(context)
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            if (AppearanceStore.saveCustomFromUri(context, uri)) {
+                AppearanceStore.setMode(context, AppearanceMode.Custom)
+                status = "تصویر پس‌زمینه ذخیره شد"
+            } else {
+                status = "خطا در ذخیره تصویر"
+            }
+        }
+    }
 
     fun dataDir(): File {
         val d = File(context.filesDir, "data")

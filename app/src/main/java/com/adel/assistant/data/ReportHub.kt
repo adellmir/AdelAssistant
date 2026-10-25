@@ -3,6 +3,8 @@ package com.adel.assistant.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
+import java.io.File
 
 /**
  * فضای یکپارچهٔ گزارش‌ها:
@@ -46,6 +48,40 @@ object ReportHub {
             context.startActivity(Intent.createChooser(intent, title))
         } catch (_: Exception) {
         }
+    }
+
+    /**
+     * بایت را در cache می‌نویسد و با FileProvider اشتراک می‌گذارد.
+     * برای PDF/XLSX/DXF که از Documents مستقیم share نمی‌شوند.
+     */
+    fun shareBytes(
+        context: Context,
+        fileName: String,
+        bytes: ByteArray,
+        mimeType: String,
+        title: String = "اشتراک گزارش"
+    ) {
+        try {
+            val cache = File(context.cacheDir, fileName)
+            cache.writeBytes(bytes)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                cache
+            )
+            shareUri(context, uri, mimeType, title)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun shareTextFile(
+        context: Context,
+        fileName: String,
+        text: String,
+        mimeType: String,
+        title: String = "اشتراک"
+    ) {
+        shareBytes(context, fileName, text.toByteArray(Charsets.UTF_8), mimeType, title)
     }
 
     fun saveTextReport(

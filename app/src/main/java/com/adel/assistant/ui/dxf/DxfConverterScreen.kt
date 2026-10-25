@@ -29,7 +29,6 @@ import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ExportHub
-import com.adel.assistant.data.ReportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.KmlParser
 import com.adel.assistant.data.PointConverter
@@ -257,10 +256,16 @@ private fun saveAndShare(context: Context, content: String, originalName: String
             content,
             mimeType = "application/dxf"
         )
-        ReportHub.shareTextFile(
-            context, fileName, content, "application/dxf",
-            "اشتراک DXF — ذخیره در Documents/AdelAssistant"
-        )
+        // اشتراک مستقیم از cache
+        val cache = java.io.File(context.cacheDir, fileName)
+        cache.writeText(content, Charsets.UTF_8)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cache)
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "application/dxf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(share, "اشتراک DXF"))
     } catch (e: Exception) {
         e.printStackTrace()
     }
@@ -274,10 +279,15 @@ private fun saveAndShareKml(context: Context, content: String, originalName: Str
             context, fileName, content,
             mimeType = "application/vnd.google-earth.kml+xml"
         )
-        ReportHub.shareTextFile(
-            context, fileName, content, "application/vnd.google-earth.kml+xml",
-            "اشتراک KML"
-        )
+        val cache = java.io.File(context.cacheDir, fileName)
+        cache.writeText(content, Charsets.UTF_8)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cache)
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.google-earth.kml+xml"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(share, "اشتراک KML"))
     } catch (e: Exception) {
         e.printStackTrace()
     }
