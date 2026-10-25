@@ -769,7 +769,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             isPureNumberQ || qLower.contains("ماه") ||
                             Regex("""\d""").containsMatchIn(qLower))
                     ) {
-                        if (none { tab -> tab.id == "more" }) add(SearchTab("more", "سایر", 1))
+                        add(SearchTab("more", "سایر", 1))
                     }
                     if (isEmpty() && filteredItems.isNotEmpty()) {
                         add(SearchTab("apps", "برنامه‌ها", filteredItems.size))
