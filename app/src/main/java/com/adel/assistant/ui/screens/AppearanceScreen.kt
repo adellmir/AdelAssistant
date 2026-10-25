@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,7 +66,7 @@ fun AppearanceScreen(color: androidx.compose.ui.graphics.Color, onBack: () -> Un
         ) {
             Text(
                 "پس‌زمینه و ظاهر کاشی‌ها را انتخاب کنید. روی برنامه‌های نقشه اعمال نمی‌شود.",
-                color = TextSecondary,
+                color = appearanceTextSecondary(),
                 fontSize = 13.sp
             )
             Surface(
@@ -93,7 +95,7 @@ fun AppearanceScreen(color: androidx.compose.ui.graphics.Color, onBack: () -> Un
                             )
                             Text(
                                 label,
-                                color = TextPrimary,
+                                color = appearanceTextPrimary(),
                                 fontWeight = if (mode == m) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 14.sp,
                                 modifier = Modifier.padding(start = 4.dp)
@@ -114,11 +116,11 @@ fun AppearanceScreen(color: androidx.compose.ui.graphics.Color, onBack: () -> Un
             }
             Text(
                 "پس از انتخاب، به صفحه اصلی برگردید تا پس‌زمینه را ببینید.",
-                color = TextSecondary,
+                color = appearanceTextSecondary(),
                 fontSize = 12.sp
             )
             if (status.isNotBlank()) {
-                Text(status, color = TextPrimary, fontSize = 13.sp)
+                Text(status, color = appearanceTextPrimary(), fontSize = 13.sp)
             }
         }
     }

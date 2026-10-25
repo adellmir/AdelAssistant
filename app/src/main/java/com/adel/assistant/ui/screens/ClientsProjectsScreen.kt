@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -127,7 +129,7 @@ fun ClientsProjectsScreen(
                     Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(e.employer, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text(e.employer, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                                 IconButton(onClick = { call(e.phone) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Call, "تماس", tint = color)
                                 }
@@ -141,7 +143,7 @@ fun ClientsProjectsScreen(
                             }
                             Text(
                                 "پروژه: ${e.projectCount} | درآمد: ${moneyM(e.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(e.totalReceived)} | مانده: ${moneyM(e.totalClaims)}",
-                                color = TextSecondary, fontSize = 12.sp
+                                color = appearanceTextSecondary(), fontSize = 12.sp
                             )
                             e.sessions.take(8).forEach { s ->
                                 Text(
@@ -159,7 +161,7 @@ fun ClientsProjectsScreen(
                                 )
                             }
                             if (e.sessions.size > 8) {
-                                Text("+ ${e.sessions.size - 8} مورد دیگر", color = TextSecondary, fontSize = 11.sp)
+                                Text("+ ${e.sessions.size - 8} مورد دیگر", color = appearanceTextSecondary(), fontSize = 11.sp)
                             }
                         }
                     }
@@ -174,9 +176,9 @@ fun ClientsProjectsScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(p.name, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
-                                    Text("|", color = TextSecondary, fontSize = 12.sp)
-                                    Text(p.employer, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
+                                    Text(p.name, fontWeight = FontWeight.Bold, color = appearanceTextPrimary(), maxLines = 1)
+                                    Text("|", color = appearanceTextSecondary(), fontSize = 12.sp)
+                                    Text(p.employer, color = appearanceTextSecondary(), fontSize = 12.sp, maxLines = 1)
                                 }
                                 IconButton(onClick = { call(p.phone) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Call, "تماس", tint = color)
@@ -215,7 +217,7 @@ fun ClientsProjectsScreen(
                             }
                             Text(
                                 "جلسات: ${p.sessionCount} | درآمد: ${moneyM(p.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(p.totalReceived)} | مانده: ${moneyM(p.totalClaims)}",
-                                color = TextSecondary, fontSize = 12.sp
+                                color = appearanceTextSecondary(), fontSize = 12.sp
                             )
                             p.sessions.forEach { s ->
                                 SessionSettleRow(s, color) {
@@ -254,7 +256,7 @@ fun ClientsProjectsScreen(
                             if (locSample.neshanLink.isNotBlank()) "آدرس/لینک ثبت شده"
                             else String.format(java.util.Locale.US, "مختصات: %.5f , %.5f", locSample.lat, locSample.lon)
                         } else "موقعیت ثبت نشده",
-                        color = TextSecondary, fontSize = 12.sp
+                        color = appearanceTextSecondary(), fontSize = 12.sp
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { showLocFor = profile.name }) {
@@ -282,7 +284,7 @@ fun ClientsProjectsScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(
                                     "${s.day}/${s.month}/${s.year} ${s.hour}:${s.minute.padStart(2, '0')} — ${moneyM(s.amount)}",
-                                    fontSize = 13.sp, color = TextPrimary
+                                    fontSize = 13.sp, color = appearanceTextPrimary()
                                 )
                                 if (s.hasLocation) {
                                     Text("موقعیت ✓", fontSize = 11.sp, color = color)
@@ -388,7 +390,7 @@ private fun SessionSettleRow(s: ProjectEntry, color: Color, onToggle: () -> Unit
         Text(
             "${s.day}/${s.month}/${s.year} — ${moneyM(s.amount)}" +
                 if (settled) " (تسویه)" else "",
-            color = TextPrimary,
+            color = appearanceTextPrimary(),
             fontSize = 12.sp,
             modifier = Modifier.weight(1f)
         )

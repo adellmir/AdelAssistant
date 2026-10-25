@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -82,7 +84,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
                 Text(
                     "مطالبات آزاد",
                     style = MaterialTheme.typography.titleSmall,
-                    color = TextSecondary
+                    color = appearanceTextSecondary()
                 )
                 Text(
                     formatMoney(summary.remaining),
@@ -93,13 +95,13 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
                 Text(
                     "صورت + حسن آزاد − دریافتی",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = appearanceTextSecondary()
                 )
             }
         }
 
         if (statusMsg.isNotBlank()) {
-            Text(statusMsg, color = TextSecondary, modifier = Modifier.padding(top = 12.dp))
+            Text(statusMsg, color = appearanceTextSecondary(), modifier = Modifier.padding(top = 12.dp))
         }
     }
 }
@@ -107,7 +109,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
 @Composable
 private fun SummaryRow(label: String, value: String) {
     Column {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-        Text(value, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary())
+        Text(value, style = MaterialTheme.typography.titleMedium, color = appearanceTextPrimary(), fontWeight = FontWeight.SemiBold)
     }
 }

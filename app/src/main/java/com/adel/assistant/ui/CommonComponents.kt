@@ -1,4 +1,6 @@
 package com.adel.assistant.ui
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -57,9 +59,9 @@ fun MainSectionCard(
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(title, style = MaterialTheme.typography.titleLarge, color = appearanceTextPrimary(), fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary())
             }
             Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = color)
         }
@@ -98,7 +100,7 @@ fun SubMenuRow(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary())
             }
             Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = Color(0xFFAAAAAA))
         }
@@ -120,7 +122,7 @@ fun ScreenTopBar(title: String, color: Color, onBack: () -> Unit) {
             Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "بازگشت", tint = color)
         }
         Spacer(modifier = Modifier.width(4.dp))
-        Text(title, style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
+        Text(title, style = MaterialTheme.typography.headlineMedium, color = appearanceTextPrimary())
     }
 }
 
@@ -145,7 +147,7 @@ fun PlaceholderScreen(title: String, color: Color, onBack: () -> Unit) {
             Text(
                 "این بخش به‌زودی تکمیل می‌شود",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = appearanceTextSecondary()
             )
         }
     }

@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -143,23 +145,23 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(optExcav, { optExcav = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                Text("حفاری", fontSize = 12.sp, color = TextPrimary)
+                Text("حفاری", fontSize = 12.sp, color = appearanceTextPrimary())
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(optDev, { optDev = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                Text("انحراف", fontSize = 12.sp, color = TextPrimary)
+                Text("انحراف", fontSize = 12.sp, color = appearanceTextPrimary())
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(optFall, { optFall = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                Text("ریزش", fontSize = 12.sp, color = TextPrimary)
+                Text("ریزش", fontSize = 12.sp, color = appearanceTextPrimary())
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(optNotes, { optNotes = it }, colors = CheckboxDefaults.colors(checkedColor = color))
-                Text("توضیحات", fontSize = 12.sp, color = TextPrimary)
+                Text("توضیحات", fontSize = 12.sp, color = appearanceTextPrimary())
             }
         }
 
-        Text("بازهٔ تاریخ (از – تا)", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+        Text("بازهٔ تاریخ (از – تا)", color = appearanceTextSecondary(), style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             DateField("روز از", fromDay, { fromDay = filterNumericInput(it) }, Modifier.weight(1f))
@@ -206,11 +208,11 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         }
         if (selectMode) {
             TextButton(onClick = { selectMode = false; selected = emptySet() }) {
-                Text("لغو گزینش", color = TextSecondary)
+                Text("لغو گزینش", color = appearanceTextSecondary())
             }
         }
 
-        Text(status, color = TextSecondary, style = MaterialTheme.typography.bodySmall,
+        Text(status, color = appearanceTextSecondary(), style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(vertical = 6.dp))
 
         LazyColumn(
@@ -240,18 +242,18 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 e.dateLabel,
-                                color = TextPrimary,
+                                color = appearanceTextPrimary(),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
                             Text(
                                 "X=${"%.3f".format(e.x)}  Y=${"%.3f".format(e.y)}  Z=${"%.3f".format(e.z)}",
-                                color = TextSecondary,
+                                color = appearanceTextSecondary(),
                                 fontSize = 12.sp
                             )
                             Text(
                                 "کیلومتراژ ${"%.3f".format(e.km)}  |  شفت ${e.shaft} سمت ${e.side}",
-                                color = TextSecondary,
+                                color = appearanceTextSecondary(),
                                 fontSize = 12.sp
                             )
                             if (e.collapse.isNotBlank()) {

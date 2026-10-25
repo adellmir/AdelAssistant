@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -394,15 +396,15 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
         if (brand == 1) {
             Text(
                 "راهنما Sanding: ۱) بلوتوث دوربین را Pair کنید  ۲) روی دوربین ارسال/Export فایل را بزنید  ۳) اینجا اتصال و دریافت  ۴) خروجی GSI/TXT/CSV/DXF",
-                color = TextSecondary,
+                color = appearanceTextSecondary(),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 6.dp)
             )
         }
 
-        Text(status, color = TextPrimary, fontSize = 13.sp)
+        Text(status, color = appearanceTextPrimary(), fontSize = 13.sp)
         if (receivedBytes > 0) {
-            Text("حجم: $receivedBytes بایت | نقاط: ${points.size}", color = TextSecondary, fontSize = 11.sp)
+            Text("حجم: $receivedBytes بایت | نقاط: ${points.size}", color = appearanceTextSecondary(), fontSize = 11.sp)
         }
 
         Row(
@@ -435,8 +437,8 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                         .clickable { selected = dev }
                 ) {
                     Column(Modifier.padding(12.dp)) {
-                        Text(name, color = TextPrimary)
-                        Text(dev.address, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        Text(name, color = appearanceTextPrimary())
+                        Text(dev.address, style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary())
                     }
                 }
             }
@@ -449,11 +451,11 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
                     Text(
                         "${p.id} | ${p.code} | E=${"%.3f".format(Locale.US, p.x)} N=${"%.3f".format(Locale.US, p.y)} Z=${"%.3f".format(Locale.US, p.z)}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = appearanceTextSecondary()
                     )
                 }
                 if (points.size > 80) {
-                    item { Text("… و ${points.size - 80} نقطه دیگر", color = TextSecondary) }
+                    item { Text("… و ${points.size - 80} نقطه دیگر", color = appearanceTextSecondary()) }
                 }
             }
         }

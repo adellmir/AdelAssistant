@@ -1,4 +1,5 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,12 +26,12 @@ fun ViaClaudeScreen(title: String, color: Color, description: String, onBack: ()
     ) {
         ScreenTopBar(title = title, color = color, onBack = onBack)
         Spacer(modifier = Modifier.height(24.dp))
-        Text(description, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = appearanceTextSecondary())
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             "برای این کار، فایل موردنظر را در چت با کلود آپلود کن و درخواستت را بگو.",
             style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
+            color = appearanceTextSecondary()
         )
     }
 }

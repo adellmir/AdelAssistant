@@ -6,6 +6,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import com.adel.assistant.data.AppearanceMode
+import com.adel.assistant.data.AppearanceStore
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -42,13 +45,25 @@ private val AppTypography = Typography(
 
 @Composable
 fun AdelAssistantTheme(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    AppearanceStore.ensureLoaded(context)
+    val mode = AppearanceStore.modeState
+    val scheme = when (mode) {
+        AppearanceMode.Topo -> AppColorScheme.copy(
+            onBackground = Color.Black,
+            onSurface = Color.Black,
+            onSurfaceVariant = Color(0xFF333333),
+            onPrimary = Color.Black
+        )
+        else -> AppColorScheme
+    }
     val selection = TextSelectionColors(
         handleColor = WorkPrimary,
         backgroundColor = WorkPrimary.copy(alpha = 0.35f)
     )
     CompositionLocalProvider(LocalTextSelectionColors provides selection) {
         MaterialTheme(
-            colorScheme = AppColorScheme,
+            colorScheme = scheme,
             typography = AppTypography,
             content = content
         )

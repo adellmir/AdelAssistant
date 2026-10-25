@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -466,29 +468,29 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             Text(
                 "دقت GPS گوشی معمولاً ۳–۱۵ متر است. برای کنترل دقیق از دوربین نقشه‌برداری استفاده کنید.",
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
+                color = appearanceTextSecondary(),
                 fontSize = 11.sp
             )
 
             // —— موقعیت زنده ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("موقعیت زنده", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("موقعیت زنده", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                     if (liveLat != null && liveLon != null) {
                         val z = if (autoZone) UtmGeo.zoneFromLon(liveLon!!) else zone()
                         val (e, n) = UtmGeo.fromLatLon(liveLat!!, liveLon!!, z)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(formatEn("Lat %.7f", liveLat!!), color = TextPrimary, fontSize = 12.sp,
+                            Text(formatEn("Lat %.7f", liveLat!!), color = appearanceTextPrimary(), fontSize = 12.sp,
                                 modifier = Modifier.clickable { copyText("Lat", formatEn("%.8f", liveLat!!)) })
-                            Text(formatEn("Lon %.7f", liveLon!!), color = TextPrimary, fontSize = 12.sp,
+                            Text(formatEn("Lon %.7f", liveLon!!), color = appearanceTextPrimary(), fontSize = 12.sp,
                                 modifier = Modifier.clickable { copyText("Lon", formatEn("%.8f", liveLon!!)) })
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(formatEn("E %.3f", e), color = TextSecondary, fontSize = 12.sp,
+                            Text(formatEn("E %.3f", e), color = appearanceTextSecondary(), fontSize = 12.sp,
                                 modifier = Modifier.clickable { copyText("E", formatEn("%.3f", e)) })
-                            Text(formatEn("N %.3f", n), color = TextSecondary, fontSize = 12.sp,
+                            Text(formatEn("N %.3f", n), color = appearanceTextSecondary(), fontSize = 12.sp,
                                 modifier = Modifier.clickable { copyText("N", formatEn("%.3f", n)) })
-                            Text("Z$z", color = TextSecondary, fontSize = 12.sp)
+                            Text("Z$z", color = appearanceTextSecondary(), fontSize = 12.sp)
                         }
                         val accColor = when {
                             liveAcc < 0 -> TextSecondary
@@ -508,7 +510,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                     } else {
                         Text(
                             if (hasPermission) "در انتظار سیگنال GPS…" else "مجوز موقعیت لازم است",
-                            color = TextSecondary,
+                            color = appearanceTextSecondary(),
                             fontSize = 12.sp
                         )
                     }
@@ -518,7 +520,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             // —— ثبت ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("ثبت نقطه", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("ثبت نقطه", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AdelOutlinedTextField(
                             pointName, { pointName = it },
@@ -536,7 +538,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(autoZone, { autoZone = it })
-                            Text("Zone خودکار", fontSize = 12.sp, color = TextSecondary)
+                            Text("Zone خودکار", fontSize = 12.sp, color = appearanceTextSecondary())
                         }
                         AdelOutlinedTextField(
                             zoneText,
@@ -578,7 +580,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             // —— برو به روی نقشه ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("برو به روی نقشه", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("برو به روی نقشه", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                     AdelOutlinedTextField(
                         gotoCoordLine, { gotoCoordLine = it },
                         label = { Text("مختصات (یک خط)") },
@@ -612,18 +614,18 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = color),
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("برو به نقشه") }
-                    Text("تشخیص خودکار: UTM (رقم≥۴) یا جغرافیایی (رقم≤۳)", fontSize = 10.sp, color = TextSecondary)
+                    Text("تشخیص خودکار: UTM (رقم≥۴) یا جغرافیایی (رقم≤۳)", fontSize = 10.sp, color = appearanceTextSecondary())
                 }
             }
 
             // —— تبدیل دستی ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("تبدیل مختصات / ورود دستی", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("تبدیل مختصات / ورود دستی", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = northernHemi, onClick = { northernHemi = true }, label = { Text("شمال N") })
                         FilterChip(selected = !northernHemi, onClick = { northernHemi = false }, label = { Text("جنوب S") })
-                        Text("نیمکره برای UTM→Geo", fontSize = 11.sp, color = TextSecondary)
+                        Text("نیمکره برای UTM→Geo", fontSize = 11.sp, color = appearanceTextSecondary())
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AdelOutlinedTextField(
@@ -648,7 +650,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         ) { Text("افزودن") }
                     }
                     if (fmtPreview.isNotBlank()) {
-                        Text(fmtPreview, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
+                        Text(fmtPreview, fontSize = 12.sp, color = appearanceTextSecondary(), lineHeight = 16.sp)
                         TextButton(onClick = {
                             clipboard.setText(AnnotatedString(fmtPreview))
                             status = "فرمت‌ها کپی شد"
@@ -671,8 +673,8 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             // —— ابزار فاصله / آفست / قطب‌نما ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("فاصله / آزیموت / قطب‌نما", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("دو نقطه را از لیست انتخاب کنید (A سپس B) — یا هدف‌گیری با GPS", fontSize = 11.sp, color = TextSecondary)
+                    Text("فاصله / آزیموت / قطب‌نما", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
+                    Text("دو نقطه را از لیست انتخاب کنید (A سپس B) — یا هدف‌گیری با GPS", fontSize = 11.sp, color = appearanceTextSecondary())
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -693,7 +695,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             Text(
                                 "جهت فعلی: ${formatEn("%.0f", hdg)}°",
                                 fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary,
+                                color = appearanceTextPrimary(),
                                 fontSize = 14.sp
                             )
                             if (targetPt != null && liveLat != null && liveLon != null) {
@@ -707,11 +709,11 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                                 Text("هدف: ${targetPt.name}", color = color, fontSize = 13.sp)
                                 Text(
                                     "فاصله ${formatEn("%.1f", d)} m | آزیموت ${formatEn("%.0f", az)}°",
-                                    fontSize = 12.sp, color = TextSecondary
+                                    fontSize = 12.sp, color = appearanceTextSecondary()
                                 )
                                 Text(turnTxt, fontWeight = FontWeight.Bold, color = color, fontSize = 13.sp)
                             } else {
-                                Text("نقطه A را انتخاب کنید و GPS روشن باشد تا هدف‌گیری فعال شود", fontSize = 11.sp, color = TextSecondary)
+                                Text("نقطه A را انتخاب کنید و GPS روشن باشد تا هدف‌گیری فعال شود", fontSize = 11.sp, color = appearanceTextSecondary())
                             }
                         }
                     }
@@ -719,7 +721,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         Text(distInfo, color = color, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }
                     if (points.size >= 2) {
-                        Text("طول مسیر: ${formatEn("%.3f", pathLen)} m", fontSize = 12.sp, color = TextSecondary)
+                        Text("طول مسیر: ${formatEn("%.3f", pathLen)} m", fontSize = 12.sp, color = appearanceTextSecondary())
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AdelOutlinedTextField(
@@ -742,7 +744,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             modifier = Modifier.align(Alignment.CenterVertically)
                         ) { Text("آفست") }
                     }
-                    Text("مبنا: نقطه A انتخاب‌شده یا GPS زنده", fontSize = 10.sp, color = TextSecondary)
+                    Text("مبنا: نقطه A انتخاب‌شده یا GPS زنده", fontSize = 10.sp, color = appearanceTextSecondary())
                 }
             }
 
@@ -750,7 +752,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             if (points.isNotEmpty()) {
                 Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("نقشهٔ نقاط (${points.size})", fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("نقشهٔ نقاط (${points.size})", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                         Spacer(Modifier.height(6.dp))
                         PointsSketch(points, color, Modifier.fillMaxWidth().height(180.dp))
                     }
@@ -761,7 +763,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("نقاط ثبت‌شده (${points.size})", fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
+                        Text("نقاط ثبت‌شده (${points.size})", fontWeight = FontWeight.Bold, color = appearanceTextPrimary(), modifier = Modifier.weight(1f))
                         if (points.isNotEmpty()) {
                             TextButton(onClick = {
                                 persist(emptyList())
@@ -772,7 +774,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                         }
                     }
                     if (points.isEmpty()) {
-                        Text("هنوز نقطه‌ای ثبت نشده", color = TextSecondary, fontSize = 12.sp)
+                        Text("هنوز نقطه‌ای ثبت نشده", color = appearanceTextSecondary(), fontSize = 12.sp)
                     } else {
                         points.asReversed().forEach { p ->
                             PointRow(
@@ -805,7 +807,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                                     if (selB == p.id) selB = null
                                 }
                             )
-                            HorizontalDivider(color = TextSecondary.copy(alpha = 0.2f))
+                            HorizontalDivider(color = appearanceTextSecondary().copy(alpha = 0.2f))
                         }
                     }
                 }
@@ -814,8 +816,8 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             // —— ژئوئید / ارتفاع ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("ارتفاع ژئوئید (N)", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Z_ortho = Z_ellip − N  |  برای دقت بالا N را از مدل محلی وارد کنید", fontSize = 11.sp, color = TextSecondary)
+                    Text("ارتفاع ژئوئید (N)", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
+                    Text("Z_ortho = Z_ellip − N  |  برای دقت بالا N را از مدل محلی وارد کنید", fontSize = 11.sp, color = appearanceTextSecondary())
                     AdelOutlinedTextField(
                         geoidNText, { geoidNText = it },
                         label = { Text("N (متر)") },
@@ -847,7 +849,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             // —— خروجی ——
             Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("خروجی فایل", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("خروجی فایل", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                     Row(
                         Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -856,7 +858,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             OutlinedButton(onClick = { export(ext) }) { Text(ext.uppercase()) }
                         }
                     }
-                    Text("ذخیره در Documents/AdelAssistant", fontSize = 10.sp, color = TextSecondary)
+                    Text("ذخیره در Documents/AdelAssistant", fontSize = 10.sp, color = appearanceTextSecondary())
                 }
             }
 
@@ -904,19 +906,19 @@ private fun PointRow(
                         if (selectedB) append("  ·B")
                     },
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
+                    color = appearanceTextPrimary(),
                     fontSize = 13.sp
                 )
                 Text(
                     formatEn("E %.3f  N %.3f  Z%d", p.easting, p.northing, p.zone),
-                    color = TextSecondary,
+                    color = appearanceTextSecondary(),
                     fontSize = 11.sp
                 )
                 Text(
                     formatEn("%.7f , %.7f   h=%.1f", p.lat, p.lon, p.alt) +
                         (if (p.accuracy > 0) formatEn("  ±%.1fm", p.accuracy) else "") +
                         (if (timeLabel.isNotBlank()) "  $timeLabel" else ""),
-                    color = TextSecondary,
+                    color = appearanceTextSecondary(),
                     fontSize = 10.sp
                 )
             }

@@ -1,4 +1,9 @@
 package com.adel.assistant.ui.components
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceFieldColors
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
@@ -57,7 +62,7 @@ fun AdelOutlinedTextField(
     minLines: Int = 1,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     shape: Shape = OutlinedTextFieldDefaults.shape,
-    colors: TextFieldColors = OutlinedTextFieldDefaults.colors(),
+    colors: TextFieldColors? = null,
     /** اجبار حالت عددی حتی بدون KeyboardType عددی */
     numeric: Boolean = false
 ) {
@@ -77,25 +82,32 @@ fun AdelOutlinedTextField(
             {
                 Row {
                     trailingIcon?.invoke()
-                    IconButton(
-                        onClick = { onValueChange("") },
-                        modifier = Modifier.size(28.dp)
+                    // فضای ضربدر نصف شد (قبلاً IconButton ۲۸dp + آیکن ۱۶)
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onValueChange("") },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Outlined.Close,
                             contentDescription = "پاک کردن",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                     }
                 }
             }
         } else trailingIcon
 
+    val resolvedColors = colors ?: appearanceFieldColors()
+    val resolvedStyle = if (textStyle == LocalTextStyle.current) {
+        textStyle.copy(color = appearanceTextPrimary())
+    } else textStyle
+
     OutlinedTextField(
         value = value,
         onValueChange = { raw ->
             if (treatNumeric) {
-                // اجازه ارقام فارسی؛ فقط نویسهٔ غیرعددی حذف
                 onValueChange(filterNumericInput(raw))
             } else {
                 onValueChange(raw)
@@ -110,7 +122,7 @@ fun AdelOutlinedTextField(
         },
         enabled = enabled,
         readOnly = readOnly,
-        textStyle = textStyle,
+        textStyle = resolvedStyle,
         label = label,
         placeholder = placeholder,
         leadingIcon = leadingIcon,
@@ -127,6 +139,6 @@ fun AdelOutlinedTextField(
         minLines = minLines,
         interactionSource = interactionSource,
         shape = shape,
-        colors = colors
+        colors = resolvedColors
     )
 }

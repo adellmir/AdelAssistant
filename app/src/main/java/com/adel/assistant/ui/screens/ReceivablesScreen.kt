@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -178,8 +180,8 @@ fun ReceivablesScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("کارکرد: ${formatMoney(totalWork)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-                Text("دریافتی: ${formatMoney(totalReceived)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                Text("کارکرد: ${formatMoney(totalWork)}", style = MaterialTheme.typography.bodySmall, color = appearanceTextPrimary())
+                Text("دریافتی: ${formatMoney(totalReceived)}", style = MaterialTheme.typography.bodySmall, color = appearanceTextPrimary())
                 Text(
                     "مانده: ${formatMoney(totalRemain)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -338,14 +340,14 @@ private fun EmployerClaimsCard(
                     Text(
                         group.employer,
                         style = MaterialTheme.typography.titleSmall,
-                        color = TextPrimary,
+                        color = appearanceTextPrimary(),
                         fontWeight = FontWeight.Bold
                     )
                     if (reportMode) {
                         Text(
                             "کارکرد: ${formatMoney(group.totalWork)}  |  مطالبات: ${formatMoney(group.totalRemain)}  |  مانده: ${formatMoney(group.totalRemain)}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
+                            color = appearanceTextSecondary(),
                             fontSize = 11.sp
                         )
                     } else if (remainingTab) {
@@ -376,7 +378,7 @@ private fun EmployerClaimsCard(
                 }
             }
 
-            HorizontalDivider(color = TextSecondary.copy(alpha = 0.25f))
+            HorizontalDivider(color = appearanceTextSecondary().copy(alpha = 0.25f))
 
             // لیست پروژه‌ها — جدیدترین اول
             group.projects.forEach { p ->
@@ -386,11 +388,11 @@ private fun EmployerClaimsCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(p.name, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                        Text(p.name, style = MaterialTheme.typography.bodySmall, color = appearanceTextPrimary())
                         Text(
                             "${projectDateLabel(p)}  |  ${formatMoney(if (remainingTab) p.remaining.coerceAtLeast(0.0) else p.amount)}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
+                            color = appearanceTextSecondary(),
                             fontSize = 11.sp
                         )
                     }

@@ -1,4 +1,7 @@
 package com.adel.assistant.ui
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
+import com.adel.assistant.ui.appearanceTextMuted
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.ui.PendingDailyReport
@@ -320,7 +323,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             Text(
                                 clock,
                                 style = MaterialTheme.typography.headlineSmall,
-                                color = TextPrimary,
+                                color = appearanceTextPrimary(),
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(6.dp))
@@ -336,7 +339,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     Text(
                                         jalali,
                                         style = MaterialTheme.typography.titleMedium,
-                                        color = TextSecondary
+                                        color = appearanceTextSecondary()
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -393,7 +396,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                             else -> "—"
                                         },
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary
+                                        color = appearanceTextSecondary()
                                     )
                                 }
                             }
@@ -419,13 +422,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         Text(
                             "برنامه‌ریزی",
                             style = MaterialTheme.typography.titleSmall,
-                            color = TextPrimary,
+                            color = appearanceTextPrimary(),
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f)
                         )
                         Text(
                             "پروژه ${projects.size} | تسک ${projectTasks.size + tunnelTasks.size}",
-                            color = TextSecondary,
+                            color = appearanceTextSecondary(),
                             style = MaterialTheme.typography.bodySmall
                         )
                         Icon(
@@ -441,7 +444,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         Text("پروژه پیش‌رو", color = WorkPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(4.dp))
                         if (projects.isEmpty()) {
-                            Text("پروژه‌ای از امروز به بعد ثبت نشده", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                            Text("پروژه‌ای از امروز به بعد ثبت نشده", color = appearanceTextMuted(), style = MaterialTheme.typography.bodySmall)
                         } else {
                             ScrollBox3 {
                                 projects.forEach { p ->
@@ -478,7 +481,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         if (projectTasks.isEmpty()) {
-                            Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                            Text("تسک باز ندارد", color = appearanceTextMuted(), style = MaterialTheme.typography.bodySmall)
                         } else {
                             ScrollBox3 {
                                 projectTasks.forEach { task ->
@@ -490,7 +493,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text("○", color = WorkPrimary, modifier = Modifier.padding(end = 6.dp))
-                                        Text(task.title, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(task.title, color = appearanceTextPrimary(), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }
@@ -506,7 +509,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         if (tunnelTasks.isEmpty()) {
-                            Text("تسک باز ندارد", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                            Text("تسک باز ندارد", color = appearanceTextMuted(), style = MaterialTheme.typography.bodySmall)
                         } else {
                             ScrollBox3 {
                                 tunnelTasks.forEach { task ->
@@ -518,7 +521,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text("○", color = WorkPrimary, modifier = Modifier.padding(end = 6.dp))
-                                        Text(task.title, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(task.title, color = appearanceTextPrimary(), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }
@@ -590,7 +593,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     AdelOutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("جستجو: شفت، پیشرفت، مطالبات، پروژه…", color = TextMuted, fontSize = 13.sp) },
+                        placeholder = { Text("جستجو: شفت، پیشرفت، مطالبات، پروژه…", color = appearanceTextMuted(), fontSize = 13.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -599,7 +602,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary
                         ),
-                        textStyle = TextStyle(fontSize = 14.sp, color = TextPrimary),
+                        textStyle = TextStyle(fontSize = 14.sp, color = appearanceTextPrimary()),
                         leadingIcon = {
                             Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
                         },
@@ -704,15 +707,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .filter { it.collapse.isNotBlank() }
                             .sortedByDescending { it.dateSortKey }
                     }
-                    Text("ریزش (${falls.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("ریزش (${falls.size})", color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     falls.take(40).forEach { e ->
                         val slots = TunnelReportStore.parseSlotValues(e.collapse)
                         Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                             Column(Modifier.padding(8.dp)) {
-                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = TextPrimary, fontSize = 12.sp)
+                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = appearanceTextPrimary(), fontSize = 12.sp)
                                 Text(
                                     "شفت ${e.shaft} → ${sideDisplayName(e.side)}  |  نقطه ${e.pointNo}",
-                                    color = TextSecondary, fontSize = 11.sp
+                                    color = appearanceTextSecondary(), fontSize = 11.sp
                                 )
                                 slots.forEach { (slot, value) ->
                                     Text("فیلد $slot : $value", color = Color(0xFFE57373), fontSize = 11.sp)
@@ -728,15 +731,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .filter { it.deviation.isNotBlank() }
                             .sortedByDescending { it.dateSortKey }
                     }
-                    Text("انحراف (${devs.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("انحراف (${devs.size})", color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     devs.take(40).forEach { e ->
                         val slots = TunnelReportStore.parseSlotValues(e.deviation)
                         Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                             Column(Modifier.padding(8.dp)) {
-                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = TextPrimary, fontSize = 12.sp)
+                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = appearanceTextPrimary(), fontSize = 12.sp)
                                 Text(
                                     "شفت ${e.shaft} → ${sideDisplayName(e.side)}  |  نقطه ${e.pointNo}",
-                                    color = TextSecondary, fontSize = 11.sp
+                                    color = appearanceTextSecondary(), fontSize = 11.sp
                                 )
                                 slots.forEach { (slot, value) ->
                                     Text("فیلد $slot : $value", color = Color(0xFFFFB74D), fontSize = 11.sp)
@@ -752,14 +755,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .filter { it.notes.isNotBlank() }
                             .sortedByDescending { it.dateSortKey }
                     }
-                    Text("توضیحات حفاری (${notes.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("توضیحات حفاری (${notes.size})", color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     notes.take(40).forEach { e ->
                         Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                             Column(Modifier.padding(8.dp)) {
-                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = TextPrimary, fontSize = 12.sp)
+                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = appearanceTextPrimary(), fontSize = 12.sp)
                                 Text(
                                     "شفت ${e.shaft} → ${sideDisplayName(e.side)}  |  نقطه ${e.pointNo}",
-                                    color = TextSecondary, fontSize = 11.sp
+                                    color = appearanceTextSecondary(), fontSize = 11.sp
                                 )
                                 Text(e.notes, color = Color(0xFF81C784), fontSize = 12.sp)
                             }
@@ -772,12 +775,12 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .filter { it.description.isNotBlank() }
                             .sortedWith(compareBy<com.adel.assistant.data.ProjectEntry> { it.name }.thenByDescending { it.dateSortKey })
                     }
-                    Text("توضیحات پروژه (${projs.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("توضیحات پروژه (${projs.size})", color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     projs.take(50).forEach { e ->
                         Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                             Column(Modifier.padding(8.dp)) {
-                                Text(e.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Text("${e.year}/${e.month}/${e.day}", color = TextSecondary, fontSize = 11.sp)
+                                Text(e.name, color = appearanceTextPrimary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("${e.year}/${e.month}/${e.day}", color = appearanceTextSecondary(), fontSize = 11.sp)
                                 Text(e.description, color = Color(0xFF81C784), fontSize = 12.sp)
                             }
                         }
@@ -791,7 +794,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     val pts = remember(query) { TunnelReportStore.allPoints(context) }
                     val asPoint = pts.filter { it.pointNo == pureNum || it.pointNo.contains(pureNum) }
                     val asKm = pureNum.toDoubleOrNull()
-                    Text("شماره نقطه / کیلومتر", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("شماره نقطه / کیلومتر", color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     // نقاط با این شماره
                     asPoint.forEach { p ->
                         val ctx = remember(p.pointNo) { TunnelReportStore.kmContext(context, p.km) }
@@ -807,16 +810,16 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
                                     }
                                 )
-                                Text("کد: ${p.type}", color = TextSecondary, fontSize = 12.sp)
+                                Text("کد: ${p.type}", color = appearanceTextSecondary(), fontSize = 12.sp)
                                 Text(
                                     String.format(java.util.Locale.US, "X=%.3f Y=%.3f Z=%.3f", p.x, p.y, p.z),
-                                    color = TextMuted, fontSize = 11.sp
+                                    color = appearanceTextMuted(), fontSize = 11.sp
                                 )
-                                if (p.elevDiff.isNotBlank()) Text("اختلاف تراز: ${p.elevDiff}", color = TextSecondary, fontSize = 11.sp)
+                                if (p.elevDiff.isNotBlank()) Text("اختلاف تراز: ${p.elevDiff}", color = appearanceTextSecondary(), fontSize = 11.sp)
                                 val ps = ctx.prevShaft; val ns = ctx.nextShaft
-                                Text("شفت‌ها: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1fm", it.distanceM) } ?: ""} | ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1fm", it.distanceM) } ?: ""}", color = TextSecondary, fontSize = 11.sp)
+                                Text("شفت‌ها: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1fm", it.distanceM) } ?: ""} | ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1fm", it.distanceM) } ?: ""}", color = appearanceTextSecondary(), fontSize = 11.sp)
                                 val face = ctx.prevReport ?: ctx.nextReport
-                                Text("سینه کار: ${face?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: "—"}", color = TextSecondary, fontSize = 11.sp)
+                                Text("سینه کار: ${face?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: "—"}", color = appearanceTextSecondary(), fontSize = 11.sp)
                             }
                         }
                     }
@@ -836,15 +839,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
                                     }
                                 )
-                                Text("نزدیک‌ترین نقطه: ${near.pointNo} (${near.type})", color = TextSecondary, fontSize = 12.sp)
+                                Text("نزدیک‌ترین نقطه: ${near.pointNo} (${near.type})", color = appearanceTextSecondary(), fontSize = 12.sp)
                                 val ps = ctx.prevShaft; val ns = ctx.nextShaft
-                                Text("شفت قبل: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}", color = TextSecondary, fontSize = 11.sp)
-                                Text("شفت بعد: ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}", color = TextSecondary, fontSize = 11.sp)
+                                Text("شفت قبل: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}", color = appearanceTextSecondary(), fontSize = 11.sp)
+                                Text("شفت بعد: ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}", color = appearanceTextSecondary(), fontSize = 11.sp)
                             }
                         }
                     }
                     if (asPoint.isEmpty() && (asKm == null || pts.isEmpty())) {
-                        Text("نقطه یا کیلومتری یافت نشد", color = TextMuted, fontSize = 12.sp)
+                        Text("نقطه یا کیلومتری یافت نشد", color = appearanceTextMuted(), fontSize = 12.sp)
                     }
                 }
 
@@ -862,7 +865,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             val wd = CalendarStore.weekdayNameJalali(y, pMonth, pDay)
                             Text(
                                 "$wd ${String.format(java.util.Locale.US, "%04d/%02d/%02d", y, pMonth, pDay)}",
-                                color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                                color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 12.sp
                             )
                             // پروژه‌های آن روز
                             val dayProjects = remember(query, y) {
@@ -874,7 +877,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             }
                             Text("پروژه‌ها", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             if (dayProjects.isEmpty()) {
-                                Text("پروژه‌ای در این تاریخ نیست", color = TextMuted, fontSize = 11.sp)
+                                Text("پروژه‌ای در این تاریخ نیست", color = appearanceTextMuted(), fontSize = 11.sp)
                             } else {
                                 dayProjects.forEach { s ->
                                     val ok = s.remaining <= 0.01
@@ -888,7 +891,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                             .padding(vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("${s.name} / ${s.employer} / ${moneyM(s.amount)}", Modifier.weight(1f), color = TextPrimary, fontSize = 12.sp)
+                                        Text("${s.name} / ${s.employer} / ${moneyM(s.amount)}", Modifier.weight(1f), color = appearanceTextPrimary(), fontSize = 12.sp)
                                         Text(if (ok) "✓" else "✕", color = if (ok) Color(0xFF43A047) else Color(0xFFE53935), fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -908,7 +911,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 }
                             )
                             if (reports.isEmpty()) {
-                                Text("گزارشی در این تاریخ نیست", color = TextMuted, fontSize = 11.sp)
+                                Text("گزارشی در این تاریخ نیست", color = appearanceTextMuted(), fontSize = 11.sp)
                             } else {
                                 reports.forEach { e ->
                                     Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier
@@ -920,7 +923,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         Column(Modifier.padding(8.dp)) {
                                             Text(
                                                 "${e.dateLabel} · شفت${e.shaft}/${e.side} · نقطه ${e.pointNo}",
-                                                fontWeight = FontWeight.Medium, color = TextPrimary, fontSize = 12.sp
+                                                fontWeight = FontWeight.Medium, color = appearanceTextPrimary(), fontSize = 12.sp
                                             )
                                             Text(
                                                 String.format(
@@ -928,7 +931,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                                     "km %.3f · روزانه %.1f · شفت %.1f · مانده %.1f",
                                                     e.km, e.dailyProgress, e.shaftProgress, e.remaining
                                                 ),
-                                                color = TextSecondary, fontSize = 11.sp
+                                                color = appearanceTextSecondary(), fontSize = 11.sp
                                             )
                                         }
                                     }
@@ -941,7 +944,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             val monthName = PERSIAN_MONTHS.getOrNull(pMonth - 1) ?: pMonth.toString()
                             Text(
                                 "$monthName $y",
-                                color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp
+                                color = appearanceTextSecondary(), fontWeight = FontWeight.Bold, fontSize = 13.sp
                             )
                             // ۱ پروژه‌ها
                             val monthProjects = remember(query, y, pMonth) {
@@ -953,7 +956,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     .sortedByDescending { it.dateSortKey }
                             }
                             Text("۱. پروژه‌ها", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            if (monthProjects.isEmpty()) Text("—", color = TextMuted, fontSize = 11.sp)
+                            if (monthProjects.isEmpty()) Text("—", color = appearanceTextMuted(), fontSize = 11.sp)
                             else monthProjects.forEach { s ->
                                 val ok = s.remaining <= 0.01
                                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -963,7 +966,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                             PendingClientsNav.openProject(s.name)
                                             onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
                                         },
-                                        color = TextPrimary, fontSize = 12.sp
+                                        color = appearanceTextPrimary(), fontSize = 12.sp
                                     )
                                     Text(if (ok) "✓" else "✕", color = if (ok) Color(0xFF43A047) else Color(0xFFE53935))
                                 }
@@ -977,12 +980,12 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 }
                             }
                             val byShaft = monthReports.groupBy { it.shaft }
-                            if (byShaft.isEmpty()) Text("—", color = TextMuted, fontSize = 11.sp)
+                            if (byShaft.isEmpty()) Text("—", color = appearanceTextMuted(), fontSize = 11.sp)
                             else byShaft.forEach { (sh, list) ->
                                 val last = list.maxByOrNull { it.dateSortKey }
                                 Text(
                                     "شفت $sh: ${list.size} گزارش · آخرین km ${last?.let { String.format(java.util.Locale.US, "%.3f", it.km) } ?: "—"} · پیشرفت روزانه جمع ${String.format(java.util.Locale.US, "%.1f", list.sumOf { it.dailyProgress })}",
-                                    color = TextSecondary, fontSize = 11.sp,
+                                    color = appearanceTextSecondary(), fontSize = 11.sp,
                                     modifier = Modifier.clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }
                                 )
                             }
@@ -990,7 +993,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             Text("۳. درآمد و دریافتی", color = WorkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             val projIncome = monthProjects.sumOf { it.amount }
                             val projRecv = monthProjects.sumOf { it.settled }
-                            Text("پروژه — درآمد: ${moneyM(projIncome)} / دریافتی: ${moneyM(projRecv)}", color = TextPrimary, fontSize = 12.sp)
+                            Text("پروژه — درآمد: ${moneyM(projIncome)} / دریافتی: ${moneyM(projRecv)}", color = appearanceTextPrimary(), fontSize = 12.sp)
                             val tunRows = remember(query, y, pMonth) {
                                 try {
                                     TunnelFinanceStore.all(context).filter { it.year == y && it.month == pMonth }
@@ -1000,7 +1003,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             val tunRecv = tunRows.sumOf { it.receiveAmount ?: 0.0 }
                             Text(
                                 "تونل — درآمد: ${moneyM(tunIncome)} / دریافتی: ${moneyM(tunRecv)}",
-                                color = TextPrimary, fontSize = 12.sp,
+                                color = appearanceTextPrimary(), fontSize = 12.sp,
                                 modifier = Modifier.clickable { onNavigate(Routes.FIN_TUNNEL_SUMMARY) }
                             )
                         }
@@ -1043,7 +1046,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 .padding(vertical = 4.dp)
                         )
                         if (filtered.isEmpty()) {
-                            Text("نقطه‌ای با این کد یافت نشد", color = TextMuted, fontSize = 12.sp)
+                            Text("نقطه‌ای با این کد یافت نشد", color = appearanceTextMuted(), fontSize = 12.sp)
                         } else {
                             filtered.take(30).forEach { p ->
                                 val ctx = remember(p.pointNo, p.km) { TunnelReportStore.kmContext(context, p.km) }
@@ -1053,28 +1056,28 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text("نقطه ${p.pointNo} · ${p.type}", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
+                                        Text("نقطه ${p.pointNo} · ${p.type}", fontWeight = FontWeight.Bold, color = appearanceTextPrimary(), fontSize = 13.sp)
                                         Text(
                                             String.format(java.util.Locale.US, "کیلومتر: %.3f", p.km),
-                                            color = TextSecondary, fontSize = 12.sp
+                                            color = appearanceTextSecondary(), fontSize = 12.sp
                                         )
                                         val ps = ctx.prevShaft
                                         val ns = ctx.nextShaft
                                         Text(
                                             "شفت قبل: ${ps?.label ?: "—"} ${ps?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}",
-                                            color = TextSecondary, fontSize = 11.sp
+                                            color = appearanceTextSecondary(), fontSize = 11.sp
                                         )
                                         Text(
                                             "شفت بعد: ${ns?.label ?: "—"} ${ns?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: ""}",
-                                            color = TextSecondary, fontSize = 11.sp
+                                            color = appearanceTextSecondary(), fontSize = 11.sp
                                         )
                                         val face = ctx.prevReport ?: ctx.nextReport
                                         Text(
                                             "سینه کار: ${face?.let { String.format(java.util.Locale.US, "%.1f m", it.distanceM) } ?: "—"}",
-                                            color = TextSecondary, fontSize = 11.sp
+                                            color = appearanceTextSecondary(), fontSize = 11.sp
                                         )
                                         if (p.elevDiff.isNotBlank()) {
-                                            Text("اختلاف تراز: ${p.elevDiff}", color = TextSecondary, fontSize = 11.sp)
+                                            Text("اختلاف تراز: ${p.elevDiff}", color = appearanceTextSecondary(), fontSize = 11.sp)
                                         }
                                         Row(
                                             Modifier.fillMaxWidth(),
@@ -1118,14 +1121,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         )
                         val entries = remember(query) { TunnelReportStore.allEntries(context).takeLast(8).reversed() }
                         if (entries.isEmpty()) {
-                            Text("گزارشی ثبت نشده", color = TextMuted, fontSize = 12.sp)
+                            Text("گزارشی ثبت نشده", color = appearanceTextMuted(), fontSize = 12.sp)
                         } else {
                             entries.forEach { e ->
                                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(10.dp)) {
                                         Text(
                                             "${e.dateLabel} · شفت${e.shaft}/${e.side}",
-                                            fontWeight = FontWeight.Medium, color = TextPrimary, fontSize = 13.sp
+                                            fontWeight = FontWeight.Medium, color = appearanceTextPrimary(), fontSize = 13.sp
                                         )
                                         Text(
                                             String.format(
@@ -1133,7 +1136,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                                 "km %.3f · روزانه %.1f · شفت %.1f · مانده %.1f",
                                                 e.km, e.dailyProgress, e.shaftProgress, e.remaining
                                             ),
-                                            color = TextSecondary, fontSize = 11.sp
+                                            color = appearanceTextSecondary(), fontSize = 11.sp
                                         )
                                     }
                                 }
@@ -1168,7 +1171,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                                 .weight(1f)
                                                 .clickable { expandedEmp = if (expandedEmp == emp.employer) null else emp.employer },
                                             fontWeight = FontWeight.Bold,
-                                            color = TextPrimary,
+                                            color = appearanceTextPrimary(),
                                             fontSize = 13.sp
                                         )
                                         Text(moneyM(emp.totalClaims), color = WorkPrimary, fontSize = 12.sp)
@@ -1183,7 +1186,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         emp.sessions.forEach { s ->
                                             Text(
                                                 "${s.name} · ${moneyM(s.remaining)}",
-                                                color = TextSecondary,
+                                                color = appearanceTextSecondary(),
                                                 fontSize = 12.sp,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -1209,7 +1212,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             ProjectStore.projectProfiles(context, query)
                         }
                         if (emps.isNotEmpty()) {
-                            Text("کارفرمایان", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("کارفرمایان", color = appearanceTextSecondary(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             emps.forEach { emp ->
                                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(10.dp)) {
@@ -1222,17 +1225,17 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                                         PendingClientsNav.openEmployer(emp.employer)
                                                         onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
                                                     },
-                                                fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp
+                                                fontWeight = FontWeight.Bold, color = appearanceTextPrimary(), fontSize = 13.sp
                                             )
                                             Text(
                                                 "${moneyM(emp.sessions.sumOf { it.amount })} / ${moneyM(emp.totalClaims)}",
-                                                color = TextSecondary, fontSize = 11.sp
+                                                color = appearanceTextSecondary(), fontSize = 11.sp
                                             )
                                         }
                                         emp.sessions.forEach { s ->
                                             Text(
                                                 "· ${s.name}  ${moneyM(s.amount)} / ${moneyM(s.remaining)}",
-                                                color = TextMuted, fontSize = 11.sp,
+                                                color = appearanceTextMuted(), fontSize = 11.sp,
                                                 modifier = Modifier
                                                     .clickable {
                                                         PendingClientsNav.openProject(s.name)
@@ -1246,7 +1249,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             }
                         }
                         if (projs.isNotEmpty()) {
-                            Text("پروژه‌ها", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("پروژه‌ها", color = appearanceTextSecondary(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             projs.forEach { pr ->
                                 Surface(shape = RoundedCornerShape(10.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(10.dp)) {
@@ -1259,19 +1262,19 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                                         PendingClientsNav.openProject(pr.name)
                                                         onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
                                                     },
-                                                fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp
+                                                fontWeight = FontWeight.Bold, color = appearanceTextPrimary(), fontSize = 13.sp
                                             )
                                             Text(
                                                 "${moneyM(pr.sessions.sumOf { it.amount })} / ${moneyM(pr.totalClaims)}",
-                                                color = TextSecondary, fontSize = 11.sp
+                                                color = appearanceTextSecondary(), fontSize = 11.sp
                                             )
                                         }
-                                        Text(pr.employer, color = TextMuted, fontSize = 11.sp)
+                                        Text(pr.employer, color = appearanceTextMuted(), fontSize = 11.sp)
                                         pr.sessions.take(12).forEach { s ->
                                             val settled = if (s.remaining <= 0.01) "تسویه" else "مانده ${moneyM(s.remaining)}"
                                             Text(
                                                 "${s.year}/${s.month}/${s.day} — $settled",
-                                                color = TextSecondary, fontSize = 11.sp,
+                                                color = appearanceTextSecondary(), fontSize = 11.sp,
                                                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)
                                             )
                                         }
@@ -1288,7 +1291,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     })) {
                         Text(
                             "برنامه‌ها (${filteredItems.size})",
-                            color = TextSecondary,
+                            color = appearanceTextSecondary(),
                             style = MaterialTheme.typography.labelLarge
                         )
                         MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
@@ -1301,7 +1304,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             // ---- عنوان بخش ----
             Text(
                 section.title,
-                color = TextSecondary,
+                color = appearanceTextSecondary(),
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -1459,7 +1462,7 @@ private fun MenuGrid(
                             Text(
                                 item.title,
                                 fontSize = 12.sp,
-                                color = TextPrimary,
+                                color = appearanceTextPrimary(),
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
@@ -1491,7 +1494,7 @@ private fun DashboardCard(
             Text(
                 title,
                 style = MaterialTheme.typography.titleSmall,
-                color = TextPrimary,
+                color = appearanceTextPrimary(),
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(10.dp))

@@ -1,4 +1,7 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
+import com.adel.assistant.ui.appearanceTextMuted
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -149,7 +152,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(8.dp))
-        Text("جمع دریافتی‌ها: ${formatMoney(totalRecv)}", fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("جمع دریافتی‌ها: ${formatMoney(totalRecv)}", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
         Spacer(Modifier.height(6.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
@@ -163,14 +166,14 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "${formatMoney(item.receiveAmount ?: 0.0)} — تاریخ دریافت: ${item.receiveDate.ifBlank { "—" }}",
-                                fontWeight = FontWeight.SemiBold, color = TextPrimary
+                                fontWeight = FontWeight.SemiBold, color = appearanceTextPrimary()
                             )
                             Text(
                                 formatEn("روی سطر کارکرد %d (%d/%02d)", item.dateCode, item.year, item.month),
-                                style = MaterialTheme.typography.bodySmall, color = TextSecondary
+                                style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary()
                             )
                             if (item.note.isNotBlank()) {
-                                Text(item.note, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                Text(item.note, style = MaterialTheme.typography.bodySmall, color = appearanceTextMuted())
                             }
                         }
                         IconButton(onClick = {

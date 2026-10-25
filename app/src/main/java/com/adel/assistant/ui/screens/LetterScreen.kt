@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -74,7 +76,7 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 value = employer,
                 onValueChange = { employer = it },
                 label = { Text("نام کارفرما") },
-                placeholder = { Text("کارفرمای محترم …", color = TextSecondary) },
+                placeholder = { Text("کارفرمای محترم …", color = appearanceTextSecondary()) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -110,7 +112,7 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
                 ) { Text("خروجی PDF") }
             }
 
-            Text(status, color = TextPrimary, style = MaterialTheme.typography.bodySmall)
+            Text(status, color = appearanceTextPrimary(), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(16.dp))
         }
     }

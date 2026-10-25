@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Row
@@ -242,10 +244,10 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             // ——— نما (بالای صفحه) ———
             Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("نمای برنامه", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text("نمای برنامه", color = appearanceTextPrimary(), style = MaterialTheme.typography.titleMedium)
                     Text(
                         "پس‌زمینه و کاشی شیشه‌ای — به‌جز برنامه‌های نقشه",
-                        color = TextSecondary,
+                        color = appearanceTextSecondary(),
                         style = MaterialTheme.typography.bodySmall
                     )
                     val mode = AppearanceStore.modeState
@@ -267,7 +269,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                                 onCheckedChange = { AppearanceStore.setMode(context, m) },
                                 colors = CheckboxDefaults.colors(checkedColor = color)
                             )
-                            Text(label, color = TextPrimary)
+                            Text(label, color = appearanceTextPrimary())
                         }
                     }
                     OutlinedButton(
@@ -285,10 +287,10 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             // ——— پشتیبان ———
             Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("پشتیبان پایگاه داده", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text("پشتیبان پایگاه داده", color = appearanceTextPrimary(), style = MaterialTheme.typography.titleMedium)
                     Text(
                         "خروجی یکجای data + شاقولی + پایش و ورود مجدد همان بسته.",
-                        color = TextSecondary,
+                        color = appearanceTextSecondary(),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Button(
@@ -317,7 +319,7 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             }
 
             if (status.isNotBlank()) {
-                Text(status, color = TextPrimary)
+                Text(status, color = appearanceTextPrimary())
             }
             Spacer(Modifier.height(24.dp))
         }

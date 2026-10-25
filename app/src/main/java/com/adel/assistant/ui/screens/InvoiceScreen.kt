@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -210,10 +212,10 @@ fun InvoiceScreen(
                                 selected = if (it) selected + p.row else selected - p.row
                             })
                             Column(Modifier.weight(1f)) {
-                                Text("${p.name} — ${p.employer}", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                                Text("${p.name} — ${p.employer}", color = appearanceTextPrimary(), style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     "مبلغ: ${formatMoney(p.amount)} | مانده: ${formatMoney(p.remaining)} | ${p.year}/${p.month}/${p.day}",
-                                    color = TextSecondary, style = MaterialTheme.typography.bodySmall
+                                    color = appearanceTextSecondary(), style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
@@ -252,7 +254,7 @@ fun InvoiceScreen(
             }
 
             item {
-                Text("شرح خدمات", fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("شرح خدمات", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
             }
             itemsIndexed(lines) { index, line ->
                 Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
@@ -312,8 +314,8 @@ fun InvoiceScreen(
             item {
                 Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("جمع کل: ${formatMoney(totalPreview)}", fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text("دریافتی: ${formatMoney(recvPreview)}", color = TextSecondary)
+                        Text("جمع کل: ${formatMoney(totalPreview)}", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
+                        Text("دریافتی: ${formatMoney(recvPreview)}", color = appearanceTextSecondary())
                         Text("مانده پرداختی: ${formatMoney(remainPreview)}", fontWeight = FontWeight.Bold, color = color)
                     }
                 }
@@ -351,7 +353,7 @@ fun InvoiceScreen(
             } // end if (mode == 0)
 
             if (status.isNotBlank()) {
-                item { Text(status, color = TextSecondary) }
+                item { Text(status, color = appearanceTextSecondary()) }
             }
             item { Spacer(Modifier.height(24.dp)) }
         }

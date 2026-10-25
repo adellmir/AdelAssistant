@@ -1,4 +1,5 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -54,7 +55,7 @@ fun SimpleRecordScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         if (readOnlyNote != null) {
-            Text(readOnlyNote, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Text(readOnlyNote, color = appearanceTextSecondary(), style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(12.dp))
         } else {
             fields.forEachIndexed { index, label ->

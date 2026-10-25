@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -198,17 +200,17 @@ fun TunnelWorklogScreen(color: Color, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(10.dp))
-        Text("سوابق ماهانه", fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("سوابق ماهانه", fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
         Spacer(Modifier.height(6.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(list) { item ->
                 Surface(shape = RoundedCornerShape(10.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text(formatEn("%04d/%02d — %.1f روز × %s", item.year % 100, item.month, item.days, formatMoney(item.unitPrice)),
-                            fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                            fontWeight = FontWeight.SemiBold, color = appearanceTextPrimary())
                         Text(formatEn("صورت‌وضعیت: %s | درآمد: %s | دریافت: %s",
                             formatMoney(item.payable), formatMoney(item.income), item.receiveAmount?.let { formatMoney(it) } ?: "—"),
-                            style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                            style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary())
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconButton(onClick = {
                                 year = item.year.toString(); month = item.month.toString()

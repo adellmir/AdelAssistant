@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -260,7 +262,7 @@ fun AssistantScreen(
 
         Text(
             text = activeChat.title,
-            color = TextSecondary,
+            color = appearanceTextSecondary(),
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
         )
@@ -322,7 +324,7 @@ fun AssistantScreen(
 
                             Text(
                                 line.text,
-                                color = TextPrimary,
+                                color = appearanceTextPrimary(),
                                 style = MaterialTheme.typography.bodyMedium
                             )
 
@@ -350,7 +352,7 @@ fun AssistantScreen(
         selectedFileName?.let { name ->
             Text(
                 text = "📎 $name",
-                color = TextSecondary,
+                color = appearanceTextSecondary(),
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
             )
@@ -381,7 +383,7 @@ fun AssistantScreen(
                 placeholder = {
                     Text(
                         "مثلاً: برای تونل تسک برداشت مقطع ثبت کن…",
-                        color = TextSecondary
+                        color = appearanceTextSecondary()
                     )
                 },
                 singleLine = true,

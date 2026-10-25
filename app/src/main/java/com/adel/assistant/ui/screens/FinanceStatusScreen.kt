@@ -1,4 +1,6 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.ui.appearanceTextSecondary
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -118,16 +120,16 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
             .verticalScroll(rememberScrollState())
     ) {
         ScreenTopBar(title = "وضعیت مالی", color = color, onBack = onBack)
-        Text("بازه تاریخ (شمسی)", color = TextSecondary, style = MaterialTheme.typography.labelLarge)
+        Text("بازه تاریخ (شمسی)", color = appearanceTextSecondary(), style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(6.dp))
-        Text("از تاریخ", color = TextPrimary)
+        Text("از تاریخ", color = appearanceTextPrimary())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AdelOutlinedTextField(fromY, { fromY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
             AdelOutlinedTextField(fromM, { fromM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
             AdelOutlinedTextField(fromD, { fromD = it }, label = { Text("روز") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
         }
         Spacer(Modifier.height(8.dp))
-        Text("تا تاریخ", color = TextPrimary)
+        Text("تا تاریخ", color = appearanceTextPrimary())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AdelOutlinedTextField(toY, { toY = it }, label = { Text("سال") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
             AdelOutlinedTextField(toM, { toM = it }, label = { Text("ماه") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
@@ -174,10 +176,10 @@ private fun StatusCard(title: String, rows: List<Pair<String, Double>>, color: C
             Text(title, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.Bold)
             rows.forEach { (label, value) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(label, color = TextSecondary)
+                    Text(label, color = appearanceTextSecondary())
                     Text(
                         formatMoney(value),
-                        color = TextPrimary,
+                        color = appearanceTextPrimary(),
                         fontWeight = if (label == "جمع") FontWeight.Bold else FontWeight.Normal
                     )
                 }
