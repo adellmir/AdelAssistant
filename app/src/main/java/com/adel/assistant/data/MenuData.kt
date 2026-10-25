@@ -79,8 +79,9 @@ object AppMenu {
         color = ToolPrimary,
         tabs = listOf(
             MenuTab("", listOf(
+                MenuItem("نمای برنامه", Icons.Filled.Wallpaper, Routes.TOOL_APPEARANCE),
                 MenuItem("تبدیل به DXF", Icons.Filled.Architecture, Routes.TOOL_DXF),
-                // نمایش نقشه مخفی — از نوار پایین «نقشه» (Map2) استفاده شود
+                MenuItem("نمایش نقشه", Icons.Filled.Map, Routes.TOOL_DXF_PREVIEW),
                 MenuItem("پروفیل طولی", Icons.Filled.ShowChart, Routes.TOOL_PROFILE),
                 MenuItem("شاقولی", Icons.Filled.VerticalAlignCenter, Routes.TOOL_PLUMB),
                 MenuItem("پایش", Icons.Filled.Timeline, Routes.TOOL_MONITORING),

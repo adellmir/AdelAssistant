@@ -21,6 +21,7 @@ import com.adel.assistant.ui.screens.ClientsProjectsScreen
 import com.adel.assistant.ui.screens.DailyReportScreen
 import com.adel.assistant.ui.screens.ExcavationPointsScreen
 import com.adel.assistant.ui.screens.DatabaseBackupScreen
+import com.adel.assistant.ui.screens.AppearanceScreen
 import com.adel.assistant.ui.screens.DxfPreviewScreen
 import com.adel.assistant.ui.screens.FinanceStatusScreen
 import com.adel.assistant.ui.screens.GsiConverterScreen
@@ -275,6 +276,9 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         }
         composable(Routes.TOOL_BACKUP) {
             DatabaseBackupScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_APPEARANCE) {
+            AppearanceScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_PLUMB) {
             PlumbScreen(color = ToolPrimary, onBack = { navController.popBackStack() })

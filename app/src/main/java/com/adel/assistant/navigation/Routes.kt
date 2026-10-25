@@ -35,6 +35,7 @@ object Routes {
     const val TOOL_TOPOGRAPHY = "tool/topography"
     const val TOOL_PROFILE = "tool/profile"
     const val TOOL_BACKUP = "tool/backup"
+    const val TOOL_APPEARANCE = "tool/appearance"
     const val TOOL_DXF_PREVIEW = "tool/dxf_preview"
     const val TOOL_MAP2 = "tool/map2"
     const val TOOL_TOTAL_STATION = "tool/total_station"

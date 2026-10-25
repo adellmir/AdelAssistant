@@ -11,6 +11,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -229,84 +231,95 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
-        ScreenTopBar(title = "پشتیبان پایگاه داده", color = color, onBack = onBack)
-        Spacer(Modifier.height(12.dp))
-        Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "خروجی یکجای data + شاقولی + پایش (پروژه‌ها، اپوک‌ها، قالب اکسل) و ورود مجدد همان بسته.",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Button(
-                    onClick = {
-                        val f = exportZip()
-                        if (f != null) {
-                            try {
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f)
-                                val share = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/zip"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(share, "اشتراک پشتیبان"))
-                            } catch (_: Exception) {}
+        ScreenTopBar(title = "پشتیبان و نما", color = color, onBack = onBack)
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(top = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // ——— نما (بالای صفحه) ———
+            Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("نمای برنامه", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "پس‌زمینه و کاشی شیشه‌ای — به‌جز برنامه‌های نقشه",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    val mode = AppearanceStore.modeState
+                    listOf(
+                        AppearanceMode.Simple to "۱. ساده (پیش‌فرض برنامه)",
+                        AppearanceMode.Iran to "۲. ایران — ماهواره‌ای محو",
+                        AppearanceMode.Topo to "۳. توپوگرافی",
+                        AppearanceMode.Custom to "۴. تصویر من (از گالری)"
+                    ).forEach { (m, label) ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { AppearanceStore.setMode(context, m) }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = mode == m,
+                                onCheckedChange = { AppearanceStore.setMode(context, m) },
+                                colors = CheckboxDefaults.colors(checkedColor = color)
+                            )
+                            Text(label, color = TextPrimary)
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = color),
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("خروجی یکجا + اشتراک") }
-                OutlinedButton(
-                    onClick = { importLauncher.launch(arrayOf("application/zip", "*/*")) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("ورود یکجا از فایل ZIP") }
-            }
-        }
-                Spacer(Modifier.height(14.dp))
-        Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("نما", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "پس‌زمینه و کاشی شیشه‌ای — به‌جز برنامه‌های نقشه",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                val mode = AppearanceStore.modeState
-                listOf(
-                    AppearanceMode.Simple to "۱. ساده (پیش‌فرض برنامه)",
-                    AppearanceMode.Iran to "۲. ایران — ماهواره‌ای محو",
-                    AppearanceMode.Topo to "۳. توپوگرافی",
-                    AppearanceMode.Custom to "۴. تصویر من (از گالری)"
-                ).forEach { (m, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { AppearanceStore.setMode(context, m) }
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    }
+                    OutlinedButton(
+                        onClick = { pickImage.launch("image/*") },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Checkbox(
-                            checked = mode == m,
-                            onCheckedChange = { AppearanceStore.setMode(context, m) },
-                            colors = CheckboxDefaults.colors(checkedColor = color)
+                        Text(
+                            if (AppearanceStore.hasCustom(context)) "تعویض تصویر پس‌زمینه"
+                            else "انتخاب تصویر از گوشی"
                         )
-                        Text(label, color = TextPrimary)
                     }
                 }
-                OutlinedButton(
-                    onClick = { pickImage.launch("image/*") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            }
+
+            // ——— پشتیبان ———
+            Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("پشتیبان پایگاه داده", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (AppearanceStore.hasCustom(context)) "تعویض تصویر پس‌زمینه"
-                        else "انتخاب تصویر از گوشی"
+                        "خروجی یکجای data + شاقولی + پایش و ورود مجدد همان بسته.",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
                     )
+                    Button(
+                        onClick = {
+                            val f = exportZip()
+                            if (f != null) {
+                                try {
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f)
+                                    val share = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/zip"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(share, "اشتراک پشتیبان"))
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("خروجی یکجا + اشتراک") }
+                    OutlinedButton(
+                        onClick = { importLauncher.launch(arrayOf("application/zip", "*/*")) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("ورود یکجا از فایل ZIP") }
                 }
             }
-        }
 
-        if (status.isNotBlank()) {
-            Text(status, color = TextPrimary, modifier = Modifier.padding(top = 12.dp))
+            if (status.isNotBlank()) {
+                Text(status, color = TextPrimary)
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
