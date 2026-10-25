@@ -2789,7 +2789,10 @@ if (zoomWindowMode) {
                                 Text("قفل", fontSize = 10.sp)
                                 LayerColorButton(layer.displayColor ?: DxfParser.aciToColor(layer.colorAci)) { newColor ->
                                     layer.displayColor = newColor
+                                    layer.colorAci = DxfParser.colorToAci(newColor)
+                                    // موجودیت‌های ByLayer این لایه را با رنگ جدید همگام کن (اختیاری: فقط ACI لایه کافی است)
                                     drawings = drawings.toList()
+                                    docDirty = true
                                 }
                             }
                             }

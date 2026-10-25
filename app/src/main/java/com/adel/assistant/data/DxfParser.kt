@@ -43,16 +43,51 @@ data class DxfModel(
     }
 
     fun toDxfText(): String = buildString {
-        append("0\nSECTION\n2\nHEADER\n0\nENDSEC\n")
+        fun colorOf(entityColor: Int, layerName: String): Int {
+            if (entityColor in 1..255) return entityColor
+            val li = layers[layerName]
+            var aci = li?.colorAci ?: 7
+            li?.displayColor?.let { aci = DxfParser.colorToAci(it) }
+            return aci.coerceIn(1, 255)
+        }
+        val layerNames = linkedSetOf<String>()
+        layerNames.add("0")
+        layers.keys.forEach { layerNames.add(it.ifBlank { "0" }) }
+        lines.forEach { layerNames.add(it.layer.ifBlank { "0" }) }
+        circles.forEach { layerNames.add(it.layer.ifBlank { "0" }) }
+        texts.forEach { layerNames.add(it.layer.ifBlank { "0" }) }
+
+        append("0\nSECTION\n2\nHEADER\n")
+        append("9\n")
+        append("$")
+        append("INSUNITS\n70\n6\n")
+        append("0\nENDSEC\n")
+        append("0\nSECTION\n2\nTABLES\n")
+        append("0\nTABLE\n2\nLAYER\n70\n${layerNames.size}\n")
+        layerNames.forEach { name ->
+            val li = layers[name]
+            var aci = li?.colorAci ?: 7
+            if (aci !in 1..255) aci = 7
+            li?.displayColor?.let { aci = DxfParser.colorToAci(it) }
+            val on = if (li?.visible == false) -aci else aci
+            append("0\nLAYER\n2\n$name\n70\n0\n62\n$on\n6\nCONTINUOUS\n")
+        }
+        append("0\nENDTAB\n0\nENDSEC\n")
         append("0\nSECTION\n2\nENTITIES\n")
         lines.forEach { l ->
-            append("0\nLINE\n8\n${l.layer}\n10\n${l.x1}\n20\n${l.y1}\n11\n${l.x2}\n21\n${l.y2}\n")
+            val ly = l.layer.ifBlank { "0" }
+            val col = colorOf(l.color, ly)
+            append("0\nLINE\n8\n$ly\n62\n$col\n10\n${l.x1}\n20\n${l.y1}\n30\n0.0\n11\n${l.x2}\n21\n${l.y2}\n31\n0.0\n")
         }
         circles.forEach { c ->
-            append("0\nCIRCLE\n8\n${c.layer}\n10\n${c.x}\n20\n${c.y}\n40\n${c.r}\n")
+            val ly = c.layer.ifBlank { "0" }
+            val col = colorOf(c.color, ly)
+            append("0\nCIRCLE\n8\n$ly\n62\n$col\n10\n${c.x}\n20\n${c.y}\n30\n0.0\n40\n${c.r}\n")
         }
         texts.forEach { tx ->
-            append("0\nTEXT\n8\n${tx.layer}\n10\n${tx.x}\n20\n${tx.y}\n40\n${tx.height}\n1\n${tx.text}\n50\n${tx.rotation}\n")
+            val ly = tx.layer.ifBlank { "0" }
+            val col = colorOf(tx.color, ly)
+            append("0\nTEXT\n8\n$ly\n62\n$col\n10\n${tx.x}\n20\n${tx.y}\n30\n0.0\n40\n${tx.height}\n1\n${tx.text}\n50\n${tx.rotation}\n")
         }
         append("0\nENDSEC\n0\nEOF\n")
     }
@@ -235,5 +270,31 @@ object DxfParser {
             200 -> Color(0xFF8E24AA)
             else -> Color(0xFF90A4AE)
         }
+    }
+
+    /** نزدیک‌ترین ACI استاندارد به رنگ Compose (برای ذخیره DXF) */
+    fun colorToAci(color: Color): Int {
+        val palette = listOf(
+            1 to Color(0xFFE53935),
+            2 to Color(0xFFFDD835),
+            3 to Color(0xFF43A047),
+            4 to Color(0xFF00ACC1),
+            5 to Color(0xFF1E88E5),
+            6 to Color(0xFFD81B60),
+            7 to Color(0xFFE0E0E0),
+            8 to Color(0xFF9E9E9E),
+            30 to Color(0xFFFB8C00),
+            200 to Color(0xFF8E24AA),
+            0 to Color.Black
+        )
+        fun dist(a: Color, b: Color): Float {
+            val dr = a.red - b.red
+            val dg = a.green - b.green
+            val db = a.blue - b.blue
+            return dr * dr + dg * dg + db * db
+        }
+        // سفید خالص
+        if (color.red > 0.9f && color.green > 0.9f && color.blue > 0.9f) return 7
+        return palette.minBy { dist(color, it.second) }.first.let { if (it == 0) 7 else it }
     }
 }

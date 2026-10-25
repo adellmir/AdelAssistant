@@ -113,7 +113,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
 
     var tunnelPts by remember { mutableStateOf(TunnelReportStore.allPoints(context)) }
     var bgModel by remember { mutableStateOf<DxfModel?>(TunnelMapBgStore.parseModel(context)) }
-    var showBg by remember { mutableStateOf(true) }
+    var showBg by remember { mutableStateOf(TunnelLayerPrefs.showBg(context)) }
     var reportPts by remember { mutableStateOf(listOf<ReportEntry>()) }
     var overlays by remember { mutableStateOf(MapOverlayStore.all(context)) }
 
@@ -122,14 +122,19 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var canvasSize by remember { mutableStateOf(Offset.Zero) }
     var needFit by remember { mutableStateOf(true) }
 
-    var baseMap by remember { mutableStateOf(TunnelBaseMap.NONE) }
+    var baseMap by remember {
+        mutableStateOf(
+            try { TunnelBaseMap.valueOf(TunnelLayerPrefs.baseMapName(context)) }
+            catch (_: Exception) { TunnelBaseMap.NONE }
+        )
+    }
     var showBaseDialog by remember { mutableStateOf(false) }
     var tiles by remember { mutableStateOf<List<TunnelTileBmp>>(emptyList()) }
     var zone by remember { mutableStateOf(40) }
 
-    var showTunnel by remember { mutableStateOf(false) }
-    var showReport by remember { mutableStateOf(true) }
-    var showOverlay by remember { mutableStateOf(true) }
+    var showTunnel by remember { mutableStateOf(TunnelLayerPrefs.showTunnel(context)) }
+    var showReport by remember { mutableStateOf(TunnelLayerPrefs.showReport(context)) }
+    var showOverlay by remember { mutableStateOf(TunnelLayerPrefs.showOverlay(context)) }
     var showEvents by remember { mutableStateOf(TunnelLayerPrefs.showEvents(context)) }
     var infoTunnelPt by remember { mutableStateOf<TunnelReportStore.TunnelPoint?>(null) }
     var crosshairMode by remember { mutableStateOf(false) }
@@ -142,7 +147,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var layerColors by remember { mutableStateOf(TunnelLayerPrefs.loadColors(context)) }
     var colorEditLayer by remember { mutableStateOf<String?>(null) }
     var showBenchmarkDialog by remember { mutableStateOf(false) }
-    var showBenchmarks by remember { mutableStateOf(true) }
+    var showBenchmarks by remember { mutableStateOf(TunnelLayerPrefs.showBenchmarks(context)) }
     var dimMode by remember { mutableStateOf(false) }
     var dimA by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var dimB by remember { mutableStateOf<Pair<Double, Double>?>(null) }
@@ -1108,6 +1113,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     TunnelBaseMap.values().forEach { item ->
                         TextButton(onClick = {
                             baseMap = item
+                            TunnelLayerPrefs.setBaseMapName(context, item.name)
                             showBaseDialog = false
                         }) { Text(item.title) }
                     }
@@ -1129,16 +1135,16 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
             text = {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showBg, { showBg = it }); Text("نقشه آپلود‌شده (DXF)")
+                        Checkbox(showBg, { showBg = it; TunnelLayerPrefs.setShowBg(context, it) }); Text("نقشه آپلود‌شده (DXF)")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showTunnel, { showTunnel = it }); Text("محور و نقاط تونل (ثابت)")
+                        Checkbox(showTunnel, { showTunnel = it; TunnelLayerPrefs.setShowTunnel(context, it) }); Text("محور و نقاط تونل (ثابت)")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showReport, { showReport = it }); Text("نقاط حفاری گزارش")
+                        Checkbox(showReport, { showReport = it; TunnelLayerPrefs.setShowReport(context, it) }); Text("نقاط حفاری گزارش")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showOverlay, { showOverlay = it }); Text("نقاط دستی / GPS")
+                        Checkbox(showOverlay, { showOverlay = it; TunnelLayerPrefs.setShowOverlay(context, it) }); Text("نقاط دستی / GPS")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
@@ -1151,7 +1157,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         Text("اتفاقات تونل")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(showBenchmarks, { showBenchmarks = it })
+                        Checkbox(showBenchmarks, { showBenchmarks = it; TunnelLayerPrefs.setShowBenchmarks(context, it) })
                         Text("بنچ‌مارک")
                     }
                     if (bgLayerNames.isNotEmpty()) {
