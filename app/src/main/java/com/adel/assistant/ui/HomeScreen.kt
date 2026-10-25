@@ -769,7 +769,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             isPureNumberQ || qLower.contains("ماه") ||
                             Regex("""\d""").containsMatchIn(qLower))
                     ) {
-                        if (none { it.id == "more" }) add(SearchTab("more", "سایر", 1))
+                        if (none { tab -> tab.id == "more" }) add(SearchTab("more", "سایر", 1))
                     }
                     if (isEmpty() && filteredItems.isNotEmpty()) {
                         add(SearchTab("apps", "برنامه‌ها", filteredItems.size))
@@ -1030,8 +1030,8 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             }
                         }
                     }
-                    "more", else -> {
-                        // شفت، مطالبات، تاریخ و … (بدون تکرار سربرگ‌های جدا)
+                    "more" -> {
+                        // شفت، مطالبات، تاریخ و …
                 // —— عدد خالص: شماره نقطه یا کیلومتر ——
                 val pureNum = query.toEnglishDigits().trim()
                 val isPureNumber = pureNum.matches(Regex("""^\d+(\.\d+)?$"""))
