@@ -17,7 +17,7 @@ object WorkingDraftStore {
     data class DailyRow(
         val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
         val km: Double, val dailyProgress: Double, val shaftProgress: Double, val remaining: Double,
-        val deviation: String = "", val collapse: String = ""
+        val deviation: String = "", val collapse: String = "", val notes: String = ""
     )
 
     data class DailyDraft(
@@ -38,7 +38,7 @@ object WorkingDraftStore {
                     .put("lengthCm", r.lengthCm).put("km", r.km)
                     .put("dailyProgress", r.dailyProgress).put("shaftProgress", r.shaftProgress)
                     .put("remaining", r.remaining)
-                    .put("deviation", r.deviation).put("collapse", r.collapse)
+                    .put("deviation", r.deviation).put("collapse", r.collapse).put("notes", r.notes)
             )
         }
         o.put("rows", arr)
@@ -57,7 +57,7 @@ object WorkingDraftStore {
                     r.optString("shaft"), r.optString("side"), r.optString("pointNo"),
                     r.optDouble("lengthCm"), r.optDouble("km"),
                     r.optDouble("dailyProgress"), r.optDouble("shaftProgress"), r.optDouble("remaining"),
-                    r.optString("deviation"), r.optString("collapse")
+                    r.optString("deviation"), r.optString("collapse"), r.optString("notes")
                 )
             }
             DailyDraft(o.optString("year"), o.optString("month"), o.optString("day"), rows)

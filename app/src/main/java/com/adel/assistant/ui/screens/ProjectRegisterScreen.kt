@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -53,6 +54,7 @@ import com.adel.assistant.ui.theme.Surface as SurfaceColor
 fun ProjectRegisterScreen(
     color: Color,
     onBack: () -> Unit,
+    onOpenCalendar: (() -> Unit)? = null,
     initialDay: String? = null,
     initialMonth: String? = null,
     initialYear: String? = null,
@@ -268,11 +270,18 @@ fun ProjectRegisterScreen(
                 color = color,
                 onBack = { if (editingRow != null) clearForm() else onBack() }
             )
-            IconButton(
-                onClick = { showMenu = true },
-                modifier = Modifier.align(Alignment.CenterEnd)
+            Row(
+                Modifier.align(Alignment.CenterEnd),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                if (onOpenCalendar != null) {
+                    IconButton(onClick = { onOpenCalendar.invoke() }) {
+                        Icon(Icons.Filled.CalendarMonth, contentDescription = "تقویم کاری", tint = Color(0xFFAAB697))
+                    }
+                }
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Filled.Settings, contentDescription = "ایمپورت/اکسپورت", tint = Color(0xFFAAB697))
+                }
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("وارد کردن") }, onClick = {

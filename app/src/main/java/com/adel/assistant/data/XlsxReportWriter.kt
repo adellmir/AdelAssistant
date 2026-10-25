@@ -67,6 +67,25 @@ object XlsxReportWriter {
             if (todayEntry != null || row == 4 || row == 60) {
                 cellUpdates["J$row"] = formatEn("%.4f", j) to false
             }
+            // توضیحات → ستون T همان ردیف بخش
+            if (todayEntry != null && todayEntry.notes.isNotBlank()) {
+                cellUpdates["T$row"] = todayEntry.notes to true
+            }
+            // انحراف → ردیف base+1 ستون‌های L..R (فیلد ۱..۷)
+            // ریزش → ردیف base+3
+            val slotCols = listOf("L", "M", "N", "O", "P", "Q", "R")
+            if (todayEntry != null) {
+                TunnelReportStore.parseSlotValues(todayEntry.deviation).forEach { (slot, value) ->
+                    if (slot in 1..7) {
+                        cellUpdates["${slotCols[slot - 1]}${row + 1}"] = value to false
+                    }
+                }
+                TunnelReportStore.parseSlotValues(todayEntry.collapse).forEach { (slot, value) ->
+                    if (slot in 1..7) {
+                        cellUpdates["${slotCols[slot - 1]}${row + 3}"] = value to false
+                    }
+                }
+            }
         }
         cellUpdates["E69"] = formatEn("%.4f", sumI) to false
 

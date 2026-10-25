@@ -111,6 +111,7 @@ fun AppNavigation() {
             ProjectRegisterScreen(
                 color = WorkPrimary,
                 onBack = { navController.popBackStack() },
+                onOpenCalendar = { navController.navigate(Routes.SURVEY_PROJECT_CALENDAR) },
                 onInvoice = { list ->
                     InvoiceLaunch.preselected = list
                     navController.navigate(Routes.FIN_PROJECT_INVOICE)
@@ -128,6 +129,7 @@ fun AppNavigation() {
             ProjectRegisterScreen(
                 color = WorkPrimary,
                 onBack = { navController.popBackStack() },
+                onOpenCalendar = { navController.navigate(Routes.SURVEY_PROJECT_CALENDAR) },
                 initialDay = entry.arguments?.getString("day"),
                 initialMonth = entry.arguments?.getString("month"),
                 initialYear = entry.arguments?.getString("year"),

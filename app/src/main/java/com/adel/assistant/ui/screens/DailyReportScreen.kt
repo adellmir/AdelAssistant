@@ -33,6 +33,7 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.ReportEntry
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.normalizeSide
 import com.adel.assistant.data.WorkingDraftStore
 import com.adel.assistant.data.XlsxReportWriter
 import com.adel.assistant.data.filterNumericInput
@@ -49,7 +50,7 @@ private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 private data class PreviewRow(
     val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
     val km: Double, val dailyProgress: Double, val shaftProgress: Double, val remaining: Double,
-    val deviation: String = "", val collapse: String = ""
+    val deviation: String = "", val collapse: String = "", val notes: String = ""
 )
 
 /** سمت «کمتر»؟ — از منطق یکسان Store استفاده می‌شود */
@@ -71,6 +72,9 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     var length by remember { mutableStateOf("") }
     var deviation by remember { mutableStateOf("") }
     var collapse by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var slotNo by remember { mutableStateOf("4") }  // شماره فیلد ۱..۷ پیش‌فرض ۴
+    var lastNotesByKey by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var editingIndex by remember { mutableStateOf(-1) }
 
     var rows by remember { mutableStateOf(listOf<PreviewRow>()) }
@@ -127,7 +131,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         rows = existing.map { e ->
             PreviewRow(
                 e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.shaftProgress,
-                e.remaining, e.deviation, e.collapse
+                e.remaining, e.deviation, e.collapse, e.notes
             )
         }
         // اگر هنوز خالی بود، یک‌بار با همه رکوردها تطبیق نرم بده (سال ۲رقمی ذخیره‌شده)
@@ -137,7 +141,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             rows = soft.map { e ->
                 PreviewRow(
                     e.shaft, e.side, e.pointNo, e.lengthCm, e.km, e.dailyProgress, e.shaftProgress,
-                    e.remaining, e.deviation, e.collapse
+                    e.remaining, e.deviation, e.collapse, e.notes
                 )
             }
         }
@@ -161,24 +165,66 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             statusMsg = "نقطه‌ی $pointNo در فایل نقاط پیدا نشد — اول از «نقاط تونل» ثبتش کن"
             return
         }
+        val slot = (slotNo.toIntOrNullFa() ?: 4).coerceIn(1, 7)
+        // ادغام مقدار فیلد جاری با مقادیر قبلی همان ردیف
+        val prev = if (editingIndex >= 0) rows.getOrNull(editingIndex)
+            else rows.firstOrNull { it.shaft == shaft && it.side == side }
+        var dev = prev?.deviation.orEmpty()
+        var col = prev?.collapse.orEmpty()
+        if (deviation.isNotBlank()) {
+            dev = TunnelReportStore.mergeSlotValue(dev, slot, deviation.trim())
+        }
+        if (collapse.isNotBlank()) {
+            col = TunnelReportStore.mergeSlotValue(col, slot, collapse.trim())
+        }
+        val noteText = notes.trim().ifBlank { prev?.notes.orEmpty() }
         val newRow = PreviewRow(
             shaft, side, pointNo, len, v.km, v.dailyProgress, v.shaftProgress, v.remaining,
-            deviation, collapse
+            dev, col, noteText
         )
         rows = if (editingIndex >= 0) {
             rows.toMutableList().also { it[editingIndex] = newRow }
         } else {
             rows.filterNot { it.shaft == shaft && it.side == side } + newRow
         }
-        shaft = ""; side = ""; pointNo = ""; length = ""; deviation = ""; collapse = ""; editingIndex = -1
+        // یادداشت جهت برای روز بعد
+        if (noteText.isNotBlank()) {
+            val k = "$shaft-${normalizeSide(side)}"
+            lastNotesByKey = lastNotesByKey + (k to noteText)
+        }
+        shaft = ""; side = ""; pointNo = ""; length = ""
+        deviation = ""; collapse = ""; notes = ""; slotNo = "4"; editingIndex = -1
         statusMsg = TunnelReportStore.dailyProgressWarning(newRow.dailyProgress) ?: ""
+    }
+
+    fun appendSlotOnly() {
+        // فقط ثبت ریزش/انحراف بدون تغییر طول — برای چند محل
+        if (shaft.isBlank() || side.isBlank()) {
+            statusMsg = "اول شفت و سمت را مشخص کن"; return
+        }
+        val slot = (slotNo.toIntOrNullFa() ?: 4).coerceIn(1, 7)
+        val idx = rows.indexOfFirst { it.shaft == shaft && it.side == side }
+        if (idx < 0) {
+            statusMsg = "اول ردیف حفاری را با طول ثبت کن"; return
+        }
+        val r = rows[idx]
+        var dev = r.deviation
+        var col = r.collapse
+        if (deviation.isNotBlank()) dev = TunnelReportStore.mergeSlotValue(dev, slot, deviation.trim())
+        if (collapse.isNotBlank()) col = TunnelReportStore.mergeSlotValue(col, slot, collapse.trim())
+        val noteText = notes.trim().ifBlank { r.notes }
+        rows = rows.toMutableList().also {
+            it[idx] = r.copy(deviation = dev, collapse = col, notes = noteText)
+        }
+        deviation = ""; collapse = ""; notes = noteText; slotNo = "4"
+        statusMsg = "ریزش/انحراف در فیلد $slot ثبت شد — برای مورد بعد آماده"
     }
 
     fun startEdit(i: Int) {
         val r = rows[i]
         shaft = r.shaft; side = r.side; pointNo = r.pointNo
         length = r.lengthCm.toString()
-        deviation = r.deviation; collapse = r.collapse
+        deviation = ""; collapse = ""; notes = r.notes; slotNo = "4"
         editingIndex = i
     }
 
@@ -194,7 +240,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 it.km, it.dailyProgress, it.shaftProgress, it.remaining,
                 x = xyz?.first ?: 0.0,
                 y = xyz?.second ?: 0.0,
-                z = xyz?.third ?: 0.0
+                z = xyz?.third ?: 0.0,
+                notes = it.notes
             )
         }
         TunnelReportStore.replaceEntriesForDate(context, year, month, day, newEntries)
@@ -214,7 +261,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                     WorkingDraftStore.DailyRow(
                         it.shaft, it.side, it.pointNo, it.lengthCm,
                         it.km, it.dailyProgress, it.shaftProgress, it.remaining,
-                        it.deviation, it.collapse
+                        it.deviation, it.collapse, it.notes
                     )
                 }
             )
@@ -228,7 +275,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 PreviewRow(
                     it.shaft, it.side, it.pointNo, it.lengthCm,
                     it.km, it.dailyProgress, it.shaftProgress, it.remaining,
-                    it.deviation, it.collapse
+                    it.deviation, it.collapse, it.notes
                 )
             }
             statusMsg = "پیش‌نویس گزارش بازیابی شد"
@@ -332,14 +379,28 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AdelOutlinedTextField(
-                value = deviation, onValueChange = { deviation = it }, label = { Text("انحراف") },
-                modifier = Modifier.weight(1f)
+                value = deviation, onValueChange = { deviation = filterNumericInput(it) }, label = { Text("انحراف") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
             AdelOutlinedTextField(
-                value = collapse, onValueChange = { collapse = it }, label = { Text("ریزش") },
-                modifier = Modifier.weight(1f)
+                value = collapse, onValueChange = { collapse = filterNumericInput(it) }, label = { Text("ریزش") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
             )
+            AdelOutlinedTextField(
+                value = slotNo, onValueChange = { slotNo = filterNumericInput(it) },
+                label = { Text("فیلد ۱–۷") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.7f)
+            )
+            IconButton(onClick = { appendSlotOnly() }) {
+                Icon(Icons.Outlined.Add, contentDescription = "ثبت ریزش/انحراف بعدی", tint = color)
+            }
         }
+        AdelOutlinedTextField(
+            value = notes, onValueChange = { notes = it },
+            label = { Text("توضیحات (شفت … به …)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 

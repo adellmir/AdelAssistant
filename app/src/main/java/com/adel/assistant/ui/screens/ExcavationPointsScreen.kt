@@ -50,6 +50,10 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
     var selectMode by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var status by remember { mutableStateOf("بازهٔ تاریخ را وارد و «نمایش» را بزن") }
+    var optExcav by remember { mutableStateOf(true) }
+    var optDev by remember { mutableStateOf(false) }
+    var optFall by remember { mutableStateOf(false) }
+    var optNotes by remember { mutableStateOf(false) }
 
     fun rowKey(e: ReportEntry) = "${e.dateSortKey}-${e.shaft}-${e.side}-${e.pointNo}-${e.km}"
 
@@ -69,10 +73,18 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
     }
 
     fun exportList(): List<ReportEntry> {
-        return if (selectMode && selected.isNotEmpty()) {
+        val base = if (selectMode && selected.isNotEmpty()) {
             points.filter { rowKey(it) in selected }
         } else {
             points
+        }
+        // اگر فقط حفاری تیک خورده → همه
+        // اگر حفاری نخورده و یکی از ریزش/انحراف/توضیحات → فقط همان‌ها
+        if (optExcav) return base
+        return base.filter { e ->
+            (optDev && e.deviation.isNotBlank()) ||
+                (optFall && e.collapse.isNotBlank()) ||
+                (optNotes && e.notes.isNotBlank())
         }
     }
 
@@ -122,6 +134,28 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
             .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "نقاط حفاری", color = color, onBack = onBack)
+        Row(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(optExcav, { optExcav = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                Text("حفاری", fontSize = 12.sp, color = TextPrimary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(optDev, { optDev = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                Text("انحراف", fontSize = 12.sp, color = TextPrimary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(optFall, { optFall = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                Text("ریزش", fontSize = 12.sp, color = TextPrimary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(optNotes, { optNotes = it }, colors = CheckboxDefaults.colors(checkedColor = color))
+                Text("توضیحات", fontSize = 12.sp, color = TextPrimary)
+            }
+        }
 
         Text("بازهٔ تاریخ (از – تا)", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(4.dp))
@@ -146,7 +180,7 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = { exportTxt() }, modifier = Modifier.weight(1f)) {
-                Text("خروجی TXT", fontSize = 13.sp)
+                Text("خروجی CSV/TXT", fontSize = 12.sp)
             }
             OutlinedButton(onClick = { exportDxf() }, modifier = Modifier.weight(1f)) {
                 Text("خروجی DXF", fontSize = 13.sp)
@@ -218,6 +252,15 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
+                            if (e.collapse.isNotBlank()) {
+                                Text("ریزش: ${e.collapse}", color = Color(0xFFE57373), fontSize = 11.sp)
+                            }
+                            if (e.deviation.isNotBlank()) {
+                                Text("انحراف: ${e.deviation}", color = Color(0xFFFFB74D), fontSize = 11.sp)
+                            }
+                            if (e.notes.isNotBlank()) {
+                                Text("توضیح: ${e.notes}", color = Color(0xFF81C784), fontSize = 11.sp)
+                            }
                         }
                     }
                 }

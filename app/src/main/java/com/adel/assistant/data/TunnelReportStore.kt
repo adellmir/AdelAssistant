@@ -6,13 +6,18 @@ import kotlin.math.abs
 data class ReportEntry(
     val year: String, val month: String, val day: String,
     val shaft: String, val side: String, val pointNo: String, val lengthCm: Double,
-    val deviation: String = "", val collapse: String = "",
+    /** انحراف چندگانه: "شماره‌فیلد:مقدار;..." مثلاً 1:2.5;4:1.2 */
+    val deviation: String = "",
+    /** ریزش چندگانه: همان قالب */
+    val collapse: String = "",
     val km: Double = 0.0, val dailyProgress: Double = 0.0,
     val shaftProgress: Double = 0.0, val remaining: Double = 0.0,
-    /** مختصات درون‌یابی‌شده روی محور تونل — ذخیره می‌شود، در UI گزارش نمایش داده نمی‌شود */
+    /** مختصات درون‌یابی‌شده روی محور تونل */
     val x: Double = 0.0,
     val y: Double = 0.0,
-    val z: Double = 0.0
+    val z: Double = 0.0,
+    /** توضیحات متنی جهت (شفت … به …) */
+    val notes: String = ""
 ) {
     val key: String get() = "$shaft-${normalizeSide(side)}"
     val dateSortKey: String get() = TunnelReportStore.dateKey(year, month, day)
@@ -85,6 +90,36 @@ object TunnelReportStore {
         "4" to "3", "4" to "end"
     )
 
+
+    /** پارس "1:2.5;4:1" → map */
+    fun parseSlotValues(raw: String): Map<Int, String> {
+        if (raw.isBlank()) return emptyMap()
+        val out = linkedMapOf<Int, String>()
+        raw.split(';', '؛').map { it.trim() }.filter { it.isNotEmpty() }.forEach { part ->
+            val idx = part.indexOf(':')
+            if (idx > 0) {
+                val k = part.substring(0, idx).trim().toIntOrNull()
+                val v = part.substring(idx + 1).trim()
+                if (k != null && k in 1..7 && v.isNotEmpty()) out[k] = v
+            } else if (part.isNotEmpty()) {
+                // مقدار بدون شماره → فیلد ۱
+                out[1] = part
+            }
+        }
+        return out
+    }
+
+    fun mergeSlotValue(existing: String, slot: Int, value: String): String {
+        val m = parseSlotValues(existing).toMutableMap()
+        val v = value.trim()
+        if (v.isEmpty()) m.remove(slot) else m[slot] = v
+        return m.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value}" }
+    }
+
+    fun hasCollapse(e: ReportEntry) = e.collapse.isNotBlank()
+    fun hasDeviation(e: ReportEntry) = e.deviation.isNotBlank()
+    fun hasNotes(e: ReportEntry) = e.notes.isNotBlank()
+
     fun saveEntry(context: Context, e: ReportEntry) {
         CsvStore.appendRow(context, REPORT_CSV, entryToRow(e))
     }
@@ -93,7 +128,8 @@ object TunnelReportStore {
         e.day, e.month, e.year, e.shaft, e.side, e.pointNo, e.lengthCm.toString(),
         e.deviation, e.collapse, e.km.toString(), e.dailyProgress.toString(),
         e.shaftProgress.toString(), e.remaining.toString(),
-        e.x.toString(), e.y.toString(), e.z.toString()
+        e.x.toString(), e.y.toString(), e.z.toString(),
+        e.notes
     )
 
     fun allEntries(context: Context): List<ReportEntry> {
@@ -115,7 +151,8 @@ object TunnelReportStore {
                     remaining = row.getOrElse(12) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     x = row.getOrElse(13) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
                     y = row.getOrElse(14) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
-                    z = row.getOrElse(15) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0
+                    z = row.getOrElse(15) { "0" }.toEnglishDigits().toDoubleOrNull() ?: 0.0,
+                    notes = row.getOrElse(16) { "" }
                 )
             } catch (e: Exception) { null }
         }

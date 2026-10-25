@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Phone
 import com.adel.assistant.ui.PendingClientsNav
 
 import com.adel.assistant.data.TunnelReportStore
+import com.adel.assistant.data.sideDisplayName
 
 import android.content.Intent
 import android.net.Uri
@@ -650,7 +651,136 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 val isSump = qLower.contains("سامپ") || qLower.contains("sump")
                 val isProgress = qLower.contains("پیشرفت")
                 val isClaims = qLower.contains("مطالبات") || qLower.contains("طلب")
+                val isFallQ = qLower.contains("ریزش")
+                val isDevQ = qLower.contains("انحراف")
+                val isNoteExcav = qLower.contains("توضیحات حفاری") || (qLower.contains("توضیح") && qLower.contains("حفار"))
+                val isNoteProj = qLower.contains("توضیحات پروژه") || (qLower.contains("توضیح") && qLower.contains("پروژه"))
+                val isNoteBoth = qLower == "توضیحات" || qLower == "توضیح"
 
+                // سربرگ‌های نتیجه جستجو
+                data class SearchTab(val id: String, val title: String)
+                val searchTabs = mutableListOf<SearchTab>()
+                searchTabs += SearchTab("apps", "برنامه‌ها")
+                if (isFallQ) searchTabs += SearchTab("fall", "ریزش")
+                if (isDevQ) searchTabs += SearchTab("dev", "انحراف")
+                if (isNoteExcav || isNoteBoth) searchTabs += SearchTab("note_ex", "توضیحات حفاری")
+                if (isNoteProj || isNoteBoth) searchTabs += SearchTab("note_pr", "توضیحات پروژه")
+                if (filteredItems.isNotEmpty() && searchTabs.none { it.id == "apps" }) {
+                    searchTabs.add(0, SearchTab("apps", "برنامه‌ها"))
+                }
+                var searchTabId by remember(query) { mutableStateOf(searchTabs.firstOrNull()?.id ?: "apps") }
+                if (searchTabs.none { it.id == searchTabId }) {
+                    searchTabId = searchTabs.firstOrNull()?.id ?: "apps"
+                }
+                if (searchTabs.size > 1) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        searchTabs.forEach { tab ->
+                            val sel = searchTabId == tab.id
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (sel) WorkPrimary.copy(alpha = 0.25f) else Color(0xFF2A2A2A),
+                                modifier = Modifier.clickable { searchTabId = tab.id }
+                            ) {
+                                Text(
+                                    tab.title,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = if (sel) WorkPrimary else TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (searchTabId == "fall") {
+                    val falls = remember(query) {
+                        TunnelReportStore.allEntries(context)
+                            .filter { it.collapse.isNotBlank() }
+                            .sortedByDescending { it.dateSortKey }
+                    }
+                    Text("ریزش (${falls.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    falls.take(40).forEach { e ->
+                        val slots = TunnelReportStore.parseSlotValues(e.collapse)
+                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Column(Modifier.padding(8.dp)) {
+                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = TextPrimary, fontSize = 12.sp)
+                                Text(
+                                    "شفت ${e.shaft} → ${sideDisplayName(e.side)}  |  نقطه ${e.pointNo}",
+                                    color = TextSecondary, fontSize = 11.sp
+                                )
+                                slots.forEach { (slot, value) ->
+                                    Text("فیلد $slot : $value", color = Color(0xFFE57373), fontSize = 11.sp)
+                                }
+                                if (slots.isEmpty()) Text("ریزش: ${e.collapse}", color = Color(0xFFE57373), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+                if (searchTabId == "dev" || (isDevQ && searchTabs.size == 1)) {
+                    val devs = remember(query) {
+                        TunnelReportStore.allEntries(context)
+                            .filter { it.deviation.isNotBlank() }
+                            .sortedByDescending { it.dateSortKey }
+                    }
+                    Text("انحراف (${devs.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    devs.take(40).forEach { e ->
+                        val slots = TunnelReportStore.parseSlotValues(e.deviation)
+                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Column(Modifier.padding(8.dp)) {
+                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = TextPrimary, fontSize = 12.sp)
+                                Text(
+                                    "شفت ${e.shaft} → ${sideDisplayName(e.side)}  |  نقطه ${e.pointNo}",
+                                    color = TextSecondary, fontSize = 11.sp
+                                )
+                                slots.forEach { (slot, value) ->
+                                    Text("فیلد $slot : $value", color = Color(0xFFFFB74D), fontSize = 11.sp)
+                                }
+                                if (slots.isEmpty()) Text("انحراف: ${e.deviation}", color = Color(0xFFFFB74D), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+                if (searchTabId == "note_ex" || ((isNoteExcav || isNoteBoth) && searchTabId == "note_ex")) {
+                    val notes = remember(query) {
+                        TunnelReportStore.allEntries(context)
+                            .filter { it.notes.isNotBlank() }
+                            .sortedByDescending { it.dateSortKey }
+                    }
+                    Text("توضیحات حفاری (${notes.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    notes.take(40).forEach { e ->
+                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Column(Modifier.padding(8.dp)) {
+                                Text("${e.year}/${e.month}/${e.day}  |  km ${"%.3f".format(e.km)}", color = TextPrimary, fontSize = 12.sp)
+                                Text(
+                                    "شفت ${e.shaft} → ${sideDisplayName(e.side)}  |  نقطه ${e.pointNo}",
+                                    color = TextSecondary, fontSize = 11.sp
+                                )
+                                Text(e.notes, color = Color(0xFF81C784), fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+                if (searchTabId == "note_pr" || ((isNoteProj || isNoteBoth) && searchTabId == "note_pr")) {
+                    val projs = remember(query) {
+                        ProjectStore.all(context)
+                            .filter { it.description.isNotBlank() }
+                            .sortedWith(compareBy<com.adel.assistant.data.ProjectEntry> { it.name }.thenByDescending { it.dateSortKey })
+                    }
+                    Text("توضیحات پروژه (${projs.size})", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    projs.take(50).forEach { e ->
+                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF2A2A2A), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Column(Modifier.padding(8.dp)) {
+                                Text(e.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("${e.year}/${e.month}/${e.day}", color = TextSecondary, fontSize = 11.sp)
+                                Text(e.description, color = Color(0xFF81C784), fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
 
                 // —— عدد خالص: شماره نقطه یا کیلومتر ——
                 val pureNum = query.toEnglishDigits().trim()
@@ -1150,7 +1280,10 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     }
 
                     // برنامه‌های منو
-                    if (filteredItems.isNotEmpty()) {
+                    if (filteredItems.isNotEmpty() && (searchTabId == "apps" || !query.let { ql ->
+                        val q = ql.lowercase()
+                        q.contains("ریزش") || q.contains("انحراف") || q.contains("توضیح")
+                    })) {
                         Text(
                             "برنامه‌ها (${filteredItems.size})",
                             color = TextSecondary,
