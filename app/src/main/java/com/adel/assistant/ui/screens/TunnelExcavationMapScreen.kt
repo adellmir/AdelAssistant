@@ -1380,7 +1380,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     infoTunnelPt?.let { p ->
         val coordTxt = formatEn("X=%.3f  Y=%.3f  Z=%.3f", p.x, p.y, p.z)
         val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)
-        val gmaps = UtmGeo.googleMapsUrl(lat, lon)
         val neshan = try { UtmGeo.neshanIntentUri(lat, lon) } catch (_: Throwable) {
             formatEn("https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
         }
@@ -1454,14 +1453,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = {
                             try {
-                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(gmaps)))
-                            } catch (_: Exception) {}
-                        }) { Text("Google Maps", color = color) }
-                        TextButton(onClick = {
-                            try {
                                 context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(neshan)))
                             } catch (_: Exception) {}
-                        }) { Text("نشان", color = color) }
+                        }) { Text("مسیریاب نشان", color = color) }
                     }
                 }
             },

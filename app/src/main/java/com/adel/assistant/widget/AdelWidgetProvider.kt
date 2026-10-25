@@ -215,39 +215,8 @@ class AdelWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // شفت‌ها پایین ویجت — وسط‌چین با لینک نشان در صورت وجود مختصات
-            listOf(
-                R.id.widget_shaft_1 to "1",
-                R.id.widget_shaft_2 to "2",
-                R.id.widget_shaft_3 to "3",
-                R.id.widget_shaft_4 to "4"
-            ).forEach { (vid, name) ->
-                try {
-                    val url = shaftNeshanUrl(context, name)
-                    if (url != null) {
-                        views.setOnClickPendingIntent(vid, openUrlIntent(context, url, 500 + name.toInt()))
-                    } else {
-                        views.setOnClickPendingIntent(
-                            vid,
-                            openRouteIntent(context, "survey/tunnel/map", 510 + name.toInt())
-                        )
-                    }
-                } catch (_: Exception) { }
-            }
-
+            // لینک شفت‌ها حذف شد
             return views
-        }
-
-        private fun shaftNeshanUrl(context: Context, shaft: String): String? {
-            return try {
-                val km = TunnelReportStore.shaftFixedKm(context, shaft) ?: return null
-                val pt = TunnelReportStore.findByKm(context, km) ?: return null
-                if (pt.x == 0.0 && pt.y == 0.0) return null
-                val (lat, lon) = UtmGeo.toLatLon(pt.x, pt.y, UtmGeo.DEFAULT_ZONE)
-                String.format(java.util.Locale.US, "https://nshn.ir/?lat=%.6f&lng=%.6f", lat, lon)
-            } catch (_: Exception) {
-                null
-            }
         }
     }
 }
