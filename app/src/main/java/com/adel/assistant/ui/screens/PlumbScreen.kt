@@ -53,6 +53,7 @@ import com.adel.assistant.data.PlumbReading
 import com.adel.assistant.data.PlumbStore
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.ToolPrimary
 import java.util.Locale
 import kotlin.math.abs
@@ -124,7 +125,7 @@ fun PlumbScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
     }
 
     Column(
-        Modifier.fillMaxSize().background(Background).padding(12.dp)
+        Modifier.fillMaxSize().background(appearanceScreenBg()).padding(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {

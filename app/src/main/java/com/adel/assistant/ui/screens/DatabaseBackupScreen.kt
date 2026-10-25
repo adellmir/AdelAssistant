@@ -1,6 +1,12 @@
 package com.adel.assistant.ui.screens
 
 import android.content.Intent
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import com.adel.assistant.data.AppearanceMode
+import com.adel.assistant.data.AppearanceStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,6 +26,8 @@ import com.adel.assistant.data.PlumbStore
 import com.adel.assistant.data.MonitoringStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -49,7 +57,12 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             val plumbJson = File(context.filesDir, "plumb_projects.json")
             val monTplDir = File(context.filesDir, "monitoring_templates")
             val monTplFiles = monTplDir.listFiles()?.filter { it.isFile } ?: emptyList()
-            if (files.isEmpty() && !plumbJson.exists() && !monJson.exists() && monTplFiles.isEmpty()) {
+            AppearanceStore.persistModeFile(context)
+            val customBg = AppearanceStore.customFile(context)
+            // حتی اگر داده خالی باشد، پشتیبان نما ممکن است لازم باشد
+            if (files.isEmpty() && !plumbJson.exists() && !monJson.exists() && monTplFiles.isEmpty()
+                && !customBg.exists() && !AppearanceStore.modeFile(context).exists()
+            ) {
                 status = "پایگاهی برای خروجی نیست"
                 return null
             }
@@ -103,6 +116,20 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                     f.inputStream().use { it.copyTo(zos) }
                     zos.closeEntry()
                 }
+                // نما
+                AppearanceStore.persistModeFile(context)
+                val modeF = AppearanceStore.modeFile(context)
+                if (modeF.exists()) {
+                    zos.putNextEntry(ZipEntry(AppearanceStore.BACKUP_MODE_ENTRY))
+                    modeF.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+                val customBg = AppearanceStore.customFile(context)
+                if (customBg.exists()) {
+                    zos.putNextEntry(ZipEntry(AppearanceStore.BACKUP_ENTRY))
+                    customBg.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
             }
             val bytes = out.readBytes()
             ExportHub.exportBytes(
@@ -138,6 +165,10 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                             name == "plumb_projects.csv" -> File(dir, name)
                             raw.startsWith("monitoring_templates/") ->
                                 File(File(context.filesDir, "monitoring_templates").also { it.mkdirs() }, name)
+                            raw == AppearanceStore.BACKUP_ENTRY || name == "custom_bg.jpg" ->
+                                AppearanceStore.customFile(context)
+                            raw == AppearanceStore.BACKUP_MODE_ENTRY || name == "mode.txt" ->
+                                AppearanceStore.modeFile(context)
                             raw.startsWith("data/") -> {
                                 val target = File(dir, name)
                                 target.parentFile?.mkdirs()
@@ -162,7 +193,8 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 }
                 MonitoringStore.saveAll(context, projects)
             } catch (_: Exception) {}
-            status = "وارد شد: $n فایل (شامل پایش در صورت وجود)"
+            AppearanceStore.restoreModeFile(context)
+            status = "وارد شد: $n فایل (شامل پایش و نما در صورت وجود)"
         } catch (e: Exception) {
             status = "خطای ورود: ${e.message}"
         }
@@ -181,12 +213,12 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         ScreenTopBar(title = "پشتیبان پایگاه داده", color = color, onBack = onBack)
         Spacer(Modifier.height(12.dp))
-        Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     "خروجی یکجای data + شاقولی + پایش (پروژه‌ها، اپوک‌ها، قالب اکسل) و ورود مجدد همان بسته.",
@@ -217,6 +249,49 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 ) { Text("ورود یکجا از فایل ZIP") }
             }
         }
+                Spacer(Modifier.height(14.dp))
+        Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("نما", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "پس‌زمینه و کاشی شیشه‌ای — به‌جز برنامه‌های نقشه",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                val mode = AppearanceStore.modeState
+                listOf(
+                    AppearanceMode.Simple to "۱. ساده (پیش‌فرض برنامه)",
+                    AppearanceMode.Iran to "۲. ایران — ماهواره‌ای محو",
+                    AppearanceMode.Topo to "۳. توپوگرافی",
+                    AppearanceMode.Custom to "۴. تصویر من (از گالری)"
+                ).forEach { (m, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { AppearanceStore.setMode(context, m) }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = mode == m,
+                            onCheckedChange = { AppearanceStore.setMode(context, m) },
+                            colors = CheckboxDefaults.colors(checkedColor = color)
+                        )
+                        Text(label, color = TextPrimary)
+                    }
+                }
+                OutlinedButton(
+                    onClick = { pickImage.launch("image/*") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (AppearanceStore.hasCustom(context)) "تعویض تصویر پس‌زمینه"
+                        else "انتخاب تصویر از گوشی"
+                    )
+                }
+            }
+        }
+
         if (status.isNotBlank()) {
             Text(status, color = TextPrimary, modifier = Modifier.padding(top = 12.dp))
         }

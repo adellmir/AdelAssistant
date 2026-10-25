@@ -35,6 +35,8 @@ import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
@@ -93,7 +95,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
     val receivedRows = list.filter { it.receiveAmount != null }.reversed()
     val totalRecv = list.mapNotNull { it.receiveAmount }.sum()
 
-    Column(modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(appearanceScreenBg()).padding(horizontal = 20.dp)) {
         Box {
             ScreenTopBar(title = "دریافتی‌های تونل", color = color, onBack = onBack)
             IconButton(onClick = { showMenu = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
@@ -152,7 +154,7 @@ fun TunnelReceiptsScreen(color: Color, onBack: () -> Unit) {
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(receivedRows) { item ->
-                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(10.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

@@ -24,6 +24,8 @@ import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -111,7 +113,7 @@ fun FinanceStatusScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState())
     ) {
@@ -167,7 +169,7 @@ private data class StatusResult(
 
 @Composable
 private fun StatusCard(title: String, rows: List<Pair<String, Double>>, color: Color) {
-    Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.Bold)
             rows.forEach { (label, value) ->

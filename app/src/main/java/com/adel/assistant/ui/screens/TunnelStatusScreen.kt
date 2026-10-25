@@ -24,6 +24,8 @@ import com.adel.assistant.data.sideDisplayName
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.abs
 
@@ -81,7 +83,7 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "پیشرفت تونل", color = color, onBack = onBack)
@@ -130,7 +132,7 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
 
 @Composable
 private fun ShaftProgressCard(c: ShaftCard) {
-    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(12.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

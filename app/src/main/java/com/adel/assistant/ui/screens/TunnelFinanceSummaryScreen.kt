@@ -22,6 +22,8 @@ import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.formatMoney
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -52,7 +54,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         ScreenTopBar(title = "خلاصه مطالبات تونل", color = color, onBack = onBack)
@@ -69,7 +71,7 @@ fun TunnelFinanceSummaryScreen(color: Color, onBack: () -> Unit) {
             TextButton(onClick = { refresh() }) { Text("بروزرسانی", color = color) }
         }
 
-        Surface(shape = RoundedCornerShape(14.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SummaryRow("کل صورت‌وضعیت‌ها", formatMoney(summary.sumPayable))
                 SummaryRow("کل حسن انجام", formatMoney(summary.sumRetention))

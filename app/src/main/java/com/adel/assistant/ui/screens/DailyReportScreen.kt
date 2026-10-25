@@ -43,6 +43,8 @@ import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -285,7 +287,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         Box {
@@ -461,7 +463,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 val r = rows[i]
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = SurfaceColor,
+                    color = appearanceCardColor(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {

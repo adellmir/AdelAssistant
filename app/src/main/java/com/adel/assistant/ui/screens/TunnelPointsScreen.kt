@@ -45,6 +45,8 @@ import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -222,7 +224,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         Box {
@@ -316,7 +318,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                 val (lat, lon) = UtmGeo.toLatLon(p.x, p.y)
                 val gmaps = UtmGeo.googleMapsUrl(lat, lon)
                 val neshan = UtmGeo.neshanIntentUri(lat, lon)
-                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(10.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
@@ -393,7 +395,7 @@ private fun KmContextCard(
     val ctx = remember(km) { TunnelReportStore.kmContext(context, km) }
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = SurfaceColor,
+        color = appearanceCardColor(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
     ) {
         Row(

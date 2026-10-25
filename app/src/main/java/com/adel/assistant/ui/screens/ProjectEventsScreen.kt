@@ -19,6 +19,8 @@ import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
@@ -38,7 +40,7 @@ fun ProjectEventsScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         ScreenTopBar(title = "ثبت وقایع پروژه", color = color, onBack = onBack)
@@ -59,7 +61,7 @@ fun ProjectEventsScreen(color: Color, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(12.dp))
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(results.take(6)) { p ->
-                Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(10.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {

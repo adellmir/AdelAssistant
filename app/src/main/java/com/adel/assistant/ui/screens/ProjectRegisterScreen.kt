@@ -48,6 +48,8 @@ import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 
 @Composable
@@ -261,7 +263,7 @@ fun ProjectRegisterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         Box {
@@ -409,7 +411,7 @@ fun ProjectRegisterScreen(
             items(results.take(6)) { p ->
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = SurfaceColor,
+                    color = appearanceCardColor(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {

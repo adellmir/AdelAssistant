@@ -32,6 +32,8 @@ import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -129,7 +131,7 @@ fun ReceivablesScreen(
         }
         .sortedByDescending { it.projects.firstOrNull()?.dateSortKey.orEmpty() }
 
-    Column(modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(appearanceScreenBg()).padding(horizontal = 16.dp)) {
         ScreenTopBar(title = "مطالبات کلی", color = color, onBack = onBack)
 
         // سربرگ‌ها
@@ -170,7 +172,7 @@ fun ReceivablesScreen(
         }
 
         // کادر محاسبات در یک خط
-        Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -328,7 +330,7 @@ private fun EmployerClaimsCard(
     onInvoice: (ProjectEntry) -> Unit
 ) {
     val showSms = if (reportMode) group.totalRemain > 1e-9 else true
-    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // سربرگ کارفرما
             Row(verticalAlignment = Alignment.CenterVertically) {

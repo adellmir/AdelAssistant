@@ -37,6 +37,7 @@ import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.MonitoringStore
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.ToolPrimary
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -88,7 +89,7 @@ fun MonitoringScreen(color: Color = ToolPrimary, onBack: () -> Unit) {
 
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
-    Column(Modifier.fillMaxSize().background(Background).padding(12.dp)) {
+    Column(Modifier.fillMaxSize().background(appearanceScreenBg()).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, null, tint = color)
@@ -258,7 +259,7 @@ private fun ProjectDetail(
 
 
 
-    Column(Modifier.fillMaxSize().background(Background).padding(12.dp)) {
+    Column(Modifier.fillMaxSize().background(appearanceScreenBg()).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 onChange(p)
@@ -410,7 +411,7 @@ private fun BaseEditor(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Background).padding(12.dp)) {
+    Column(Modifier.fillMaxSize().background(appearanceScreenBg()).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = color) }
             Text("نقاط پایه (Base)", color = Color.White, modifier = Modifier.weight(1f))
@@ -472,7 +473,7 @@ private fun AnalyzePage(
     val rows = if (tab == 0) rowsCoord else rowsAxial
     val mode = if (tab == 0) "coord" else "axial"
 
-    Column(Modifier.fillMaxSize().background(Background).padding(12.dp)) {
+    Column(Modifier.fillMaxSize().background(appearanceScreenBg()).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 onSaved(ep)

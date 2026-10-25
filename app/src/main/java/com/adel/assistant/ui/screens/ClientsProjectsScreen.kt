@@ -31,6 +31,8 @@ import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.ui.PendingProjectEdit
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -81,7 +83,7 @@ fun ClientsProjectsScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
     ) {
         ScreenTopBar(title = "کارفرمایان و پروژه‌ها", color = color, onBack = onBack)
 
@@ -122,7 +124,7 @@ fun ClientsProjectsScreen(
         ) {
             if (tab == 1) {
                 items(employers, key = { it.employer }) { e ->
-                    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(e.employer, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -164,7 +166,7 @@ fun ClientsProjectsScreen(
                 }
             } else {
                 items(projects, key = { it.name }) { p ->
-                    Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Row(

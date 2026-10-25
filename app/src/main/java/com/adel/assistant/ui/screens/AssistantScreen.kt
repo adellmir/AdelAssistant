@@ -38,6 +38,7 @@ import com.adel.assistant.data.AssistantPermissionStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.PendingAssistantPrompt
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -199,7 +200,7 @@ fun AssistantScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
     ) {
         ScreenTopBar(title = "دستیار هوشمند", color = color, onBack = onBack)
 

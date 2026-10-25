@@ -26,6 +26,8 @@ import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -130,7 +132,7 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "نقاط حفاری", color = color, onBack = onBack)
@@ -219,7 +221,7 @@ fun ExcavationPointsScreen(color: Color, onBack: () -> Unit) {
                 val key = rowKey(e)
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = SurfaceColor,
+                    color = appearanceCardColor(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(

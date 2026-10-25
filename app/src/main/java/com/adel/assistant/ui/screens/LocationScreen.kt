@@ -64,6 +64,8 @@ import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -450,7 +452,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 14.dp)
     ) {
         ScreenTopBar(title = "مکان", color = color, onBack = onBack)
@@ -469,7 +471,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             )
 
             // —— موقعیت زنده ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("موقعیت زنده", fontWeight = FontWeight.Bold, color = TextPrimary)
                     if (liveLat != null && liveLon != null) {
@@ -514,7 +516,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— ثبت ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("ثبت نقطه", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -574,7 +576,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— برو به روی نقشه ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("برو به روی نقشه", fontWeight = FontWeight.Bold, color = TextPrimary)
                     AdelOutlinedTextField(
@@ -615,7 +617,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— تبدیل دستی ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("تبدیل مختصات / ورود دستی", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -667,7 +669,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— ابزار فاصله / آفست / قطب‌نما ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("فاصله / آزیموت / قطب‌نما", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text("دو نقطه را از لیست انتخاب کنید (A سپس B) — یا هدف‌گیری با GPS", fontSize = 11.sp, color = TextSecondary)
@@ -746,7 +748,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
 
             // —— نقشه ساده ——
             if (points.isNotEmpty()) {
-                Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text("نقشهٔ نقاط (${points.size})", fontWeight = FontWeight.Bold, color = TextPrimary)
                         Spacer(Modifier.height(6.dp))
@@ -756,7 +758,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— لیست نقاط ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("نقاط ثبت‌شده (${points.size})", fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
@@ -810,7 +812,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— ژئوئید / ارتفاع ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("ارتفاع ژئوئید (N)", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text("Z_ortho = Z_ellip − N  |  برای دقت بالا N را از مدل محلی وارد کنید", fontSize = 11.sp, color = TextSecondary)
@@ -843,7 +845,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
             }
 
             // —— خروجی ——
-            Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("خروجی فایل", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Row(

@@ -18,6 +18,7 @@ import com.adel.assistant.data.LetterData
 import com.adel.assistant.data.LetterExport
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -44,7 +45,7 @@ fun LetterScreen(color: Color, onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "نامه‌نگاری", color = color, onBack = onBack)

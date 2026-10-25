@@ -32,6 +32,7 @@ import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -362,7 +363,7 @@ fun TotalStationDumpScreen(color: Color, onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(12.dp)
     ) {
         ScreenTopBar(title = "تخلیه دوربین", color = color, onBack = onBack)

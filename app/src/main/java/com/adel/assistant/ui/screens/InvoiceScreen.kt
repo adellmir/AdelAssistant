@@ -33,6 +33,8 @@ import com.adel.assistant.data.formatMoney
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
@@ -144,7 +146,7 @@ fun InvoiceScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 16.dp)
     ) {
         ScreenTopBar(title = "صدور فاکتور", color = color, onBack = onBack)
@@ -199,7 +201,7 @@ fun InvoiceScreen(
                 }
                 items(searchResults, key = { it.row }) { p ->
                     val checked = p.row in selected
-                    Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                         Row(
                             Modifier.padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -253,7 +255,7 @@ fun InvoiceScreen(
                 Text("شرح خدمات", fontWeight = FontWeight.Bold, color = TextPrimary)
             }
             itemsIndexed(lines) { index, line ->
-                Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         AdelOutlinedTextField(
                             line.service,
@@ -308,7 +310,7 @@ fun InvoiceScreen(
                 )
             }
             item {
-                Surface(shape = RoundedCornerShape(12.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("جمع کل: ${formatMoney(totalPreview)}", fontWeight = FontWeight.Bold, color = TextPrimary)
                         Text("دریافتی: ${formatMoney(recvPreview)}", color = TextSecondary)

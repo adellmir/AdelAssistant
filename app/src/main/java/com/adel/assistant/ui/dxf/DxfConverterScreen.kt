@@ -29,12 +29,14 @@ import com.adel.assistant.data.codeBase
 import com.adel.assistant.data.DefaultCodeRules
 import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ExportHub
+import com.adel.assistant.data.ReportHub
 import com.adel.assistant.data.GsiParser
 import com.adel.assistant.data.KmlParser
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.PointImport
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.ToolPrimary
 import com.adel.assistant.utils.DxfMapGenerator
 import com.adel.assistant.utils.DxfPointParser
@@ -88,7 +90,7 @@ fun DxfConverterScreen(onBack: () -> Unit, onOpenTopography: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
     ) {
         Row(
             modifier = Modifier
@@ -255,16 +257,10 @@ private fun saveAndShare(context: Context, content: String, originalName: String
             content,
             mimeType = "application/dxf"
         )
-        val cacheFile = File(context.cacheDir, fileName)
-        FileOutputStream(cacheFile).use { it.write(content.toByteArray(Charsets.UTF_8)) }
-        val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/dxf"
-            putExtra(Intent.EXTRA_STREAM, shareUri)
-            putExtra(Intent.EXTRA_SUBJECT, fileName)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "اشتراک DXF — ذخیره در Documents/AdelAssistant"))
+        ReportHub.shareTextFile(
+            context, fileName, content, "application/dxf",
+            "اشتراک DXF — ذخیره در Documents/AdelAssistant"
+        )
     } catch (e: Exception) {
         e.printStackTrace()
     }
@@ -278,16 +274,10 @@ private fun saveAndShareKml(context: Context, content: String, originalName: Str
             context, fileName, content,
             mimeType = "application/vnd.google-earth.kml+xml"
         )
-        val cacheFile = File(context.cacheDir, fileName)
-        FileOutputStream(cacheFile).use { it.write(content.toByteArray(Charsets.UTF_8)) }
-        val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/vnd.google-earth.kml+xml"
-            putExtra(Intent.EXTRA_STREAM, shareUri)
-            putExtra(Intent.EXTRA_SUBJECT, fileName)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "اشتراک KML"))
+        ReportHub.shareTextFile(
+            context, fileName, content, "application/vnd.google-earth.kml+xml",
+            "اشتراک KML"
+        )
     } catch (e: Exception) {
         e.printStackTrace()
     }

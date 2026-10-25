@@ -13,13 +13,14 @@ import com.adel.assistant.ui.theme.TextPrimary
 import com.adel.assistant.ui.theme.TextSecondary
 import com.adel.assistant.ui.theme.TextMuted
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 
 @Composable
 fun ViaClaudeScreen(title: String, color: Color, description: String, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         ScreenTopBar(title = title, color = color, onBack = onBack)

@@ -90,6 +90,8 @@ import com.adel.assistant.data.TaskStore
 import com.adel.assistant.widget.AdelWidgetProvider
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.BorderColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.SurfaceHigh
@@ -277,7 +279,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
     ) {
         Column(
             modifier = Modifier
@@ -290,7 +292,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             // ---- کادر بالا ----
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = SurfaceColor,
+                color = appearanceCardColor(),
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -403,7 +405,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             // ---- برنامه‌ریزی (پروژه + تسک) ----
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = SurfaceColor,
+                color = appearanceCardColor(),
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -559,7 +561,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
 
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = SurfaceColor,
+                color = appearanceCardColor(),
                 border = BorderStroke(0.5.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1444,7 +1446,7 @@ private fun MenuGrid(
                             .weight(1f)
                             .clickable { onNavigate(item.route) },
                         shape = RoundedCornerShape(12.dp),
-                        color = SurfaceColor
+                        color = appearanceCardColor()
                     ) {
                         Column(
                             modifier = Modifier
@@ -1481,7 +1483,7 @@ private fun DashboardCard(
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = SurfaceColor,
+        color = appearanceCardColor(),
         border = BorderStroke(0.5.dp, BorderColor),
         modifier = Modifier.fillMaxWidth()
     ) {

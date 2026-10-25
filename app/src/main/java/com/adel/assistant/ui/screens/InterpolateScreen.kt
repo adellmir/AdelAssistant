@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import kotlin.math.PI
 import kotlin.math.atan
 import kotlin.math.floor
@@ -97,7 +98,7 @@ fun InterpolateScreen(color: Color, onBack: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(Background).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
+        modifier = Modifier.fillMaxSize().background(appearanceScreenBg()).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
     ) {
         ScreenTopBar(title = "درون‌یابی", color = color, onBack = onBack)
         Spacer(Modifier.height(8.dp))

@@ -34,6 +34,8 @@ import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.*
 
@@ -101,7 +103,7 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
         ScreenTopBar(title = "کیلومتراژ/چینیج", color = color, onBack = onBack)
@@ -124,7 +126,7 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
         coordText?.let { txt ->
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = SurfaceColor,
+                color = appearanceCardColor(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
@@ -139,7 +141,7 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
         }
         detailText?.let {
             Spacer(modifier = Modifier.height(8.dp))
-            Surface(shape = RoundedCornerShape(10.dp), color = SurfaceColor, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(10.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Text(it, modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall)
             }
         }

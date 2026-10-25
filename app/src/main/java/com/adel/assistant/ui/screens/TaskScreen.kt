@@ -31,6 +31,7 @@ import com.adel.assistant.data.FilePicker
 import com.adel.assistant.data.TaskStore
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
+import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.theme.TextPrimary
 import java.io.OutputStreamWriter
 
@@ -77,7 +78,7 @@ fun TaskScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)
+        modifier = Modifier.fillMaxSize().background(appearanceScreenBg()).padding(horizontal = 20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.weight(1f)) {
