@@ -644,91 +644,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                                     onClick = {
                                         dimMode = !dimMode
                                         dimA = null; dimB = null; dimMsg = null
-                                        menuOpen = false
-                                        status = if (dimMode) "اندازه‌گذاری: نقطه اول را بزن" else ""
-                                    },
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Straighten,
-                                        "اندازه",
-                                        tint = if (dimMode) color else Color.White,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Text("اندازه", color = if (dimMode) color else Color.White, fontSize = 9.sp)
-                            }
-                            IconButton(onClick = { showLayers = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Outlined.Layers, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            }
-                            IconButton(onClick = { showExport = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Outlined.FileDownload, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            }
-                        }
-                    }
-                }
-            }
-
-
-            dimMsg?.let { msg ->
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = color,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp)
-                ) {
-                    Text(msg, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontSize = 13.sp)
-                }
-            }
-            // وضعیت
-            Text(
-                status,
-                color = Color.White.copy(alpha = 0.85f),
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(10.dp)
-                    .background(Color(0x66000000), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-
-            Canvas(
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        // زوم حول نقطهٔ تماس — بدون پرش
-                        detectTransformGestures { centroid, pan, zoom, _ ->
-                            val oldScale = scale
-                            val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
-                            if (kotlin.math.abs(newScale - oldScale) > 1e-12f) {
-                                val factor = newScale / oldScale
-                                offset = Offset(
-                                    centroid.x - (centroid.x - offset.x) * factor + pan.x,
-                                    centroid.y - (centroid.y - offset.y) * factor + pan.y
-                                )
-                                scale = newScale
-                            } else {
-                                offset += pan
-                            }
-                        }
-                    }
-                    .pointerInput(editMode, overlays, scale, offset, dimMode) {
-                        detectTapGestures(
-                            onTap = { pos ->
-                                if (dimMode) {
-                                    val w = screenToWorld(pos.x, pos.y)
-                                    if (dimA == null) {
-                                        dimA = w
-                                        dimB = null
-                                        dimMsg = "نقطه دوم را بزن"
-                                    } else {
-                                        dimB = w
-                                        val a = dimA!!
-                                        val dist = kotlin.math.hypot(w.first - a.first, w.second - a.second)
-                                        dimMsg = String.format(java.util.Locale.US, "طول = %.3f m", dist)
-                                        dimA = null
-                                    }
+                                        if (dimMode) {
+                                    // اندازه‌گذاری با تارگت مرکزی است — لمس نقشه نادیده
                                     return@detectTapGestures
                                 }
                                 var best: MapOverlayPoint? = null
@@ -962,14 +879,28 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                 }
 
                 // بنچ‌مارک: متن سبز ۲۰؟ ۱۰ سانتی‌متر سمت راست — ردیف۱ نام، ردیف۲ تراز
-                // خط اندازه‌گذاری
+                // خط اندازه‌گذاری + متن فاصله روی خط
                 dimA?.let { a ->
                     val sa = worldToScreen(a.first, a.second)
                     drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sa)
+                    drawCircle(Color.Black.copy(alpha = 0.5f), radius = 10f, center = sa, style = Stroke(1.5f))
                     dimB?.let { b ->
                         val sb = worldToScreen(b.first, b.second)
-                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3f)
+                        drawLine(Color(0xFFFFEB3B), sa, sb, strokeWidth = 3.5f)
                         drawCircle(Color(0xFFFFEB3B), radius = 8f, center = sb)
+                        drawCircle(Color.Black.copy(alpha = 0.5f), radius = 10f, center = sb, style = Stroke(1.5f))
+                        val dist = kotlin.math.hypot(b.first - a.first, b.second - a.second)
+                        val mid = Offset((sa.x + sb.x) / 2f, (sa.y + sb.y) / 2f)
+                        val label = String.format(java.util.Locale.US, "%.3f m", dist)
+                        val tp = Paint().apply {
+                            this.color = android.graphics.Color.rgb(0xFF, 0xEB, 0x3B)
+                            textSize = 36f
+                            isAntiAlias = true
+                            typeface = Typeface.DEFAULT_BOLD
+                            textAlign = Paint.Align.CENTER
+                            setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
+                        }
+                        drawContext.canvas.nativeCanvas.drawText(label, mid.x, mid.y - 8f, tp)
                     }
                 }
 
@@ -1004,11 +935,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                     drawLine(Color(0xFFE53935), Offset(s.x, s.y - 28f), Offset(s.x, s.y - 12f), 3f)
                 }
             }
-            // —— تارگت مرکزی + نوار ثبت (بالای Canvas نقشه تا قابل‌دیدن و قابل‌لمس باشد) ——
-            if (crosshairMode) {
+            // —— تارگت مرکزی + نوار ثبت (نقطه یا اندازه‌گذاری) ——
+            if (crosshairMode || dimMode) {
                 val cw = centerWorldSnapped()
                 val editHintId = nearestOverlayId(cw.first, cw.second, 0.01) ?: crosshairEditOverlayId
-                val inv = Color.White
+                val inv = if (dimMode) Color(0xFFFFEB3B) else Color.White
                 Canvas(
                     Modifier
                         .fillMaxSize()
@@ -1024,7 +955,6 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                     drawLine(inv, Offset(cx, cy - arm), Offset(cx, cy - gap), stroke)
                     drawLine(inv, Offset(cx, cy + gap), Offset(cx, cy + arm), stroke)
                     drawCircle(inv, radius = 6f, center = Offset(cx, cy), style = Stroke(2.5f))
-                    // حلقه بیرونی کم‌رنگ برای دیده شدن روی هر پس‌زمینه
                     drawCircle(Color.Black.copy(alpha = 0.35f), radius = 8f, center = Offset(cx, cy), style = Stroke(1.5f))
                 }
                 Surface(
@@ -1040,26 +970,67 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        TextButton(
-                            onClick = { registerFromCrosshair() },
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) { Text("ثبت", color = color, fontSize = 14.sp) }
-                        TextButton(
-                            onClick = {
-                                if (editHintId != null) {
-                                    crosshairEditOverlayId = editHintId
-                                    crosshairDimId = editHintId
-                                    status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
-                                } else {
-                                    crosshairMode = false
-                                    crosshairDimId = null
-                                    crosshairEditOverlayId = null
-                                    status = "تارگت خاموش"
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 14.sp)
+                        if (dimMode) {
+                            TextButton(
+                                onClick = {
+                                    val pt = centerWorldSnapped()
+                                    when {
+                                        dimA == null -> {
+                                            dimA = pt
+                                            dimB = null
+                                            dimMsg = "نقطه ۲: تارگت را بگذارید و ثبت بزنید"
+                                            status = dimMsg ?: ""
+                                        }
+                                        dimB == null -> {
+                                            dimB = pt
+                                            val a = dimA!!
+                                            val dist = kotlin.math.hypot(pt.first - a.first, pt.second - a.second)
+                                            dimMsg = String.format(java.util.Locale.US, "طول = %.3f m", dist)
+                                            status = dimMsg ?: ""
+                                        }
+                                        else -> {
+                                            // اندازه‌گیری جدید از نقطه ۱
+                                            dimA = pt
+                                            dimB = null
+                                            dimMsg = "نقطه ۲: تارگت را بگذارید و ثبت بزنید"
+                                            status = dimMsg ?: ""
+                                        }
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) { Text("ثبت", color = Color(0xFFFFEB3B), fontSize = 14.sp) }
+                            TextButton(
+                                onClick = {
+                                    dimMode = false
+                                    dimA = null
+                                    dimB = null
+                                    dimMsg = null
+                                    status = ""
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) { Text("برگشت", color = Color.White, fontSize = 14.sp) }
+                        } else {
+                            TextButton(
+                                onClick = { registerFromCrosshair() },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) { Text("ثبت", color = color, fontSize = 14.sp) }
+                            TextButton(
+                                onClick = {
+                                    if (editHintId != null) {
+                                        crosshairEditOverlayId = editHintId
+                                        crosshairDimId = editHintId
+                                        status = "ویرایش — موقعیت جدید را بگذارید و ثبت کنید"
+                                    } else {
+                                        crosshairMode = false
+                                        crosshairDimId = null
+                                        crosshairEditOverlayId = null
+                                        status = "تارگت خاموش"
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(if (editHintId != null) "ویرایش" else "برگشت", color = Color.White, fontSize = 14.sp)
+                            }
                         }
                         Column {
                             Text(formatEn("E %.3f", cw.first), color = Color.White, fontSize = 12.sp)
