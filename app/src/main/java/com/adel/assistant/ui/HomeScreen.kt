@@ -630,8 +630,49 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
             }
 
+            // ---- نوار آیکن سریع زیر جستجو (مثل سابق) ----
+            if (filteredItems.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    filteredItems.forEach { item ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = appearanceCardColor(),
+                            border = BorderStroke(0.5.dp, BorderColor),
+                            modifier = Modifier
+                                .clickable { onNavigate(item.route) }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    item.icon,
+                                    contentDescription = item.title,
+                                    tint = WorkPrimary,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    item.title,
+                                    fontSize = 10.sp,
+                                    color = appearanceTextPrimary(),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
-            // ---- نتایج جستجوی هوشمند ----
+            // ---- نتایج جستجوی هوشمند (غیر از آیکن برنامه‌ها) ----
             if (query.isNotEmpty()) {
                 val qLower = query.lowercase().trim()
                 val qNorm = qLower.replace("ی", "ي").replace("ک", "ك")
@@ -804,19 +845,23 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
 
                 var searchTabId by remember(query) {
-                    mutableStateOf(searchTabs.firstOrNull()?.id ?: "apps")
+                    mutableStateOf(searchTabs.firstOrNull { it.id != "apps" }?.id
+                        ?: searchTabs.firstOrNull()?.id
+                        ?: "apps")
                 }
                 LaunchedEffect(query, searchTabs.joinToString { it.id }) {
                     if (searchTabs.none { it.id == searchTabId }) {
-                        searchTabId = searchTabs.firstOrNull()?.id ?: "apps"
+                        searchTabId = searchTabs.firstOrNull { it.id != "apps" }?.id
+                            ?: searchTabs.firstOrNull()?.id
+                            ?: "apps"
                     }
                 }
 
-                // نوار سربرگ منابع (وقتی بیش از یک منبع باشد واضح‌تر است)
-                if (searchTabs.isNotEmpty()) {
+                // سربرگ‌ها فقط وقتی نتیجهٔ غیر از برنامه هم باشد (آیکن‌ها در نوار بالا)
+                val nonAppTabs = searchTabs.filter { it.id != "apps" }
+                if (nonAppTabs.isNotEmpty()) {
                     Text(
-                        if (searchTabs.size > 1) "منابع پاسخ — یک سربرگ را انتخاب کنید"
-                        else "نتایج",
+                        "سایر نتایج",
                         color = appearanceTextSecondary(),
                         fontSize = 11.sp,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -828,7 +873,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        searchTabs.forEach { tab ->
+                        nonAppTabs.forEach { tab ->
                             val sel = searchTabId == tab.id
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
@@ -959,10 +1004,15 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         }
                     }
                     "apps" -> {
+                        // آیکن‌ها در نوار زیر جستجو هستند — اینجا تکرار نمی‌کنیم
                         if (filteredItems.isEmpty()) {
                             Text("برنامه‌ای یافت نشد", color = appearanceTextMuted(), fontSize = 12.sp)
                         } else {
-                            MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
+                            Text(
+                                "آیکن برنامه‌ها در نوار بالای همین بخش است",
+                                color = appearanceTextMuted(),
+                                fontSize = 11.sp
+                            )
                         }
                     }
                     "emp" -> {
