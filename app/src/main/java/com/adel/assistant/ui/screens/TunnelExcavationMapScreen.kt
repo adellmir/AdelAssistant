@@ -1494,6 +1494,10 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
 
 }
 
+}
+}
+}
+}
 private enum class TunnelBaseMap(val title: String) {
     NONE("پس‌زمینه ساده"),
     SATELLITE("ماهواره‌ای"),
