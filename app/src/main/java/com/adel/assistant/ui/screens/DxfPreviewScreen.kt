@@ -471,6 +471,11 @@ LaunchedEffect(profileMode) {
         PendingMapGoto.consume()?.let { (e, n, z) ->
             zoneText = z.toString()
             centerOnUtm(e, n, 17)
+            scale = (scale * 3f).coerceIn(0.000001f, 5000f)
+            offset = Offset(
+                canvasSize.x / 2f - (e * scale).toFloat(),
+                canvasSize.y / 2f + (n * scale).toFloat()
+            )
             gotoMarker = e to n
             message = "برو به: E=${"%.3f".format(java.util.Locale.US, e)} N=${"%.3f".format(java.util.Locale.US, n)}"
         }
@@ -3381,6 +3386,11 @@ if (showSaveDxfDialog) {
                             ) {
                                 TextButton(onClick = {
                                     centerOnUtm(sp.x, sp.y, 17)
+                                    scale = (scale * 3f).coerceIn(0.000001f, 5000f)
+                                    offset = Offset(
+                                        canvasSize.x / 2f - (sp.x * scale).toFloat(),
+                                        canvasSize.y / 2f + (sp.y * scale).toFloat()
+                                    )
                                     gotoMarker = sp.x to sp.y
                                     showGotoDialog = false
                                     message = "برو به ${sp.id}"
@@ -3407,6 +3417,12 @@ if (showSaveDxfDialog) {
                     val (e, n, zz) = CoordGoto.toUtm(pr, z)
                     zoneText = zz.toString()
                     centerOnUtm(e, n, 17)
+                    // مقیاس ۳ برابر
+                    scale = (scale * 3f).coerceIn(0.000001f, 5000f)
+                    offset = Offset(
+                        canvasSize.x / 2f - (e * scale).toFloat(),
+                        canvasSize.y / 2f + (n * scale).toFloat()
+                    )
                     gotoMarker = e to n
                     showGotoDialog = false
                     message = "برو به مختصات"

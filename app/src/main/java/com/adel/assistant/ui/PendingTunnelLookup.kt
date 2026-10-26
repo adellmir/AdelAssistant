@@ -4,15 +4,26 @@ package com.adel.assistant.ui
 object PendingTunnelLookup {
     var pointNo: String? = null
     var km: String? = null
+    /** اگر true باشد فرم در حالت ویرایش باز می‌شود */
+    var editMode: Boolean = false
 
     fun openPoint(no: String) {
         pointNo = no
         km = null
+        editMode = false
+    }
+
+    /** باز کردن نقطه برای ویرایش در برنامه نقاط تونل */
+    fun openPointForEdit(no: String) {
+        pointNo = no
+        km = null
+        editMode = true
     }
 
     fun openKm(k: Double) {
         km = String.format(java.util.Locale.US, "%.3f", k)
         pointNo = null
+        editMode = false
     }
 
     fun consumePointNo(): String? {
@@ -24,6 +35,12 @@ object PendingTunnelLookup {
     fun consumeKm(): String? {
         val v = km
         km = null
+        return v
+    }
+
+    fun consumeEditMode(): Boolean {
+        val v = editMode
+        editMode = false
         return v
     }
 }

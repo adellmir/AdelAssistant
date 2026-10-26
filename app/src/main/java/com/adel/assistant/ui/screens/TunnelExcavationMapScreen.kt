@@ -77,6 +77,8 @@ import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.PendingTunnelLookup
+import com.adel.assistant.navigation.Routes
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -106,7 +108,7 @@ import kotlin.math.tan
  * پس‌زمینه ماهواره / شهری اختیاری
  */
 @Composable
-fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
+fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -141,6 +143,8 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
     var showGotoDialog by remember { mutableStateOf(false) }
     var gotoLine by remember { mutableStateOf("") }
     var gotoZone by remember { mutableStateOf("40") }
+    var gotoPointNo by remember { mutableStateOf("") }
+    var gotoKm by remember { mutableStateOf("") }
     var gotoMarker by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var crosshairEditOverlayId by remember { mutableStateOf<String?>(null) }
     var crosshairDimId by remember { mutableStateOf<String?>(null) }
@@ -1325,11 +1329,41 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
         val numKb = androidx.compose.foundation.text.KeyboardOptions(
             keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
         )
+        fun applyGoto(e: Double, n: Double, msg: String) {
+            gotoMarker = e to n
+            if (canvasSize.x > 0f) {
+                // مقیاس ۳ برابر نسبت به زوم فعلی
+                val targetScale = (scale * 3f).coerceIn(0.01f, 5000f)
+                scale = targetScale
+                offset = Offset(
+                    canvasSize.x / 2f - (e * scale).toFloat(),
+                    canvasSize.y / 2f + (n * scale).toFloat()
+                )
+            }
+            showGotoDialog = false
+            status = msg
+        }
         AlertDialog(
             onDismissRequest = { showGotoDialog = false },
-            title = { Text("برو به مختصات") },
+            title = { Text("برو به") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AdelOutlinedTextField(
+                        gotoPointNo,
+                        { gotoPointNo = it },
+                        label = { Text("شماره نقطه") },
+                        singleLine = true,
+                        keyboardOptions = numKb,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    AdelOutlinedTextField(
+                        gotoKm,
+                        { gotoKm = it },
+                        label = { Text("کیلومتر") },
+                        singleLine = true,
+                        keyboardOptions = numKb,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     AdelOutlinedTextField(
                         gotoLine,
                         { gotoLine = it },
@@ -1345,11 +1379,37 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                         keyboardOptions = numKb,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Text("UTM: رقم صحیح ≥۴  |  جغرافیایی: رقم صحیح ≤۳", fontSize = 11.sp, color = Color(0xFF9E9E9E))
+                    Text("اولویت: شماره نقطه → کیلومتر → مختصات", fontSize = 11.sp, color = Color(0xFF9E9E9E))
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
+                    // ۱) شماره نقطه
+                    val pno = gotoPointNo.trim()
+                    if (pno.isNotEmpty()) {
+                        val pt = TunnelReportStore.findByPointNo(context, pno)
+                            ?: TunnelReportStore.allPoints(context).firstOrNull {
+                                it.pointNo == pno || it.pointNo.contains(pno)
+                            }
+                        if (pt != null && (pt.x != 0.0 || pt.y != 0.0)) {
+                            applyGoto(pt.x, pt.y, "برو به نقطه ${pt.pointNo}")
+                            return@TextButton
+                        }
+                        status = "نقطه یافت نشد"
+                        return@TextButton
+                    }
+                    // ۲) کیلومتر
+                    val kmVal = gotoKm.replace(',', '.').toDoubleOrNull()
+                    if (kmVal != null) {
+                        val pt = TunnelReportStore.findByKm(context, kmVal)
+                        if (pt != null && (pt.x != 0.0 || pt.y != 0.0)) {
+                            applyGoto(pt.x, pt.y, formatEn("برو به km %.3f (نقطه %s)", pt.km, pt.pointNo))
+                            return@TextButton
+                        }
+                        status = "کیلومتر یافت نشد"
+                        return@TextButton
+                    }
+                    // ۳) مختصات
                     val pr = CoordGoto.parse(gotoLine)
                     if (pr == null) {
                         status = "مختصات نامعتبر"
@@ -1357,18 +1417,7 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                     }
                     val z = gotoZone.toIntOrNull() ?: zone
                     val (e, n, zz) = CoordGoto.toUtm(pr, z)
-                    gotoMarker = e to n
-                    // مرکز و زوم روی نقطه
-                    if (canvasSize.x > 0f) {
-                        val targetScale = (scale * 1.2f).coerceIn(0.01f, 5000f)
-                        scale = targetScale
-                        offset = Offset(
-                            canvasSize.x / 2f - (e * scale).toFloat(),
-                            canvasSize.y / 2f + (n * scale).toFloat()
-                        )
-                    }
-                    showGotoDialog = false
-                    status = formatEn("برو به E=%.3f N=%.3f", e, n)
+                    applyGoto(e, n, formatEn("برو به E=%.3f N=%.3f", e, n))
                 }) { Text("برو", color = color) }
             },
             dismissButton = {
@@ -1460,7 +1509,14 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { infoTunnelPt = null }) { Text("بستن") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        PendingTunnelLookup.openPointForEdit(p.pointNo)
+                        infoTunnelPt = null
+                        onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
+                    }) { Text("ویرایش", color = color) }
+                    TextButton(onClick = { infoTunnelPt = null }) { Text("بستن") }
+                }
             }
         )
     }

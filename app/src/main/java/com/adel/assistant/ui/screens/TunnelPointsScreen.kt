@@ -44,6 +44,7 @@ import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
+import com.adel.assistant.ui.PendingTunnelLookup
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.appearanceScreenBg
 import com.adel.assistant.ui.appearanceCardColor
@@ -200,6 +201,36 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
         results = emptyList()
         contextKm = null
         contextCenter = ""
+    }
+
+    LaunchedEffect(Unit) {
+        val wantEdit = PendingTunnelLookup.consumeEditMode()
+        val no = PendingTunnelLookup.consumePointNo()
+        val kmPending = PendingTunnelLookup.consumeKm()
+        if (no != null) {
+            pointNo = no
+            search()
+            if (wantEdit) {
+                val p = TunnelReportStore.findByPointNo(context, no)
+                if (p != null) {
+                    isEditMode = true
+                    editingOriginalNo = p.pointNo
+                } else {
+                    isEditMode = true
+                    editingOriginalNo = no
+                }
+            }
+        } else if (kmPending != null) {
+            km = kmPending
+            search()
+            if (wantEdit) {
+                val p = results.firstOrNull()
+                if (p != null) {
+                    isEditMode = true
+                    editingOriginalNo = p.pointNo
+                }
+            }
+        }
     }
 
     fun register() {
