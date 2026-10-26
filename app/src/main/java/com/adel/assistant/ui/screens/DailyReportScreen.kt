@@ -315,15 +315,15 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AdelOutlinedTextField(
                 value = day, onValueChange = { day = filterNumericInput(it) }, label = { Text("روز") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.9f)
             )
             AdelOutlinedTextField(
                 value = month, onValueChange = { month = filterNumericInput(it) }, label = { Text("ماه") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.9f)
             )
             AdelOutlinedTextField(
                 value = year, onValueChange = { year = filterNumericInput(it) }, label = { Text("سال") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1.15f)
             )
             IconButton(onClick = { loadDay() }) {
                 Icon(Icons.Outlined.Search, contentDescription = "نمایش گزارش این روز", tint = color)
@@ -385,16 +385,16 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AdelOutlinedTextField(
                 value = deviation, onValueChange = { deviation = filterNumericInput(it) }, label = { Text("انحراف") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.9f)
             )
             AdelOutlinedTextField(
                 value = collapse, onValueChange = { collapse = filterNumericInput(it) }, label = { Text("ریزش") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f)
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.9f)
             )
             AdelOutlinedTextField(
                 value = slotNo, onValueChange = { slotNo = filterNumericInput(it) },
-                label = { Text("فیلد ۱–۷") },
-                keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.7f)
+                label = { Text("موقعیت") },
+                keyboardOptions = numberKeyboard, modifier = Modifier.weight(1.15f)
             )
             IconButton(onClick = {
                 // بعلاوه: ثبت ردیف (یا فقط ریزش/انحراف) + ذخیره نهایی
@@ -415,7 +415,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
         }
         AdelOutlinedTextField(
             value = notes, onValueChange = { notes = it },
-            label = { Text("توضیحات (شفت … به …)") },
+            label = { Text("توضیحات") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )

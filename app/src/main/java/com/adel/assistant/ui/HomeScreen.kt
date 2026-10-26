@@ -633,14 +633,17 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 MenuGrid(items = filteredItems, accent = WorkPrimary, onNavigate = onNavigate)
             }
 
-            // ---- نتایج هوشمند چندمنبعی (مطالبات، پروژه، نقطه، …) ----
+            // ---- نتایج هوشمند چندمنبعی (ماه / تاریخ / مطالبات / درآمد / …) ----
             if (query.isNotEmpty()) {
                 val qLower = query.lowercase().trim()
+                val qEn = query.toEnglishDigits().trim()
+
                 fun moneyM(v: Double): String =
                     if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9)
                         String.format(java.util.Locale.US, "%,.0f م", v)
                     else
                         String.format(java.util.Locale.US, "%,.1f م", v)
+
                 fun callPhone(phone: String) {
                     if (phone.isBlank()) return
                     try {
@@ -660,90 +663,172 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                             "شبا: 430180000000242375213376"
                     try {
                         val uri = Uri.parse("smsto:$phone?body=" + Uri.encode(body))
-                        val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+                        context.startActivity(Intent(Intent.ACTION_SENDTO, uri).apply {
                             putExtra("sms_body", body)
                             putExtra(Intent.EXTRA_TEXT, body)
-                        }
-                        context.startActivity(intent)
+                        })
                     } catch (_: Exception) {
                         try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone?body=" + Uri.encode(body)))
-                            )
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone?body=" + Uri.encode(body))))
                         } catch (_: Exception) { }
                     }
                 }
 
-                val isShaft = qLower.contains("شفت") || Regex("""(?i)^sh\s*\d*$""").matches(qLower) || qLower.startsWith("sh ")
-                val isWell = qLower.contains("چاه") || Regex("""(?i)^ch\s*\d*$""").matches(qLower) || qLower.startsWith("ch ")
-                val isSump = qLower.contains("سامپ") || qLower.contains("sump")
-                val isProgress = qLower.contains("پیشرفت")
+                val monthNames = listOf(
+                    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+                    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+                )
+                val monthNum = monthNames.indexOfFirst { qLower.contains(it) }.let { if (it >= 0) it + 1 else null }
+                // سال همراه ماه: مهر ۱۴۰۵
+                val yearWithMonth = Regex("""(14\d{2}|13\d{2})""").find(qEn)?.value?.toIntOrNull()
+                val todayJ = try { CalendarStore.todayJalali() } catch (_: Exception) { Triple(1404, 1, 1) }
+                val focusYear = yearWithMonth ?: todayJ.first
+
+                // تاریخ فشرده YYYYMMDD یا YYYY/MM/DD
+                val ymd = Regex("""^(14\d{2}|13\d{2})[/\-.]?(\d{1,2})[/\-.]?(\d{1,2})$""").matchEntire(qEn.replace(" ", ""))
+                val ymd2 = Regex("""^(14\d{2}|13\d{2})(\d{2})(\d{2})$""").matchEntire(qEn.replace(" ", ""))
+                val dateY: Int?
+                val dateM: Int?
+                val dateD: Int?
+                when {
+                    ymd != null -> {
+                        dateY = ymd.groupValues[1].toIntOrNull()
+                        dateM = ymd.groupValues[2].toIntOrNull()
+                        dateD = ymd.groupValues[3].toIntOrNull()
+                    }
+                    ymd2 != null -> {
+                        dateY = ymd2.groupValues[1].toIntOrNull()
+                        dateM = ymd2.groupValues[2].toIntOrNull()
+                        dateD = ymd2.groupValues[3].toIntOrNull()
+                    }
+                    else -> { dateY = null; dateM = null; dateD = null }
+                }
+                val pureYear = Regex("""^(14\d{2}|13\d{2})$""").matchEntire(qEn)?.value?.toIntOrNull()
+                val pureNum = qEn.toDoubleOrNull()
+                val isPureNumberQ = pureNum != null && dateY == null && pureYear == null
+
                 val isClaims = qLower.contains("مطالبات") || qLower.contains("طلب")
+                val isIncome = qLower.contains("درآمد") || qLower.contains("دریافت")
                 val isFallQ = qLower.contains("ریزش")
                 val isDevQ = qLower.contains("انحراف")
-                val isNoteExcav = qLower.contains("توضیحات حفاری") || (qLower.contains("توضیح") && qLower.contains("حفار"))
-                val isNoteProj = qLower.contains("توضیحات پروژه") || (qLower.contains("توضیح") && qLower.contains("پروژه"))
-                val isNoteBoth = qLower == "توضیحات" || qLower == "توضیح"
-                val isNoteAny = isNoteExcav || isNoteProj || isNoteBoth || qLower.contains("توضیح")
-                val pureNumQ = query.toEnglishDigits().trim()
-                val isPureNumberQ = pureNumQ.matches(Regex("""^\d+(\.\d+)?$"""))
+                val isNoteAny = qLower.contains("توضیح")
+                val isShaft = qLower.contains("شفت") || Regex("""(?i)^sh\s*\d*$""").matches(qLower)
 
-                val empHits = remember(query) {
-                    if (query.length < 2) emptyList()
-                    else try {
-                        ProjectStore.employerProfiles(context, query)
-                    } catch (_: Exception) { emptyList() }
+                // —— داده پروژه‌ها / تونل / مالی ——
+                val allProjects = remember(query) {
+                    try { ProjectStore.all(context) } catch (_: Exception) { emptyList() }
                 }
-                val projHits = remember(query) {
-                    if (query.length < 2) emptyList()
-                    else try {
-                        ProjectStore.projectProfiles(context, query)
-                    } catch (_: Exception) { emptyList() }
+                val allTunnelEntries = remember(query) {
+                    try { TunnelReportStore.allEntries(context) } catch (_: Exception) { emptyList() }
                 }
-                val pointHits = remember(query) {
-                    if (!isPureNumberQ) emptyList()
-                    else try {
+                val allTunnelFinance = remember(query) {
+                    try { TunnelFinanceStore.all(context) } catch (_: Exception) { emptyList() }
+                }
+
+                fun monthMatch(y: String, m: String, wantY: Int, wantM: Int): Boolean {
+                    val yi = y.toIntOrNull() ?: return false
+                    val mi = m.toIntOrNull() ?: return false
+                    return yi == wantY && mi == wantM
+                }
+                fun dayMatch(y: String, m: String, d: String, wy: Int, wm: Int, wd: Int): Boolean {
+                    val yi = y.toIntOrNull() ?: return false
+                    val mi = m.toIntOrNull() ?: return false
+                    val di = d.toIntOrNull() ?: return false
+                    return yi == wy && mi == wm && di == wd
+                }
+
+                // پروژه‌های ماه
+                val monthProjects = if (monthNum != null) {
+                    allProjects.filter { monthMatch(it.year, it.month, focusYear, monthNum) }
+                        .sortedByDescending { it.dateSortKey }
+                } else emptyList()
+                // پروژه‌های روز
+                val dayProjects = if (dateY != null && dateM != null && dateD != null) {
+                    allProjects.filter { dayMatch(it.year, it.month, it.day, dateY!!, dateM!!, dateD!!) }
+                } else emptyList()
+                // پروژه‌های سال
+                val yearProjects = if (pureYear != null) {
+                    allProjects.filter { (it.year.toIntOrNull() ?: 0) == pureYear }
+                } else emptyList()
+                // نام پروژه/کارفرما با شروع کوئری
+                val nameProjects = allProjects.filter { it.name.startsWith(query, true) }.distinctBy { it.name }
+                val nameEmployers = allProjects.filter { it.employer.startsWith(query, true) }
+                    .groupBy { it.employer }.map { it.key to it.value }
+
+                val tunnelMonth = if (monthNum != null) {
+                    allTunnelEntries.filter { monthMatch(it.year, it.month, focusYear, monthNum) }
+                } else emptyList()
+                val tunnelDay = if (dateY != null && dateM != null && dateD != null) {
+                    allTunnelEntries.filter { dayMatch(it.year, it.month, it.day, dateY!!, dateM!!, dateD!!) }
+                } else emptyList()
+                val tunnelYear = if (pureYear != null) {
+                    allTunnelEntries.filter { (it.year.toIntOrNull() ?: 0) == pureYear }
+                } else emptyList()
+
+                val finMonth = if (monthNum != null) {
+                    allTunnelFinance.filter { it.year == focusYear && it.month == monthNum }
+                } else emptyList()
+                val finYear = if (pureYear != null) {
+                    allTunnelFinance.filter { it.year == pureYear }
+                } else emptyList()
+
+                // درآمد/دریافتی پروژه‌ها در ماه
+                val projIncomeMonth = monthProjects.sumOf { it.amount }
+                val projReceivedMonth = monthProjects.sumOf { it.settled }
+                val tunnelIncomeMonth = finMonth.sumOf { it.income }
+                val tunnelReceivedMonth = finMonth.sumOf { it.receiveAmount ?: 0.0 }
+
+                val pointHits = if (isPureNumberQ) {
+                    try {
                         TunnelReportStore.allPoints(context).filter {
-                            it.pointNo == pureNumQ || it.pointNo.contains(pureNumQ)
+                            it.pointNo == qEn || it.pointNo.contains(qEn) ||
+                                kotlin.math.abs(it.km - (pureNum ?: -1.0)) < 0.001
                         }
                     } catch (_: Exception) { emptyList() }
-                }
-                val fallHits = remember(query) {
-                    if (!isFallQ && !isNoteAny) emptyList()
-                    else try {
-                        TunnelReportStore.allEntries(context).filter { it.collapse.isNotBlank() }
-                    } catch (_: Exception) { emptyList() }
-                }
-                val devHits = remember(query) {
-                    if (!isDevQ && !isNoteAny) emptyList()
-                    else try {
-                        TunnelReportStore.allEntries(context).filter { it.deviation.isNotBlank() }
-                    } catch (_: Exception) { emptyList() }
-                }
-                val noteExHits = remember(query) {
-                    if (!isNoteExcav && !isNoteBoth && !isNoteAny) emptyList()
-                    else try {
-                        TunnelReportStore.allEntries(context).filter { it.notes.isNotBlank() }
-                    } catch (_: Exception) { emptyList() }
-                }
-                val notePrHits = remember(query) {
-                    if (!isNoteProj && !isNoteBoth && !isNoteAny) emptyList()
-                    else try {
-                        ProjectStore.all(context).filter { it.description.isNotBlank() }
-                    } catch (_: Exception) { emptyList() }
-                }
+                } else emptyList()
+
+                val empHits = try {
+                    ProjectStore.employerProfiles(context, query)
+                } catch (_: Exception) { emptyList() }
+                val projHits = try {
+                    ProjectStore.projectProfiles(context, query)
+                } catch (_: Exception) { emptyList() }
 
                 data class SearchTab(val id: String, val title: String, val count: Int)
                 val searchTabs = buildList {
-                    if (empHits.isNotEmpty()) add(SearchTab("emp", "کارفرما", empHits.size))
-                    if (projHits.isNotEmpty()) add(SearchTab("proj", "پروژه", projHits.size))
-                    if (pointHits.isNotEmpty()) add(SearchTab("points", "نقاط", pointHits.size))
-                    if (fallHits.isNotEmpty()) add(SearchTab("fall", "ریزش", fallHits.size))
-                    if (devHits.isNotEmpty()) add(SearchTab("dev", "انحراف", devHits.size))
-                    if (noteExHits.isNotEmpty()) add(SearchTab("note_ex", "توضیحات حفاری", noteExHits.size))
-                    if (notePrHits.isNotEmpty()) add(SearchTab("note_pr", "توضیحات پروژه", notePrHits.size))
-                    if (isClaims) add(SearchTab("claims", "مطالبات", 1))
-                    if (isShaft || isWell || isSump || isProgress) add(SearchTab("more", "سایر", 1))
+                    if (monthProjects.isNotEmpty() || dayProjects.isNotEmpty() || yearProjects.isNotEmpty() || nameProjects.isNotEmpty())
+                        add(SearchTab("projects", "پروژه‌ها",
+                            (monthProjects.ifEmpty { dayProjects.ifEmpty { yearProjects.ifEmpty { nameProjects } } }).size))
+                    if (monthNum != null || pureYear != null || isIncome) {
+                        val hasInc = projIncomeMonth > 0 || tunnelIncomeMonth > 0 || projReceivedMonth > 0 ||
+                            tunnelReceivedMonth > 0 || finYear.isNotEmpty()
+                        if (hasInc || isIncome) add(SearchTab("income", "درآمد و دریافتی", 1))
+                    }
+                    if (tunnelMonth.isNotEmpty() || tunnelDay.isNotEmpty() || tunnelYear.isNotEmpty())
+                        add(SearchTab("tunnel", "تونل",
+                            tunnelMonth.ifEmpty { tunnelDay.ifEmpty { tunnelYear } }.size))
+                    if (nameEmployers.isNotEmpty() || empHits.isNotEmpty())
+                        add(SearchTab("emp", "کارفرما", nameEmployers.size.coerceAtLeast(empHits.size)))
+                    if (projHits.isNotEmpty() && nameProjects.isEmpty())
+                        add(SearchTab("proj", "پروژه", projHits.size))
+                    if (pointHits.isNotEmpty())
+                        add(SearchTab("points", "نقاط", pointHits.size))
+                    if (isClaims) {
+                        add(SearchTab("claims_proj", "مطالبات پروژه", 1))
+                        add(SearchTab("claims_tunnel", "مطالبات تونل", 1))
+                    }
+                    if (isFallQ) {
+                        val n = allTunnelEntries.count { it.collapse.isNotBlank() }
+                        if (n > 0) add(SearchTab("fall", "ریزش", n))
+                    }
+                    if (isDevQ) {
+                        val n = allTunnelEntries.count { it.deviation.isNotBlank() }
+                        if (n > 0) add(SearchTab("dev", "انحراف", n))
+                    }
+                    if (isNoteAny) {
+                        val n = allTunnelEntries.count { it.notes.isNotBlank() }
+                        if (n > 0) add(SearchTab("note_ex", "توضیحات حفاری", n))
+                    }
                 }
 
                 var searchTabId by remember(query) {
@@ -772,8 +857,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 modifier = Modifier.clickable { searchTabId = tab.id }
                             ) {
                                 Text(
-                                    if (tab.count > 0 && tab.id != "claims" && tab.id != "more")
-                                        "${tab.title} (${tab.count})" else tab.title,
+                                    if (tab.count > 1) "${tab.title} (${tab.count})" else tab.title,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                     color = if (sel) WorkPrimary else appearanceTextPrimary(),
                                     fontSize = 12.sp,
@@ -783,117 +867,135 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         }
                     }
 
-                    when (searchTabId) {
-                        "emp" -> empHits.take(30).forEach { ep ->
-                            Text(
-                                "${ep.employer} — ${ep.projectCount} پروژه · مطالبات ${moneyM(ep.totalClaims)}",
-                                color = appearanceTextPrimary(),
-                                fontSize = 13.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        PendingClientsNav.openEmployer(ep.employer)
-                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = appearanceCardColor(),
+                        border = BorderStroke(0.5.dp, BorderColor),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            when (searchTabId) {
+                                "projects" -> {
+                                    val list = monthProjects.ifEmpty { dayProjects.ifEmpty { yearProjects.ifEmpty { nameProjects } } }
+                                    list.take(40).forEach { p ->
+                                        Text(
+                                            "${p.name} / ${p.employer} · ${p.year}/${p.month}/${p.day} · ${moneyM(p.remaining)}",
+                                            color = appearanceTextPrimary(),
+                                            fontSize = 12.sp,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    PendingClientsNav.openProject(p.name)
+                                                    onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                }
+                                                .padding(vertical = 3.dp)
+                                        )
                                     }
-                                    .padding(vertical = 4.dp)
-                            )
-                        }
-                        "proj" -> projHits.take(40).forEach { pp ->
-                            Text(
-                                "${pp.name} / ${pp.employer} · ${moneyM(pp.totalClaims)}",
-                                color = appearanceTextPrimary(),
-                                fontSize = 13.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        PendingClientsNav.openProject(pp.name)
-                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                    if (list.isEmpty()) Text("پروژه‌ای نیست", color = appearanceTextMuted(), fontSize = 12.sp)
+                                }
+                                "income" -> {
+                                    if (monthNum != null) {
+                                        val mn = monthNames.getOrNull(monthNum - 1) ?: ""
+                                        Text("ماه $mn $focusYear", color = WorkPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("درآمد پروژه: ${moneyM(projIncomeMonth)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("دریافتی پروژه: ${moneyM(projReceivedMonth)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("درآمد تونل: ${moneyM(tunnelIncomeMonth)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("دریافتی تونل: ${moneyM(tunnelReceivedMonth)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                    } else if (pureYear != null) {
+                                        val py = yearProjects.sumOf { it.amount }
+                                        val pr = yearProjects.sumOf { it.settled }
+                                        val ty = finYear.sumOf { it.income }
+                                        val tr = finYear.sumOf { it.receiveAmount ?: 0.0 }
+                                        Text("سال $pureYear", color = WorkPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("درآمد پروژه: ${moneyM(py)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("دریافتی پروژه: ${moneyM(pr)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("درآمد تونل: ${moneyM(ty)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("دریافتی تونل: ${moneyM(tr)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                    } else {
+                                        Text("نام ماه یا سال را وارد کنید (مثل مهر یا ۱۴۰۵)", color = appearanceTextMuted(), fontSize = 12.sp)
                                     }
-                                    .padding(vertical = 4.dp)
-                            )
-                        }
-                        "points" -> pointHits.take(20).forEach { pt ->
-                            Text(
-                                "نقطه ${pt.pointNo} · km ${"%.3f".format(pt.km)}",
-                                color = appearanceTextPrimary(),
-                                fontSize = 13.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        PendingTunnelLookup.openPoint(pt.pointNo)
-                                        onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
+                                }
+                                "tunnel" -> {
+                                    val list = tunnelMonth.ifEmpty { tunnelDay.ifEmpty { tunnelYear } }
+                                    list.take(30).forEach { e ->
+                                        Text(
+                                            "${e.year}/${e.month}/${e.day} شفت ${e.shaft} سمت ${e.side} · طول ${e.lengthCm} · نقطه ${e.pointNo}",
+                                            color = appearanceTextPrimary(), fontSize = 12.sp,
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        )
                                     }
-                                    .padding(vertical = 4.dp)
-                            )
-                        }
-                        "fall" -> fallHits.take(25).forEach { e ->
-                            Text(
-                                "${e.year}/${e.month}/${e.day} شفت ${e.shaft} · ریزش ${e.collapse}",
-                                color = appearanceTextPrimary(), fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                        "dev" -> devHits.take(25).forEach { e ->
-                            Text(
-                                "${e.year}/${e.month}/${e.day} شفت ${e.shaft} · انحراف ${e.deviation}",
-                                color = appearanceTextPrimary(), fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                        "note_ex" -> noteExHits.take(25).forEach { e ->
-                            Text(
-                                "${e.year}/${e.month}/${e.day} · ${e.notes}",
-                                color = appearanceTextPrimary(), fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                        "note_pr" -> notePrHits.take(25).forEach { e ->
-                            Text(
-                                "${e.name} · ${e.description}",
-                                color = appearanceTextPrimary(), fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                        "claims" -> {
-                            val employers = remember(query) {
-                                try {
-                                    ProjectStore.employerProfiles(context, "").filter {
-                                        !it.employer.contains("تونل") && it.sessions.none { s -> s.name.contains("تونل") }
-                                    }
-                                } catch (_: Exception) { emptyList() }
-                            }
-                            val total = employers.sumOf { it.totalClaims }
-                            Text(
-                                "مطالبات کارفرمایان — جمع کل: ${moneyM(total)}",
-                                color = WorkPrimary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clickable { onNavigate(Routes.FIN_PROJECT_RECEIVABLES) }
-                                    .padding(vertical = 4.dp)
-                            )
-                            employers.filter { it.totalClaims > 0.01 }.take(40).forEach { emp ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = appearanceCardColor(),
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                                ) {
-                                    Column(Modifier.padding(10.dp)) {
-                                        Row(
-                                            Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
+                                    if (list.isEmpty()) Text("گزارش حفاری نیست", color = appearanceTextMuted(), fontSize = 12.sp)
+                                }
+                                "emp" -> {
+                                    if (nameEmployers.isNotEmpty()) {
+                                        nameEmployers.take(20).forEach { (emp, rows) ->
                                             Text(
-                                                emp.employer,
+                                                "$emp — ${rows.size} پروژه · مطالبات ${moneyM(rows.sumOf { it.remaining })}",
+                                                color = appearanceTextPrimary(), fontSize = 12.sp,
                                                 modifier = Modifier
-                                                    .weight(1f)
+                                                    .fillMaxWidth()
                                                     .clickable {
-                                                        expandedEmp = if (expandedEmp == emp.employer) null else emp.employer
-                                                    },
-                                                fontWeight = FontWeight.Bold,
-                                                color = appearanceTextPrimary(),
-                                                fontSize = 13.sp
+                                                        PendingClientsNav.openEmployer(emp)
+                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                    }
+                                                    .padding(vertical = 3.dp)
                                             )
+                                        }
+                                    } else {
+                                        empHits.take(20).forEach { ep ->
+                                            Text(
+                                                "${ep.employer} — ${ep.projectCount} پروژه · ${moneyM(ep.totalClaims)}",
+                                                color = appearanceTextPrimary(), fontSize = 12.sp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        PendingClientsNav.openEmployer(ep.employer)
+                                                        onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                                    }
+                                                    .padding(vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                "proj" -> projHits.take(30).forEach { pp ->
+                                    Text(
+                                        "${pp.name} / ${pp.employer} · ${moneyM(pp.totalClaims)}",
+                                        color = appearanceTextPrimary(), fontSize = 12.sp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                PendingClientsNav.openProject(pp.name)
+                                                onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
+                                            }
+                                            .padding(vertical = 3.dp)
+                                    )
+                                }
+                                "points" -> pointHits.take(25).forEach { pt ->
+                                    Text(
+                                        "نقطه ${pt.pointNo} · km ${"%.3f".format(pt.km)}",
+                                        color = appearanceTextPrimary(), fontSize = 12.sp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                PendingTunnelLookup.openPoint(pt.pointNo)
+                                                onNavigate(Routes.SURVEY_TUNNEL_EVENTS)
+                                            }
+                                            .padding(vertical = 3.dp)
+                                    )
+                                }
+                                "claims_proj" -> {
+                                    val employers = try {
+                                        ProjectStore.employerProfiles(context, "").filter {
+                                            !it.employer.contains("تونل") && it.totalClaims > 0.01
+                                        }
+                                    } catch (_: Exception) { emptyList() }
+                                    Text("جمع مطالبات پروژه: ${moneyM(employers.sumOf { it.totalClaims })}", color = WorkPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    employers.take(30).forEach { emp ->
+                                        Row(
+                                            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(emp.employer, color = appearanceTextPrimary(), fontSize = 12.sp, modifier = Modifier.weight(1f))
                                             Text(moneyM(emp.totalClaims), color = WorkPrimary, fontSize = 12.sp)
                                             IconButton(onClick = { callPhone(emp.phone) }) {
                                                 Icon(Icons.Filled.Phone, null, tint = WorkPrimary, modifier = Modifier.size(18.dp))
@@ -902,32 +1004,35 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                                 Icon(Icons.Filled.Sms, null, tint = WorkPrimary, modifier = Modifier.size(18.dp))
                                             }
                                         }
-                                        if (expandedEmp == emp.employer) {
-                                            emp.sessions.forEach { s ->
-                                                Text(
-                                                    "${s.name} · ${moneyM(s.remaining)}",
-                                                    color = appearanceTextSecondary(),
-                                                    fontSize = 12.sp,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clickable {
-                                                            PendingClientsNav.openProject(s.name)
-                                                            onNavigate(Routes.SURVEY_PROJECT_CLIENTS)
-                                                        }
-                                                        .padding(vertical = 4.dp, horizontal = 4.dp)
-                                                )
-                                            }
-                                        }
                                     }
                                 }
+                                "claims_tunnel" -> {
+                                    val sum = try { TunnelFinanceStore.summary(context) } catch (_: Exception) { null }
+                                    if (sum != null) {
+                                        Text("خلاصه مالی تونل", color = WorkPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("جمع صورت‌وضعیت: ${moneyM(sum.sumPayable)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("جمع دریافتی: ${moneyM(sum.sumReceived)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        Text("مانده مطالبات: ${moneyM(sum.remaining)}", color = WorkPrimary, fontSize = 12.sp)
+                                        Text(
+                                            "جزئیات بیشتر →",
+                                            color = WorkPrimary,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.clickable { onNavigate(Routes.FIN_TUNNEL_SUMMARY) }
+                                        )
+                                    } else {
+                                        Text("داده مالی تونل نیست", color = appearanceTextMuted(), fontSize = 12.sp)
+                                    }
+                                }
+                                "fall" -> allTunnelEntries.filter { it.collapse.isNotBlank() }.take(25).forEach { e ->
+                                    Text("${e.year}/${e.month}/${e.day} شفت ${e.shaft} · ${e.collapse}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                }
+                                "dev" -> allTunnelEntries.filter { it.deviation.isNotBlank() }.take(25).forEach { e ->
+                                    Text("${e.year}/${e.month}/${e.day} شفت ${e.shaft} · ${e.deviation}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                }
+                                "note_ex" -> allTunnelEntries.filter { it.notes.isNotBlank() }.take(25).forEach { e ->
+                                    Text("${e.year}/${e.month}/${e.day} · ${e.notes}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                }
                             }
-                        }
-                        "more" -> {
-                            Text(
-                                "برای جزئیات بیشتر برنامهٔ مربوط را از نتایج بالا باز کنید.",
-                                color = appearanceTextMuted(),
-                                fontSize = 12.sp
-                            )
                         }
                     }
                 }
