@@ -25,6 +25,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -645,40 +646,98 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                                         dimMode = !dimMode
                                         dimA = null; dimB = null; dimMsg = null
                                         if (dimMode) {
-                                    // اندازه‌گذاری با تارگت مرکزی است — لمس نقشه نادیده
-                                    return@detectTapGestures
-                                }
-                                var best: MapOverlayPoint? = null
-                                var bestD = 40f
-                                overlays.forEach { p ->
-                                    val s = worldToScreen(p.x, p.y)
-                                    val d = hypot(s.x - pos.x, s.y - pos.y)
-                                    if (d < bestD) { bestD = d; best = p }
-                                }
-                                if (best != null) {
-                                    selectedId = best!!.id
-                                    if (editMode) {
-                                        openAddAt(best!!.x, best!!.y, best!!.id, best!!.d)
-                                        draftZ = formatEn("%.3f", best!!.z)
-                                        draftKm = formatEn("%.3f", best!!.km)
-                                    }
-                                } else {
-                                    val (wx, wy) = screenToWorld(pos.x, pos.y)
-                                    // لمس نزدیک نقطه تونل (۵۰ سانتی‌متر)
-                                    val near = TunnelReportStore.findNearestByXy(context, wx, wy)
-                                    if (near != null) {
-                                        val dist = kotlin.math.hypot(near.x - wx, near.y - wy)
-                                        if (dist <= 0.50) {
-                                            infoTunnelPt = near
-                                            return@detectTapGestures
+                                            crosshairMode = false
+                                            crosshairEditOverlayId = null
+                                            crosshairDimId = null
+                                            status = "اندازه‌گذاری: مرکز تارگت را روی نقطه ۱ بگذارید و ثبت بزنید"
+                                        } else {
+                                            status = ""
                                         }
+                                        menuOpen = false
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Straighten,
+                                        "اندازه",
+                                        tint = if (dimMode) color else Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Text("اندازه", color = if (dimMode) color else Color.White, fontSize = 9.sp)
+                            }
+                            IconButton(onClick = { showLayers = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.Layers, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                            IconButton(onClick = { showExport = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Outlined.FileDownload, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            dimMsg?.let { msg ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = color,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp)
+                ) {
+                    Text(msg, color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                }
+            }
+
+            Canvas(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            val newScale = (scale * zoom).coerceIn(0.01f, 5000f)
+                            offset = Offset(
+                                offset.x + pan.x + (canvasSize.x / 2f - offset.x) * (1f - newScale / scale),
+                                offset.y + pan.y + (canvasSize.y / 2f - offset.y) * (1f - newScale / scale)
+                            )
+                            scale = newScale
+                        }
+                    }
+                    .pointerInput(editMode, overlays, scale, offset, dimMode) {
+                        detectTapGestures { pos ->
+                            if (dimMode || crosshairMode) {
+                                // با تارگت — لمس نقشه برای انتخاب نقطه نادیده
+                                return@detectTapGestures
+                            }
+                            var best: MapOverlayPoint? = null
+                            var bestD = 40f
+                            overlays.forEach { p ->
+                                val s = worldToScreen(p.x, p.y)
+                                val d = hypot(s.x - pos.x, s.y - pos.y)
+                                if (d < bestD) { bestD = d; best = p }
+                            }
+                            if (best != null) {
+                                selectedId = best!!.id
+                                if (editMode) {
+                                    openAddAt(best!!.x, best!!.y, best!!.id, best!!.d)
+                                    draftZ = formatEn("%.3f", best!!.z)
+                                    draftKm = formatEn("%.3f", best!!.km)
+                                }
+                            } else {
+                                val (wx, wy) = screenToWorld(pos.x, pos.y)
+                                val near = TunnelReportStore.findNearestByXy(context, wx, wy)
+                                if (near != null) {
+                                    val dist = kotlin.math.hypot(near.x - wx, near.y - wy)
+                                    if (dist <= 0.50) {
+                                        infoTunnelPt = near
+                                        return@detectTapGestures
                                     }
-                                    if (editMode) {
-                                        openAddAt(wx, wy)
-                                    }
+                                }
+                                if (editMode) {
+                                    openAddAt(wx, wy)
                                 }
                             }
-                        )
+                        }
                     }
                     .pointerInput(editMode, selectedId, scale) {
                         if (!editMode || selectedId == null) return@pointerInput
@@ -1490,14 +1549,9 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                 }
             }
         )
-    }
+}
+}
 
-}
-
-}
-}
-}
-}
 private enum class TunnelBaseMap(val title: String) {
     NONE("پس‌زمینه ساده"),
     SATELLITE("ماهواره‌ای"),
