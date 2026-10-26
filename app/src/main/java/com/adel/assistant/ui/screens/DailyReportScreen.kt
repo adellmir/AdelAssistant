@@ -271,8 +271,8 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        val draft = WorkingDraftStore.loadDaily(context) ?: return@LaunchedEffect
-        if (draft.year == year && draft.month == month && draft.day == day && draft.rows.isNotEmpty()) {
+        val draft = WorkingDraftStore.loadDaily(context)
+        if (draft != null && draft.year == year && draft.month == month && draft.day == day && draft.rows.isNotEmpty()) {
             rows = draft.rows.map {
                 PreviewRow(
                     it.shaft, it.side, it.pointNo, it.lengthCm,
@@ -281,6 +281,9 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 )
             }
             statusMsg = "پیش‌نویس گزارش بازیابی شد"
+        } else {
+            // اگر برای روز جاری گزارشی ثبت شده، در پیش‌نمایش پایین نشان بده
+            loadDay()
         }
     }
 
@@ -393,8 +396,21 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 label = { Text("فیلد ۱–۷") },
                 keyboardOptions = numberKeyboard, modifier = Modifier.weight(0.7f)
             )
-            IconButton(onClick = { appendSlotOnly() }) {
-                Icon(Icons.Outlined.Add, contentDescription = "ثبت ریزش/انحراف بعدی", tint = color)
+            IconButton(onClick = {
+                // بعلاوه: ثبت ردیف (یا فقط ریزش/انحراف) + ذخیره نهایی
+                when {
+                    length.isNotBlank() && shaft.isNotBlank() && side.isNotBlank() && pointNo.isNotBlank() ->
+                        addOrUpdateRow()
+                    deviation.isNotBlank() || collapse.isNotBlank() ->
+                        appendSlotOnly()
+                    else -> {
+                        statusMsg = "شفت، سمت، نقطه و طول (یا ریزش/انحراف) را پر کنید"
+                        return@IconButton
+                    }
+                }
+                if (rows.isNotEmpty()) registerAll()
+            }) {
+                Icon(Icons.Outlined.Add, contentDescription = "ثبت", tint = color)
             }
         }
         AdelOutlinedTextField(

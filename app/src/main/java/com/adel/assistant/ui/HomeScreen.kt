@@ -60,6 +60,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -216,10 +219,14 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     var clock by remember { mutableStateOf(currentTimeString()) }
     var weatherSnap by remember { mutableStateOf(WeatherStore.cached()) }
     var weatherLoading by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        weatherLoading = true
-        weatherSnap = WeatherStore.fetch(context, force = true)
-        weatherLoading = false
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // هر بار ورود به صفحه اصلی — رفرش فوری هواشناسی
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            weatherLoading = true
+            weatherSnap = WeatherStore.fetch(context, force = true)
+            weatherLoading = false
+        }
     }
     var greeting by remember { mutableStateOf(timeBasedGreeting()) }
     var jalali by remember { mutableStateOf(jalaliDateWithWeekday()) }
