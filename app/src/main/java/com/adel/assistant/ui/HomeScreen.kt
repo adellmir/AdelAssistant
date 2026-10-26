@@ -650,12 +650,30 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 }
                 fun smsClaims(phone: String, amount: Double) {
                     if (phone.isBlank()) return
-                    val body = "با سلام جهت پرداخت هزینه نقشه‌برداری به‌مبلغ ${moneyM(amount)}. ممنون می‌شوم پس از پرداخت اطلاع‌رسانی بفرمایید.\nکارت: 5859831142797561\nشبا: 430180000000242375213376"
+                    // مبلغ در سیستم میلیون تومان است — مثل صفحه مطالبات
+                    val amt = amount.coerceAtLeast(0.0)
+                    val amountStr = if (kotlin.math.abs(amt - amt.toLong().toDouble()) < 1e-6)
+                        String.format(java.util.Locale.US, "%,.0f", amt)
+                    else
+                        String.format(java.util.Locale.US, "%,.1f", amt)
+                    val body =
+                        "با سلام جهت پرداخت هزینه نقشه‌برداری به‌مبلغ $amountStr م تومان. ممنون می‌شوم پس از پرداخت اطلاع‌رسانی بفرمایید.\n" +
+                            "کارت: 5859831142797561\n" +
+                            "شبا: 430180000000242375213376"
                     try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone")).apply {
+                        val uri = Uri.parse("smsto:$phone?body=" + Uri.encode(body))
+                        val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
                             putExtra("sms_body", body)
-                        })
-                    } catch (_: Exception) { }
+                            putExtra(Intent.EXTRA_TEXT, body)
+                        }
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone?body=" + Uri.encode(body)))
+                            )
+                        } catch (_: Exception) { }
+                    }
                 }
 
                 // تشخیص نوع کوئری
