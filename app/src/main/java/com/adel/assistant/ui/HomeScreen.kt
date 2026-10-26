@@ -729,7 +729,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                 val notePrHits = remember(query) {
                     if (!isNoteProj && !isNoteBoth && !isNoteAny) emptyList()
                     else try {
-                        ProjectStore.all(context).filter { it.notes.isNotBlank() }
+                        ProjectStore.all(context).filter { it.description.isNotBlank() }
                     } catch (_: Exception) { emptyList() }
                 }
 
@@ -800,7 +800,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         }
                         "proj" -> projHits.take(40).forEach { pp ->
                             Text(
-                                "${pp.name} / ${pp.employer} · ${moneyM(pp.remaining)}",
+                                "${pp.name} / ${pp.employer} · ${moneyM(pp.totalClaims)}",
                                 color = appearanceTextPrimary(),
                                 fontSize = 13.sp,
                                 modifier = Modifier
@@ -849,7 +849,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         }
                         "note_pr" -> notePrHits.take(25).forEach { e ->
                             Text(
-                                "${e.name} · ${e.notes}",
+                                "${e.name} · ${e.description}",
                                 color = appearanceTextPrimary(), fontSize = 12.sp,
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )

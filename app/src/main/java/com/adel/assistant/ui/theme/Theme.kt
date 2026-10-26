@@ -58,10 +58,10 @@ fun AdelAssistantTheme(content: @Composable () -> Unit) {
             onTertiary = Color(0xFF111111),
             primary = Color(0xFF3D5A1A),
             secondary = Color(0xFF2A2A2A),
-            surface = Color(0xE6FFFFFF),
-            surfaceVariant = Color(0xD9FFFFFF),
+            surface = Color(0x80B8D4B8),
+            surfaceVariant = Color(0x80B8D4B8),
             primaryContainer = Color(0xCC8FAF5E),
-            secondaryContainer = Color(0xD9FFFFFF)
+            secondaryContainer = Color(0x80B8D4B8)
         )
         AppearanceMode.Iran -> AppColorScheme.copy(
             surface = Color(0xD6141910),

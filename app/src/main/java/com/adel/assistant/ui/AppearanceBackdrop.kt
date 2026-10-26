@@ -16,6 +16,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import com.adel.assistant.data.AppearanceMode
@@ -32,11 +33,13 @@ val LocalAppearanceTextPrimary = staticCompositionLocalOf { TextPrimary }
 val LocalAppearanceTextSecondary = staticCompositionLocalOf { TextSecondary }
 val LocalAppearanceTextMuted = staticCompositionLocalOf { TextMuted }
 
+/** سبز پاستیلی تم توپوگرافی */
+private val TopoPastelGreen = Color(0xFFB8D4B8)
+
 @Composable
 fun appearanceIsLightTheme(): Boolean {
-    val context = LocalContext.current
-    AppearanceStore.ensureLoaded(context)
-    return AppearanceStore.modeState == AppearanceMode.Topo
+    val bg = appearanceCardColor()
+    return bg.luminance() > 0.45f
 }
 
 @Composable
@@ -61,16 +64,14 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
             }
             AppearanceMode.Iran -> {
                 AssetOrFileBackground(assetName = "bg_iran.jpg", file = null, version = 0)
-                // لایه محو ۲۰٪ تیره‌تر از قبل
                 Box(Modifier.fillMaxSize().background(Color(0xFF0A0D08).copy(alpha = 0.36f)))
             }
             AppearanceMode.Topo -> {
                 AssetOrFileBackground(assetName = "bg_topo.jpg", file = null, version = 0)
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.08f)))
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.06f)))
             }
             AppearanceMode.Custom -> {
                 val f = AppearanceStore.customFile(context)
-                // نسخه از customVersion یا lastModified
                 val ver = AppearanceStore.customVersion.let { v ->
                     if (v > 0) v else (f.lastModified() % Int.MAX_VALUE).toInt()
                 }
@@ -142,15 +143,12 @@ fun appearanceCardColor(): Color {
     return when (AppearanceStore.modeState) {
         AppearanceMode.Simple -> Surface
         AppearanceMode.Iran -> Color(0xFF141910).copy(alpha = 0.84f)
-        AppearanceMode.Topo -> Color.White.copy(alpha = 0.90f)
+        // سبز پاستیلی — شفافیت ۵۰٪
+        AppearanceMode.Topo -> TopoPastelGreen.copy(alpha = 0.50f)
         AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.90f)
     }
 }
 
-/**
- * پس‌زمینه سربرگ / دکمه / کنترل — در تم ساده شفاف (رفتار قبلی)،
- * در بقیه تم‌ها شیشه‌ای مثل کارت.
- */
 @Composable
 fun appearanceControlBg(): Color {
     val context = LocalContext.current
@@ -158,7 +156,7 @@ fun appearanceControlBg(): Color {
     return when (AppearanceStore.modeState) {
         AppearanceMode.Simple -> Color.Transparent
         AppearanceMode.Iran -> Color(0xFF141910).copy(alpha = 0.78f)
-        AppearanceMode.Topo -> Color.White.copy(alpha = 0.85f)
+        AppearanceMode.Topo -> TopoPastelGreen.copy(alpha = 0.50f)
         AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.75f)
     }
 }
@@ -170,39 +168,28 @@ fun appearanceFieldContainer(): Color {
     return when (AppearanceStore.modeState) {
         AppearanceMode.Simple -> Surface.copy(alpha = 0.85f)
         AppearanceMode.Iran -> Color(0xFF141910).copy(alpha = 0.66f)
-        AppearanceMode.Topo -> Color.White.copy(alpha = 0.75f)
+        AppearanceMode.Topo -> TopoPastelGreen.copy(alpha = 0.50f)
         AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.60f)
     }
 }
 
+/**
+ * متن اصلی — هوشمند نسبت به روشنایی پس‌زمینهٔ کادر:
+ * پس‌زمینه روشن → متن تیره، پس‌زمینه تیره → متن روشن
+ */
 @Composable
 fun appearanceTextPrimary(): Color {
-    val context = LocalContext.current
-    AppearanceStore.ensureLoaded(context)
-    return when (AppearanceStore.modeState) {
-        AppearanceMode.Topo -> Color(0xFF111111)
-        else -> TextPrimary
-    }
+    return if (appearanceIsLightTheme()) Color(0xFF111111) else TextPrimary
 }
 
 @Composable
 fun appearanceTextSecondary(): Color {
-    val context = LocalContext.current
-    AppearanceStore.ensureLoaded(context)
-    return when (AppearanceStore.modeState) {
-        AppearanceMode.Topo -> Color(0xFF2A2A2A)
-        else -> TextSecondary
-    }
+    return if (appearanceIsLightTheme()) Color(0xFF2A2A2A) else TextSecondary
 }
 
 @Composable
 fun appearanceTextMuted(): Color {
-    val context = LocalContext.current
-    AppearanceStore.ensureLoaded(context)
-    return when (AppearanceStore.modeState) {
-        AppearanceMode.Topo -> Color(0xFF3D3D3D)
-        else -> TextMuted
-    }
+    return if (appearanceIsLightTheme()) Color(0xFF3D4A3D) else TextMuted
 }
 
 @Composable
@@ -217,11 +204,7 @@ fun appearanceOnCardMuted(): Color = appearanceTextMuted()
 @Composable
 fun appearanceFilledButtonColors(accent: Color = WorkPrimary) =
     ButtonDefaults.buttonColors(
-        containerColor = if (appearanceIsThemed()) {
-            accent.copy(alpha = 0.88f)
-        } else {
-            accent
-        },
+        containerColor = if (appearanceIsThemed()) accent.copy(alpha = 0.88f) else accent,
         contentColor = Color.White
     )
 
@@ -229,7 +212,7 @@ fun appearanceFilledButtonColors(accent: Color = WorkPrimary) =
 fun appearanceOutlinedButtonColors(accent: Color = WorkPrimary) =
     ButtonDefaults.outlinedButtonColors(
         containerColor = appearanceControlBg(),
-        contentColor = if (appearanceIsLightTheme()) Color(0xFF111111) else appearanceTextPrimary()
+        contentColor = appearanceTextPrimary()
     )
 
 @Composable
@@ -249,7 +232,7 @@ fun appearanceFieldColors(): TextFieldColors {
         unfocusedLabelColor = muted,
         cursorColor = WorkPrimary,
         focusedBorderColor = WorkPrimary.copy(alpha = 0.85f),
-        unfocusedBorderColor = if (appearanceIsLightTheme()) Color(0xFF666666) else BorderColor.copy(alpha = 0.7f),
+        unfocusedBorderColor = if (appearanceIsLightTheme()) Color(0xFF5A6B5A) else BorderColor.copy(alpha = 0.7f),
         focusedPlaceholderColor = muted,
         unfocusedPlaceholderColor = muted,
         focusedTrailingIconColor = secondary,
