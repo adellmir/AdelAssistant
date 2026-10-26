@@ -151,7 +151,7 @@ fun ReceivablesScreen(
                     Text(
                         label,
                         modifier = Modifier.padding(vertical = 10.dp).fillMaxWidth(),
-                        color = if (selected) color else TextSecondary,
+                        color = if (selected) color else appearanceTextSecondary(),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }

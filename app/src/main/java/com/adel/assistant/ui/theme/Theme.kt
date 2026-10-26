@@ -50,10 +50,14 @@ fun AdelAssistantTheme(content: @Composable () -> Unit) {
     val mode = AppearanceStore.modeState
     val scheme = when (mode) {
         AppearanceMode.Topo -> AppColorScheme.copy(
-            onBackground = Color.Black,
-            onSurface = Color.Black,
-            onSurfaceVariant = Color(0xFF333333),
-            onPrimary = Color.Black
+            onBackground = Color(0xFF111111),
+            onSurface = Color(0xFF111111),
+            onSurfaceVariant = Color(0xFF2A2A2A),
+            onPrimary = Color(0xFF111111),
+            onSecondary = Color(0xFF111111),
+            onTertiary = Color(0xFF111111),
+            primary = Color(0xFF3D5A1A),
+            secondary = Color(0xFF2A2A2A)
         )
         else -> AppColorScheme
     }

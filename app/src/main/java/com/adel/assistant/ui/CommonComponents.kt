@@ -102,7 +102,7 @@ fun SubMenuRow(
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = appearanceTextSecondary())
             }
-            Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = Color(0xFFAAAAAA))
+            Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = appearanceTextMuted())
         }
     }
 }

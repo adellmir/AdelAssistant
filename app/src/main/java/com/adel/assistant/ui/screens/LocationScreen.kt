@@ -493,7 +493,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             Text("Z$z", color = appearanceTextSecondary(), fontSize = 12.sp)
                         }
                         val accColor = when {
-                            liveAcc < 0 -> TextSecondary
+                            liveAcc < 0 -> appearanceTextSecondary()
                             liveAcc <= 5f -> Color(0xFF2E7D32)
                             liveAcc <= 15f -> Color(0xFFF9A825)
                             else -> Color(0xFFC62828)

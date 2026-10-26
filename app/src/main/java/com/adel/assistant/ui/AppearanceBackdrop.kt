@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
@@ -30,9 +31,14 @@ val LocalAppearanceTextPrimary = staticCompositionLocalOf { TextPrimary }
 val LocalAppearanceTextSecondary = staticCompositionLocalOf { TextSecondary }
 val LocalAppearanceTextMuted = staticCompositionLocalOf { TextMuted }
 
-/**
- * پس‌زمینه نما برای کل اپ (به‌جز نقشه‌ها که خودشان Background تیره می‌گذارند).
- */
+/** آیا تم روشن (متن/آیکن تیره) است؟ توپوگرافی */
+@Composable
+fun appearanceIsLightTheme(): Boolean {
+    val context = LocalContext.current
+    AppearanceStore.ensureLoaded(context)
+    return AppearanceStore.modeState == AppearanceMode.Topo
+}
+
 @Composable
 fun AppearanceBackdrop(content: @Composable () -> Unit) {
     val context = LocalContext.current
@@ -56,8 +62,9 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
             }
             AppearanceMode.Custom -> {
                 val f = AppearanceStore.customFile(context)
+                val ver = AppearanceStore.customVersion
                 if (f.exists()) {
-                    AssetOrFileBackground(assetName = null, file = f)
+                    AssetOrFileBackground(assetName = null, file = f, version = ver)
                     Box(Modifier.fillMaxSize().background(Color(0xFF12160E).copy(alpha = 0.30f)))
                 } else {
                     Box(Modifier.fillMaxSize().background(Background))
@@ -67,7 +74,9 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
         CompositionLocalProvider(
             LocalAppearanceTextPrimary provides textPrimary,
             LocalAppearanceTextSecondary provides textSecondary,
-            LocalAppearanceTextMuted provides textMuted
+            LocalAppearanceTextMuted provides textMuted,
+            // آیکن‌های بدون tint صریح از این رنگ می‌گیرند
+            LocalContentColor provides textPrimary
         ) {
             content()
         }
@@ -75,16 +84,21 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun AssetOrFileBackground(assetName: String?, file: java.io.File?) {
+private fun AssetOrFileBackground(assetName: String?, file: java.io.File?, version: Int = 0) {
     val context = LocalContext.current
-    val bmp = remember(assetName, file?.absolutePath, file?.length()) {
+    val bmp = remember(assetName, file?.absolutePath, file?.length(), version) {
         try {
             val stream = when {
                 file != null && file.exists() -> file.inputStream()
                 assetName != null -> context.assets.open(assetName)
                 else -> null
             } ?: return@remember null
-            stream.use { BitmapFactory.decodeStream(it) }
+            stream.use {
+                val opts = BitmapFactory.Options().apply {
+                    inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                }
+                BitmapFactory.decodeStream(it, null, opts)
+            }
         } catch (_: Exception) {
             null
         }
@@ -111,11 +125,6 @@ fun appearanceScreenBg(): Color {
     }
 }
 
-/**
- * کاشی/کادر — محو بودن ۲۰٪ کمتر از قبل (آلفا بالاتر = شیشه‌ای پررنگ‌تر)
- * قبلی: ایران ۰٫۵۰ / توپو ۰٫۷۰ / سفارشی ۰٫۷۰
- * جدید: ایران ۰٫۷۰ / توپو ۰٫۹۰ / سفارشی ۰٫۹۰
- */
 @Composable
 fun appearanceCardColor(): Color {
     val context = LocalContext.current
@@ -128,7 +137,6 @@ fun appearanceCardColor(): Color {
     }
 }
 
-/** رنگ شیشه‌ای فیلدها در همه تم‌ها */
 @Composable
 fun appearanceFieldContainer(): Color {
     val context = LocalContext.current
@@ -141,12 +149,13 @@ fun appearanceFieldContainer(): Color {
     }
 }
 
+/** متن اصلی — توپو: مشکی */
 @Composable
 fun appearanceTextPrimary(): Color {
     val context = LocalContext.current
     AppearanceStore.ensureLoaded(context)
     return when (AppearanceStore.modeState) {
-        AppearanceMode.Topo -> Color.Black
+        AppearanceMode.Topo -> Color(0xFF111111)
         else -> TextPrimary
     }
 }
@@ -156,7 +165,7 @@ fun appearanceTextSecondary(): Color {
     val context = LocalContext.current
     AppearanceStore.ensureLoaded(context)
     return when (AppearanceStore.modeState) {
-        AppearanceMode.Topo -> Color(0xFF222222)
+        AppearanceMode.Topo -> Color(0xFF2A2A2A)
         else -> TextSecondary
     }
 }
@@ -166,10 +175,14 @@ fun appearanceTextMuted(): Color {
     val context = LocalContext.current
     AppearanceStore.ensureLoaded(context)
     return when (AppearanceStore.modeState) {
-        AppearanceMode.Topo -> Color(0xFF444444)
+        AppearanceMode.Topo -> Color(0xFF3D3D3D)
         else -> TextMuted
     }
 }
+
+/** رنگ آیکن — توپو تیره */
+@Composable
+fun appearanceIconTint(): Color = appearanceTextPrimary()
 
 @Composable
 fun appearanceOnCard(): Color = appearanceTextPrimary()
@@ -194,10 +207,12 @@ fun appearanceFieldColors(): TextFieldColors {
         unfocusedLabelColor = muted,
         cursorColor = WorkPrimary,
         focusedBorderColor = WorkPrimary.copy(alpha = 0.85f),
-        unfocusedBorderColor = BorderColor.copy(alpha = 0.7f),
+        unfocusedBorderColor = if (appearanceIsLightTheme()) Color(0xFF666666) else BorderColor.copy(alpha = 0.7f),
         focusedPlaceholderColor = muted,
         unfocusedPlaceholderColor = muted,
         focusedTrailingIconColor = secondary,
-        unfocusedTrailingIconColor = muted
+        unfocusedTrailingIconColor = muted,
+        focusedLeadingIconColor = secondary,
+        unfocusedLeadingIconColor = muted
     )
 }

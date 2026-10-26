@@ -220,7 +220,7 @@ fun AssistantScreen(
             ) {
                 Text(
                     if (onlineMode) "🧠 حالت تفکر آنلاین" else "⚡ حالت داخلی برنامه",
-                    color = if (onlineMode) color else TextSecondary,
+                    color = if (onlineMode) color else appearanceTextSecondary(),
                     style = MaterialTheme.typography.labelMedium
                 )
                 Switch(

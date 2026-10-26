@@ -138,7 +138,7 @@ fun ClientsProjectsScreen(
                                     editEmpName = e.employer
                                     editEmpPhone = e.phone
                                 }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Filled.Edit, "ویرایش", tint = TextSecondary)
+                                    Icon(Icons.Filled.Edit, "ویرایش", tint = appearanceTextSecondary())
                                 }
                             }
                             Text(
@@ -148,7 +148,7 @@ fun ClientsProjectsScreen(
                             e.sessions.take(8).forEach { s ->
                                 Text(
                                     "• ${s.name} | جلسه ${s.day}/${s.month}/${s.year} | ${moneyM(s.amount)}",
-                                    color = if (s.hasLocation) color else TextPrimary,
+                                    color = if (s.hasLocation) color else appearanceTextPrimary(),
                                     fontSize = 12.sp,
                                     modifier = Modifier.clickable {
                                         if (s.hasLocation) ProjectLocation.openNavigation(context, s)
@@ -212,7 +212,7 @@ fun ClientsProjectsScreen(
                                     onClick = { manageProject = p },
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(Icons.Filled.Edit, "ویرایش", tint = TextSecondary)
+                                    Icon(Icons.Filled.Edit, "ویرایش", tint = appearanceTextSecondary())
                                 }
                             }
                             Text(
@@ -295,7 +295,7 @@ fun ClientsProjectsScreen(
                                 manageProject = null
                                 onEditProject?.invoke()
                             }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.Edit, "ویرایش", tint = TextSecondary)
+                                Icon(Icons.Filled.Edit, "ویرایش", tint = appearanceTextSecondary())
                             }
                             IconButton(onClick = {
                                 ProjectStore.delete(context, s.row)

@@ -381,7 +381,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         WeatherIconKind.Rain, WeatherIconKind.Drizzle -> Color(0xFF64B5F6)
                                         WeatherIconKind.Snow -> Color(0xFFE0E0E0)
                                         WeatherIconKind.Thunder -> Color(0xFFBA68C8)
-                                        else -> TextSecondary
+                                        else -> appearanceTextSecondary()
                                     }
                                     Icon(
                                         icon,
@@ -434,7 +434,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         Icon(
                             imageVector = if (planOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                             contentDescription = null,
-                            tint = TextSecondary,
+                            tint = appearanceTextSecondary(),
                             modifier = Modifier.padding(start = 4.dp)
                         )
                     }
@@ -460,7 +460,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     ) {
                                         Text(
                                             "${p.name.ifBlank { "بدون نام" }} - ${formatProjectDate(p)}",
-                                            color = if (p.hasLocation) WorkPrimary else TextPrimary,
+                                            color = if (p.hasLocation) WorkPrimary else appearanceTextPrimary(),
                                             style = MaterialTheme.typography.bodyMedium,
                                             maxLines = 2,
                                             overflow = TextOverflow.Ellipsis,
@@ -599,19 +599,19 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color.Transparent,
                             unfocusedBorderColor = Color.Transparent,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            focusedTextColor = appearanceTextPrimary(),
+                            unfocusedTextColor = appearanceTextPrimary()
                         ),
                         textStyle = TextStyle(fontSize = 14.sp, color = appearanceTextPrimary()),
                         leadingIcon = {
-                            Icon(Icons.Filled.Search, null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Filled.Search, null, tint = appearanceTextMuted(), modifier = Modifier.size(18.dp))
                         },
                         trailingIcon = {
                             if (searchQuery.isNotBlank()) {
                                 Icon(
                                     Icons.Filled.Close,
                                     contentDescription = "پاک",
-                                    tint = TextMuted,
+                                    tint = appearanceTextMuted(),
                                     modifier = Modifier
                                         .size(20.dp)
                                         .clickable { searchQuery = "" }
@@ -1564,7 +1564,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     .padding(vertical = 10.dp)
                                     .fillMaxWidth(),
                                 textAlign = TextAlign.Center,
-                                color = if (selected) section.color else TextSecondary,
+                                color = if (selected) section.color else appearanceTextSecondary(),
                                 fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
                             )
                         }
@@ -1617,9 +1617,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     val sel = sectionIndex == surveyIdx
-                    Icon(Icons.Filled.Architecture, "نقشه‌برداری", tint = if (sel) sections[surveyIdx].color else TextMuted)
+                    Icon(Icons.Filled.Architecture, "نقشه‌برداری", tint = if (sel) sections[surveyIdx].color else appearanceTextMuted())
                     Spacer(Modifier.height(4.dp))
-                    Text("نقشه‌برداری", fontSize = 11.sp, color = if (sel) sections[surveyIdx].color else TextMuted)
+                    Text("نقشه‌برداری", fontSize = 11.sp, color = if (sel) sections[surveyIdx].color else appearanceTextMuted())
                 }
                 // نقشه (نقشه ۲)
                 Column(
@@ -1640,9 +1640,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     val sel = sectionIndex == toolsIdx
-                    Icon(Icons.Filled.Build, "ابزار", tint = if (sel) sections[toolsIdx].color else TextMuted)
+                    Icon(Icons.Filled.Build, "ابزار", tint = if (sel) sections[toolsIdx].color else appearanceTextMuted())
                     Spacer(Modifier.height(4.dp))
-                    Text("ابزار", fontSize = 11.sp, color = if (sel) sections[toolsIdx].color else TextMuted)
+                    Text("ابزار", fontSize = 11.sp, color = if (sel) sections[toolsIdx].color else appearanceTextMuted())
                 }
                 // مالی
                 Column(
@@ -1654,9 +1654,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     val sel = sectionIndex == financeIdx
-                    Icon(Icons.Filled.AttachMoney, "مالی", tint = if (sel) sections[financeIdx].color else TextMuted)
+                    Icon(Icons.Filled.AttachMoney, "مالی", tint = if (sel) sections[financeIdx].color else appearanceTextMuted())
                     Spacer(Modifier.height(4.dp))
-                    Text("مالی", fontSize = 11.sp, color = if (sel) sections[financeIdx].color else TextMuted)
+                    Text("مالی", fontSize = 11.sp, color = if (sel) sections[financeIdx].color else appearanceTextMuted())
                 }
             }
         }
