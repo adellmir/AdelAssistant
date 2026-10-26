@@ -1,11 +1,15 @@
 package com.adel.assistant.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
+import java.io.FileOutputStream
 
 enum class AppearanceMode {
     Simple,
@@ -23,8 +27,11 @@ object AppearanceStore {
     private const val KEY_MODE = "mode"
     private const val CUSTOM_NAME = "custom_bg.jpg"
 
-    /** state قابل مشاهده در Compose */
     var modeState by mutableStateOf(AppearanceMode.Simple)
+        private set
+
+    /** با هر ذخیرهٔ تصویر جدید افزایش می‌یابد تا Compose بیت‌مپ را دوباره بخواند */
+    var customVersion by mutableIntStateOf(0)
         private set
 
     private var loaded = false
@@ -38,6 +45,12 @@ object AppearanceStore {
             "custom" -> AppearanceMode.Custom
             else -> AppearanceMode.Simple
         }
+        if (modeState == AppearanceMode.Custom && !customFile(context).exists()) {
+            modeState = AppearanceMode.Simple
+        }
+        if (customFile(context).exists()) {
+            customVersion = (customFile(context).lastModified() % Int.MAX_VALUE).toInt().coerceAtLeast(1)
+        }
         loaded = true
     }
 
@@ -48,6 +61,9 @@ object AppearanceStore {
 
     fun setMode(context: Context, mode: AppearanceMode) {
         ensureLoaded(context)
+        if (mode == AppearanceMode.Custom && !customFile(context).exists()) {
+            return
+        }
         modeState = mode
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
@@ -61,6 +77,7 @@ object AppearanceStore {
                 }
             )
             .apply()
+        persistModeFile(context)
     }
 
     fun customFile(context: Context): File =
@@ -70,16 +87,50 @@ object AppearanceStore {
 
     fun saveCustomFromUri(context: Context, uri: Uri): Boolean {
         return try {
+            val outFile = customFile(context)
+            var ok = false
             context.contentResolver.openInputStream(uri)?.use { input ->
-                customFile(context).outputStream().use { output -> input.copyTo(output) }
+                outFile.outputStream().use { output ->
+                    input.copyTo(output)
+                    ok = true
+                }
             }
+            if (!ok) return false
+
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(outFile.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val bmp = BitmapFactory.decodeStream(input) ?: return false
+                    FileOutputStream(outFile).use { fos ->
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 88, fos)
+                    }
+                    if (!bmp.isRecycled) bmp.recycle()
+                } ?: return false
+            } else {
+                val maxSide = 1600
+                var sample = 1
+                var w = bounds.outWidth
+                var h = bounds.outHeight
+                while (w / sample > maxSide || h / sample > maxSide) sample *= 2
+                val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                val bmp = BitmapFactory.decodeFile(outFile.absolutePath, opts)
+                if (bmp != null) {
+                    FileOutputStream(outFile).use { fos ->
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 88, fos)
+                    }
+                    if (!bmp.isRecycled) bmp.recycle()
+                }
+            }
+
+            customVersion = (customVersion + 1).coerceAtLeast(1)
+            setMode(context, AppearanceMode.Custom)
             true
         } catch (_: Exception) {
             false
         }
     }
 
-    /** مسیر نسبی داخل ZIP پشتیبان */
     const val BACKUP_ENTRY = "appearance/custom_bg.jpg"
     const val BACKUP_MODE_ENTRY = "appearance/mode.txt"
 
@@ -99,12 +150,24 @@ object AppearanceStore {
     fun restoreModeFile(context: Context) {
         val f = modeFile(context)
         if (!f.exists()) return
-        val m = when (f.readText().trim()) {
+        val raw = f.readText().trim()
+        val m = when (raw) {
             "iran" -> AppearanceMode.Iran
             "topo" -> AppearanceMode.Topo
             "custom" -> AppearanceMode.Custom
             else -> AppearanceMode.Simple
         }
-        setMode(context, m)
+        if (m == AppearanceMode.Custom && !customFile(context).exists()) {
+            setMode(context, AppearanceMode.Simple)
+        } else {
+            modeState = m
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_MODE, raw.ifBlank { "simple" })
+                .apply()
+            if (customFile(context).exists()) {
+                customVersion = (customFile(context).lastModified() % Int.MAX_VALUE).toInt().coerceAtLeast(1)
+            }
+        }
     }
 }

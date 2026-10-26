@@ -2,6 +2,7 @@ package com.adel.assistant.ui
 import com.adel.assistant.ui.appearanceTextPrimary
 import com.adel.assistant.ui.appearanceTextSecondary
 import com.adel.assistant.ui.appearanceTextMuted
+import com.adel.assistant.ui.appearanceControlBg
 import com.adel.assistant.data.TunnelFinanceStore
 import com.adel.assistant.data.toEnglishDigits
 import com.adel.assistant.ui.PendingDailyReport
@@ -1555,7 +1556,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 .weight(1f)
                                 .clickable { tabIndex = index },
                             shape = RoundedCornerShape(12.dp),
-                            color = if (selected) section.color.copy(alpha = 0.18f) else Color.Transparent,
+                            color = if (selected) section.color.copy(alpha = 0.28f) else appearanceControlBg(),
                             border = if (!selected) BorderStroke(0.5.dp, BorderColor) else null
                         ) {
                             Text(

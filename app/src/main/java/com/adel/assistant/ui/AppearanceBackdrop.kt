@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextFieldColors
@@ -31,12 +32,18 @@ val LocalAppearanceTextPrimary = staticCompositionLocalOf { TextPrimary }
 val LocalAppearanceTextSecondary = staticCompositionLocalOf { TextSecondary }
 val LocalAppearanceTextMuted = staticCompositionLocalOf { TextMuted }
 
-/** آیا تم روشن (متن/آیکن تیره) است؟ توپوگرافی */
 @Composable
 fun appearanceIsLightTheme(): Boolean {
     val context = LocalContext.current
     AppearanceStore.ensureLoaded(context)
     return AppearanceStore.modeState == AppearanceMode.Topo
+}
+
+@Composable
+fun appearanceIsThemed(): Boolean {
+    val context = LocalContext.current
+    AppearanceStore.ensureLoaded(context)
+    return AppearanceStore.modeState != AppearanceMode.Simple
 }
 
 @Composable
@@ -53,16 +60,19 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
                 Box(Modifier.fillMaxSize().background(Background))
             }
             AppearanceMode.Iran -> {
-                AssetOrFileBackground(assetName = "bg_iran.jpg", file = null)
+                AssetOrFileBackground(assetName = "bg_iran.jpg", file = null, version = 0)
                 Box(Modifier.fillMaxSize().background(Color(0xFF12160E).copy(alpha = 0.30f)))
             }
             AppearanceMode.Topo -> {
-                AssetOrFileBackground(assetName = "bg_topo.jpg", file = null)
+                AssetOrFileBackground(assetName = "bg_topo.jpg", file = null, version = 0)
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.08f)))
             }
             AppearanceMode.Custom -> {
                 val f = AppearanceStore.customFile(context)
-                val ver = AppearanceStore.customVersion
+                // نسخه از customVersion یا lastModified
+                val ver = AppearanceStore.customVersion.let { v ->
+                    if (v > 0) v else (f.lastModified() % Int.MAX_VALUE).toInt()
+                }
                 if (f.exists()) {
                     AssetOrFileBackground(assetName = null, file = f, version = ver)
                     Box(Modifier.fillMaxSize().background(Color(0xFF12160E).copy(alpha = 0.30f)))
@@ -75,7 +85,6 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
             LocalAppearanceTextPrimary provides textPrimary,
             LocalAppearanceTextSecondary provides textSecondary,
             LocalAppearanceTextMuted provides textMuted,
-            // آیکن‌های بدون tint صریح از این رنگ می‌گیرند
             LocalContentColor provides textPrimary
         ) {
             content()
@@ -137,6 +146,22 @@ fun appearanceCardColor(): Color {
     }
 }
 
+/**
+ * پس‌زمینه سربرگ / دکمه / کنترل — در تم ساده شفاف (رفتار قبلی)،
+ * در بقیه تم‌ها شیشه‌ای مثل کارت.
+ */
+@Composable
+fun appearanceControlBg(): Color {
+    val context = LocalContext.current
+    AppearanceStore.ensureLoaded(context)
+    return when (AppearanceStore.modeState) {
+        AppearanceMode.Simple -> Color.Transparent
+        AppearanceMode.Iran -> Color(0xFF1C2216).copy(alpha = 0.65f)
+        AppearanceMode.Topo -> Color.White.copy(alpha = 0.85f)
+        AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.75f)
+    }
+}
+
 @Composable
 fun appearanceFieldContainer(): Color {
     val context = LocalContext.current
@@ -149,7 +174,6 @@ fun appearanceFieldContainer(): Color {
     }
 }
 
-/** متن اصلی — توپو: مشکی */
 @Composable
 fun appearanceTextPrimary(): Color {
     val context = LocalContext.current
@@ -180,7 +204,6 @@ fun appearanceTextMuted(): Color {
     }
 }
 
-/** رنگ آیکن — توپو تیره */
 @Composable
 fun appearanceIconTint(): Color = appearanceTextPrimary()
 
@@ -189,6 +212,24 @@ fun appearanceOnCard(): Color = appearanceTextPrimary()
 
 @Composable
 fun appearanceOnCardMuted(): Color = appearanceTextMuted()
+
+@Composable
+fun appearanceFilledButtonColors(accent: Color = WorkPrimary) =
+    ButtonDefaults.buttonColors(
+        containerColor = if (appearanceIsThemed()) {
+            accent.copy(alpha = 0.88f)
+        } else {
+            accent
+        },
+        contentColor = Color.White
+    )
+
+@Composable
+fun appearanceOutlinedButtonColors(accent: Color = WorkPrimary) =
+    ButtonDefaults.outlinedButtonColors(
+        containerColor = appearanceControlBg(),
+        contentColor = if (appearanceIsLightTheme()) Color(0xFF111111) else appearanceTextPrimary()
+    )
 
 @Composable
 fun appearanceFieldColors(): TextFieldColors {
