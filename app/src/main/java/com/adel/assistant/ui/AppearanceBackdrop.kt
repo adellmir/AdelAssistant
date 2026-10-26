@@ -61,7 +61,8 @@ fun AppearanceBackdrop(content: @Composable () -> Unit) {
             }
             AppearanceMode.Iran -> {
                 AssetOrFileBackground(assetName = "bg_iran.jpg", file = null, version = 0)
-                Box(Modifier.fillMaxSize().background(Color(0xFF12160E).copy(alpha = 0.30f)))
+                // لایه محو ۲۰٪ تیره‌تر از قبل
+                Box(Modifier.fillMaxSize().background(Color(0xFF0A0D08).copy(alpha = 0.36f)))
             }
             AppearanceMode.Topo -> {
                 AssetOrFileBackground(assetName = "bg_topo.jpg", file = null, version = 0)
@@ -140,7 +141,7 @@ fun appearanceCardColor(): Color {
     AppearanceStore.ensureLoaded(context)
     return when (AppearanceStore.modeState) {
         AppearanceMode.Simple -> Surface
-        AppearanceMode.Iran -> Color(0xFF1C2216).copy(alpha = 0.70f)
+        AppearanceMode.Iran -> Color(0xFF141910).copy(alpha = 0.84f)
         AppearanceMode.Topo -> Color.White.copy(alpha = 0.90f)
         AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.90f)
     }
@@ -156,7 +157,7 @@ fun appearanceControlBg(): Color {
     AppearanceStore.ensureLoaded(context)
     return when (AppearanceStore.modeState) {
         AppearanceMode.Simple -> Color.Transparent
-        AppearanceMode.Iran -> Color(0xFF1C2216).copy(alpha = 0.65f)
+        AppearanceMode.Iran -> Color(0xFF141910).copy(alpha = 0.78f)
         AppearanceMode.Topo -> Color.White.copy(alpha = 0.85f)
         AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.75f)
     }
@@ -168,7 +169,7 @@ fun appearanceFieldContainer(): Color {
     AppearanceStore.ensureLoaded(context)
     return when (AppearanceStore.modeState) {
         AppearanceMode.Simple -> Surface.copy(alpha = 0.85f)
-        AppearanceMode.Iran -> Color(0xFF1C2216).copy(alpha = 0.55f)
+        AppearanceMode.Iran -> Color(0xFF141910).copy(alpha = 0.66f)
         AppearanceMode.Topo -> Color.White.copy(alpha = 0.75f)
         AppearanceMode.Custom -> Color(0xFF12160E).copy(alpha = 0.60f)
     }
