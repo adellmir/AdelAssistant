@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import com.adel.assistant.data.LiveLocationStore
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,6 +76,7 @@ fun ChainageScreen(color: Color, onBack: () -> Unit) {
     fun findMyLocation() {
         if (!hasPermission) { permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION); return }
         try {
+            LiveLocationStore.ensure(context)
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             var best: Location? = null
             for (provider in lm.getProviders(true)) {

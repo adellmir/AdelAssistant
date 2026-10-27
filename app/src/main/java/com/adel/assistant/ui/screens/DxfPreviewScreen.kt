@@ -31,6 +31,7 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
+import com.adel.assistant.data.LiveLocationStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -483,6 +484,7 @@ LaunchedEffect(profileMode) {
 
     fun readGps() {
         try {
+            LiveLocationStore.ensure(context)
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
             fun applyLocation(loc: Location?) {

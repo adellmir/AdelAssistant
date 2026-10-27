@@ -1,5 +1,6 @@
 package com.adel.assistant
 
+import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.Map2Session
 
 import android.content.Intent
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try { LiveLocationStore.ensure(this) } catch (_: Exception) {}
         Map2Session.load(this)
         AppearanceStore.ensureLoaded(this)
         captureRoute(intent)

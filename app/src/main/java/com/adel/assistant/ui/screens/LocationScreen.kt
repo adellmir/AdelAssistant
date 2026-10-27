@@ -52,6 +52,7 @@ import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.CoordGoto
 import com.adel.assistant.data.PendingMapGoto
 import com.adel.assistant.data.DeepLinkHolder
@@ -182,6 +183,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 updateLiveFrom(location)
+                LiveLocationStore.applyFrom(location)
                 if (averaging) {
                     avgSamples = avgSamples + location
                 }
@@ -193,7 +195,8 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         }
         try {
             for (p in lm.getProviders(true)) {
-                lm.requestLocationUpdates(p, 1000L, 0f, listener, Looper.getMainLooper())
+                lm.requestLocationUpdates(p, 5_000L, 0f, listener, Looper.getMainLooper())
+                LiveLocationStore.ensure(context)
             }
             readBestLocation()?.let { updateLiveFrom(it) }
         } catch (_: SecurityException) {

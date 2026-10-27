@@ -74,6 +74,7 @@ import com.adel.assistant.data.TunnelBenchmarkPoint
 import com.adel.assistant.data.TunnelBenchmarkStore
 import com.adel.assistant.data.DxfModel
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.toDoubleOrNullFa
@@ -449,18 +450,29 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
 
     fun readGps(registerPoint: Boolean = false) {
         try {
-            val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
-            var best: Location? = null
-            for (pr in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
-                if (!lm.isProviderEnabled(pr)) continue
-                @Suppress("MissingPermission")
-                val loc = lm.getLastKnownLocation(pr) ?: continue
-                val cur = best
-                if (cur == null || loc.accuracy < cur.accuracy) best = loc
+            LiveLocationStore.ensure(context)
+            val fix = LiveLocationStore.currentOrNull()
+            val locBest: Location? = if (fix != null) {
+                Location("live").apply {
+                    latitude = fix.lat
+                    longitude = fix.lon
+                    if (fix.accuracy > 0) accuracy = fix.accuracy
+                }
+            } else {
+                val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+                var best: Location? = null
+                for (pr in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                    if (!lm.isProviderEnabled(pr)) continue
+                    @Suppress("MissingPermission")
+                    val loc = lm.getLastKnownLocation(pr) ?: continue
+                    val cur = best
+                    if (cur == null || loc.accuracy < cur.accuracy) best = loc
+                }
+                best
             }
-            val locBest = best
             if (locBest == null) { status = "موقعیت GPS در دسترس نیست"; return }
-            val (e, n) = UtmGeo.fromLatLon(locBest.latitude, locBest.longitude, zone)
+            val zUse = if (LiveLocationStore.hasFix) LiveLocationStore.zone else zone
+            val (e, n) = UtmGeo.fromLatLon(locBest.latitude, locBest.longitude, zUse)
             myLoc = e to n
             needFit = false
             // مرکز نقشه را نزدیک موقعیت نبریم مگر کاربر بخواهد — فقط نشان بده
@@ -477,7 +489,24 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    // موقعیت سراسری — هر ۵ ثانیه مارکر من به‌روز شود
+    LaunchedEffect(hasGps) {
+        if (!hasGps) return@LaunchedEffect
+        LiveLocationStore.ensure(context)
+        while (true) {
+            val f = LiveLocationStore.currentOrNull()
+            if (f != null) {
+                myLoc = f.easting to f.northing
+            } else {
+                LiveLocationStore.readBestOnce(context)?.let {
+                    myLoc = LiveLocationStore.easting to LiveLocationStore.northing
+                }
+            }
+            kotlinx.coroutines.delay(5_000)
+        }
+    }
+
+        val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasGps = granted

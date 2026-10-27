@@ -1,4 +1,5 @@
 package com.adel.assistant.ui.screens
+import com.adel.assistant.data.LiveLocationStore
 
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
@@ -131,6 +132,11 @@ function getCenter(cb){
 
     fun locateGps() {
         try {
+            LiveLocationStore.ensure(context)
+            val live = LiveLocationStore.currentOrNull()
+            if (live != null) {
+                /* use live below */
+            }
             val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
             var best: Location? = null
             for (pr in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {

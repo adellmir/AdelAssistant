@@ -42,6 +42,7 @@ import com.adel.assistant.data.TunnelReportStore.TunnelPoint
 import com.adel.assistant.data.filterNumericInput
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.PendingTunnelLookup
@@ -111,6 +112,7 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
             return // permissionLauncher handles request below
         }
         try {
+            LiveLocationStore.ensure(context)
             val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
             var best: Location? = null
             for (provider in lm.getProviders(true)) {

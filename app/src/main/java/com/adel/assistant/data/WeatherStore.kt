@@ -40,6 +40,8 @@ object WeatherStore {
     }
 
     fun lastKnownLatLon(context: Context): Pair<Double, Double>? {
+        LiveLocationStore.ensure(context)
+        LiveLocationStore.currentOrNull()?.let { return it.lat to it.lon }
         return try {
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             var best: android.location.Location? = null

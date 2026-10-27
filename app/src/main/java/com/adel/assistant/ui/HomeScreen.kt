@@ -89,6 +89,7 @@ import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.WeatherStore
+import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.WeatherIconKind
 import com.adel.assistant.data.openNeshanNav
 import com.adel.assistant.ui.screens.ProjectLocationPickerDialog
@@ -223,6 +224,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     // هر بار ورود به صفحه اصلی — رفرش فوری هواشناسی
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            LiveLocationStore.ensure(context)
             weatherLoading = true
             weatherSnap = WeatherStore.fetch(context, force = true)
             weatherLoading = false
