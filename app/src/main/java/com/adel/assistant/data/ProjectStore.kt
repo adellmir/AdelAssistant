@@ -82,6 +82,10 @@ object ProjectStore {
             )
         }
         CsvStore.overwriteAll(context, CSV, rows)
+        try {
+            com.adel.assistant.widget.AdelWidgetProvider.refreshAll(context)
+            com.adel.assistant.widget.AdelNavWidgetProvider.refreshAll(context)
+        } catch (_: Exception) { }
     }
 
     fun nextRowId(context: Context): String {

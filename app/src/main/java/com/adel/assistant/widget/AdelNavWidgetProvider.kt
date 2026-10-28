@@ -12,6 +12,7 @@ import android.widget.RemoteViews
 import com.adel.assistant.MainActivity
 import com.adel.assistant.R
 import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.data.TunnelReportStore
 import com.adel.assistant.data.UtmGeo
 import com.adel.assistant.navigation.Routes
@@ -56,10 +57,14 @@ class AdelNavWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // پروژه‌ها از جدید به قدیم
+            // پروژه‌ها از جدید به قدیم (ثبت جدید = بالای لیست؛ اولویت با ردیف ثبت و تاریخ)
             val projects = ProjectStore.all(context)
                 .filter { it.name.isNotBlank() && it.name != "پروژه" }
-                .sortedByDescending { it.dateSortKey }
+                .sortedWith(
+                    compareByDescending<com.adel.assistant.data.ProjectEntry> {
+                        it.row.toIntOrNullFa() ?: 0
+                    }.thenByDescending { it.dateSortKey }
+                )
                 .distinctBy { it.name.trim() }
                 .take(4)
 
