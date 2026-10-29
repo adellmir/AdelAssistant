@@ -121,13 +121,13 @@ fun ClientsProjectsScreen(
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(5.5.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             if (tab == 1) {
                 items(employers, key = { it.employer }) { e ->
                     Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(e.employer, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
                                 IconButton(onClick = { call(e.phone) }, modifier = Modifier.size(32.dp)) {
@@ -169,7 +169,7 @@ fun ClientsProjectsScreen(
             } else {
                 items(projects, key = { it.name }) { p ->
                     Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Row(
                                     Modifier.weight(1f),
@@ -249,7 +249,7 @@ fun ClientsProjectsScreen(
             },
             title = { Text("مدیریت: ${profile.name}") },
             text = {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.5.dp)) {
                     val locSample = sessions.firstOrNull { it.hasLocation }
                     Text(
                         if (locSample != null) {
@@ -339,7 +339,7 @@ fun ClientsProjectsScreen(
             onDismissRequest = { editEmployerOld = null },
             title = { Text("ویرایش کارفرما") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.5.dp)) {
                     AdelOutlinedTextField(
                         value = editEmpName,
                         onValueChange = { editEmpName = it },
@@ -388,11 +388,15 @@ private fun SessionSettleRow(s: ProjectEntry, color: Color, onToggle: () -> Unit
             colors = CheckboxDefaults.colors(checkedColor = color)
         )
         Text(
-            "${s.day}/${s.month}/${s.year} — ${moneyM(s.amount)}" +
-                if (settled) " (تسویه)" else "",
+            buildString {
+                append("${s.day}/${s.month}/${s.year} — ${moneyM(s.amount)}")
+                if (settled) append(" (تسویه)")
+                if (s.description.isNotBlank()) append(" / ${s.description}")
+            },
             color = appearanceTextPrimary(),
             fontSize = 12.sp,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            maxLines = 2
         )
     }
 }

@@ -364,7 +364,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             // عدد سفید ارتفاع زیر + — بدون به‌هم‌ریختن ردیف
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = { addOrUpdateRow() }) {
-                    Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = color)
+                    Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = Color(0xFFFF9800))
                 }
                 val elevHint = remember(pointNo, length, shaft, side) {
                     val lenCm = length.toDoubleOrNullFa() ?: return@remember null
@@ -410,7 +410,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                 }
                 if (rows.isNotEmpty()) registerAll()
             }) {
-                Icon(Icons.Outlined.Add, contentDescription = "ثبت", tint = color)
+                Icon(Icons.Outlined.Add, contentDescription = "ثبت", tint = Color(0xFFFF9800))
             }
         }
         AdelOutlinedTextField(

@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +47,7 @@ import java.util.zip.ZipOutputStream
 fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
     val context = LocalContext.current
     var status by remember { mutableStateOf("") }
+    var settingsTab by remember { mutableStateOf(0) } // 0=پشتیبان 1=نما
     AppearanceStore.ensureLoaded(context)
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -233,7 +235,12 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
             .background(appearanceScreenBg())
             .padding(horizontal = 20.dp)
     ) {
-        ScreenTopBar(title = "پشتیبان و نما", color = color, onBack = onBack)
+        ScreenTopBar(title = "تنظیمات", color = color, onBack = onBack)
+        TabRow(selectedTabIndex = settingsTab, containerColor = appearanceCardColor()) {
+            Tab(selected = settingsTab == 0, onClick = { settingsTab = 0 }, text = { Text("پشتیبان‌گیری") })
+            Tab(selected = settingsTab == 1, onClick = { settingsTab = 1 }, text = { Text("نمای برنامه") })
+        }
+        Spacer(Modifier.height(8.dp))
         Column(
             Modifier
                 .weight(1f)
@@ -241,7 +248,8 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 .padding(top = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ——— نما (بالای صفحه) ———
+            if (settingsTab == 1) {
+            // ——— نما ———
             Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("نمای برنامه", color = appearanceTextPrimary(), style = MaterialTheme.typography.titleMedium)
@@ -284,6 +292,8 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 }
             }
 
+            } // end settingsTab==1
+            if (settingsTab == 0) {
             // ——— پشتیبان ———
             Surface(shape = RoundedCornerShape(14.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -318,7 +328,8 @@ fun DatabaseBackupScreen(color: Color, onBack: () -> Unit) {
                 }
             }
 
-            if (status.isNotBlank()) {
+            } // end settingsTab==0
+        if (status.isNotBlank()) {
                 Text(status, color = appearanceTextPrimary())
             }
             Spacer(Modifier.height(24.dp))

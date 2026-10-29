@@ -89,6 +89,8 @@ import com.adel.assistant.data.MenuItem
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.WeatherStore
+import com.adel.assistant.data.AppearanceMode
+import com.adel.assistant.data.AppearanceStore
 import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.WeatherIconKind
 import com.adel.assistant.data.openNeshanNav
@@ -214,7 +216,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
     val context = LocalContext.current
     var locEditProject by remember { mutableStateOf<com.adel.assistant.data.ProjectEntry?>(null) }
     val sections = AppMenu.sections
-    var sectionIndex by rememberSaveable { mutableStateOf(1) }
+    var sectionIndex by rememberSaveable { mutableStateOf(0) }
     var tabIndex by rememberSaveable { mutableStateOf(0) }
 
     var clock by remember { mutableStateOf(currentTimeString()) }
@@ -1061,7 +1063,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     .weight(1f)
                                     .clickable { tabIndex = index },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (selected) section.color.copy(alpha = 0.28f) else appearanceControlBg(),
+                                color = if (selected) {
+                                    val base = section.color
+                                    if (AppearanceStore.modeState == AppearanceMode.Iran)
+                                        base.copy(alpha = 0.48f) // حدود ۲۰٪ تیره‌تر از حالت قبل
+                                    else
+                                        base.copy(alpha = 0.28f)
+                                } else appearanceControlBg(),
                                 border = if (!selected) BorderStroke(0.5.dp, BorderColor) else null
                             ) {
                                 Text(

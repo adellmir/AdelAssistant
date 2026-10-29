@@ -380,7 +380,7 @@ fun ProjectRegisterScreen(
                 onCheckedChange = { addToCalendar = it },
                 colors = CheckboxDefaults.colors(checkedColor = color)
             )
-            Text("ثبت در Google Calendar / تقویم گوشی", color = Color(0xFF1C1C1C))
+            Text("ثبت در Google Calendar / تقویم گوشی", color = Color.White)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
