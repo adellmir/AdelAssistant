@@ -494,7 +494,10 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                         if (rowWarn != null) {
                             Text(rowWarn, color = Color(0xFFFF9800), style = MaterialTheme.typography.bodySmall)
                         }
-                        val codeAlert = TunnelReportStore.codeProximityAlert(context, r)
+                        // اعلان نزدیکی به نقطه کددار (در صورت فعال بودن در Store)
+                        val codeAlert = TunnelReportStore.codeProximityAlert(
+                            context, r.shaft, r.side, r.km, r.pointNo
+                        )
                         if (codeAlert != null) {
                             Text(codeAlert, color = Color(0xFFE53935), style = MaterialTheme.typography.bodySmall)
                         }

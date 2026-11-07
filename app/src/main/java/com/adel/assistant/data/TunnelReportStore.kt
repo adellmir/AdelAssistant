@@ -424,7 +424,13 @@ object TunnelReportStore {
      * اخطار پیشرفت حفاری نسبت به روز قبل (متر).
      * کمتر از ۰٫۵ م یا بیشتر از ۲ م.
      */
-    fun codeProximityAlert(context: Context, e: ReportEntry): String? {
+    fun codeProximityAlert(
+        context: Context,
+        shaft: String,
+        side: String,
+        km: Double,
+        pointNo: String
+    ): String? {
         // اعلان ۳ متر مانده/گذشته از نقطه کددار — در صورت وجود
         return null
     }
