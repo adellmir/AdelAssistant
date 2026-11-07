@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cal_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="#E61A2218">
+
+    <TextView
+        android:id="@+id/cal_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="تقویم کار"
+        android:textColor="#FFB8D48A"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:id="@+id/cal_month"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="—"
+        android:textColor="#FFE8EDE0"
+        android:textSize="13sp"
+        android:paddingBottom="6dp" />
+
+    <TextView
+        android:id="@+id/cal_today"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="امروز"
+        android:textColor="#FFFFCC80"
+        android:textSize="12sp"
+        android:paddingBottom="4dp" />
+
+    <TextView android:id="@+id/cal_row_1" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textColor="#FFE8EDE0" android:textSize="12sp" android:padding="4dp" android:background="#332A3A20" android:layout_marginBottom="3dp" />
+    <TextView android:id="@+id/cal_row_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textColor="#FFE8EDE0" android:textSize="12sp" android:padding="4dp" android:background="#332A3A20" android:layout_marginBottom="3dp" />
+    <TextView android:id="@+id/cal_row_3" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textColor="#FFE8EDE0" android:textSize="12sp" android:padding="4dp" android:background="#332A3A20" android:layout_marginBottom="3dp" />
+    <TextView android:id="@+id/cal_row_4" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textColor="#FFE8EDE0" android:textSize="12sp" android:padding="4dp" android:background="#332A3A20" android:layout_marginBottom="3dp" />
+    <TextView android:id="@+id/cal_row_5" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textColor="#FFE8EDE0" android:textSize="12sp" android:padding="4dp" android:background="#332A3A20" />
+</LinearLayout>
