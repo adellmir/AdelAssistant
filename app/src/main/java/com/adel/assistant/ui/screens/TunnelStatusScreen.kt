@@ -25,6 +25,7 @@ import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.appearanceScreenBg
+import com.adel.assistant.ui.appearanceTextPrimary
 import com.adel.assistant.ui.appearanceCardColor
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import kotlin.math.abs
@@ -120,6 +121,15 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
             if (rangeMode) "پیشرفت بازه‌ای" else "پیشرفت کلی",
             style = MaterialTheme.typography.titleSmall,
             color = Color(0xFFAAB697)
+        )
+        // جمع کل
+        val totalProg = cards.sumOf { it.moreProgress + it.lessProgress }
+        val totalRem = cards.sumOf { it.moreRemain + it.lessRemain }
+        Text(
+            "حفاری کل: ${String.format(java.util.Locale.US, "%.2f", totalProg)} م  |  مانده کل: ${String.format(java.util.Locale.US, "%.2f", totalRem)} م",
+            color = appearanceTextPrimary(),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(vertical = 4.dp)
         )
         Spacer(Modifier.height(6.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {

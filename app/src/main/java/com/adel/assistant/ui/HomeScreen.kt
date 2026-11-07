@@ -640,6 +640,8 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             // ---- نتایج هوشمند چندمنبعی (ماه / تاریخ / مطالبات / درآمد / …) ----
             if (query.isNotEmpty()) {
                 val qLower = query.lowercase().trim()
+                val isMandeh = qLower.contains("مانده") || qEn.contains("مانده")
+                val isProgressKw = qLower.contains("پیشرفت") || qEn.contains("پیشرفت")
                 val qEn = query.toEnglishDigits().trim()
 
                 fun moneyM(v: Double): String =
@@ -820,6 +822,13 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     if (isClaims) {
                         add(SearchTab("claims_proj", "مطالبات پروژه", 1))
                         add(SearchTab("claims_tunnel", "مطالبات تونل", 1))
+                        if (isMandeh) {
+                            add(SearchTab("mande_tunnel", "مانده تونل", 1))
+                            add(SearchTab("mande_shafts", "مانده شفت‌ها", 1))
+                        }
+                        if (isProgressKw) {
+                            add(SearchTab("prog_tunnel", "پیشرفت تونل", 1))
+                        }
                     }
                     if (isFallQ) {
                         val n = allTunnelEntries.count { it.collapse.isNotBlank() }
@@ -1027,6 +1036,49 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         Text("داده مالی تونل نیست", color = appearanceTextMuted(), fontSize = 12.sp)
                                     }
                                 }
+                                "mande_tunnel", "mande_shafts", "prog_tunnel" -> {
+                                    val layout = try { com.adel.assistant.data.TunnelReportStore.TUNNEL_LAYOUT } catch (_: Exception) { emptyList() }
+                                    val shafts = layout.map { it.first }.distinct()
+                                    var sumProg = 0.0
+                                    var sumRem = 0.0
+                                    val lines = mutableListOf<String>()
+                                    for (sh in shafts) {
+                                        val sides = layout.filter { it.first == sh }.map { it.second }
+                                        var p = 0.0; var r = 0.0
+                                        for (sd in sides) {
+                                            try {
+                                                val fixed = com.adel.assistant.data.TunnelReportStore.shaftFixedKm(context, sh) ?: 0.0
+                                                val km = com.adel.assistant.data.null /* removed */ ?: fixed
+                                                p += kotlin.math.abs(km - fixed)
+                                                // remaining approx via opposite if available
+                                            } catch (_: Exception) {}
+                                        }
+                                        // use progress screen logic lightly
+                                        lines += "شفت $sh"
+                                        sumProg += p
+                                    }
+                                    Text("حفاری کل: ${String.format(java.util.Locale.US, "%.2f", sumProg)} م", color = appearanceTextPrimary(), fontSize = 13.sp)
+                                    Text("مانده کل: (از برنامه پیشرفت تونل دقیق‌تر ببینید)", color = appearanceTextSecondary(), fontSize = 12.sp)
+                                    Spacer(Modifier.height(4.dp))
+                                    // از کارت‌های پیشرفت
+                                    try {
+                                        // ساده: آخرین گزارش‌ها
+                                        val entries = com.adel.assistant.data.TunnelReportStore.allEntries(context)
+                                        val byShaft = entries.groupBy { it.shaft }
+                                        byShaft.keys.sorted().forEach { sh ->
+                                            val last = byShaft[sh]?.maxByOrNull { "${it.year}${it.month.padStart(2,'0')}${it.day.padStart(2,'0')}" }
+                                            if (last != null) {
+                                                Text(
+                                                    "شفت $sh — پیشرفت: ${String.format(java.util.Locale.US, "%.2f", last.shaftProgress)} م  مانده: ${String.format(java.util.Locale.US, "%.2f", last.remaining)} م",
+                                                    color = appearanceTextPrimary(), fontSize = 12.sp
+                                                )
+                                            }
+                                        }
+                                    } catch (_: Exception) {
+                                        Text("داده تونل در دسترس نیست", color = appearanceTextMuted(), fontSize = 12.sp)
+                                    }
+                                }
+
                                 "fall" -> allTunnelEntries.filter { it.collapse.isNotBlank() }.take(25).forEach { e ->
                                     Text("${e.year}/${e.month}/${e.day} شفت ${e.shaft} · ${e.collapse}", color = appearanceTextPrimary(), fontSize = 12.sp)
                                 }
@@ -1065,7 +1117,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (selected) {
                                     val base = section.color
-                                    if (AppearanceStore.modeState == AppearanceMode.Iran)
+                                    if (AppearanceStore.modeState == AppearanceMode.Simple)
                                         base.copy(alpha = 0.48f) // حدود ۲۰٪ تیره‌تر از حالت قبل
                                     else
                                         base.copy(alpha = 0.28f)

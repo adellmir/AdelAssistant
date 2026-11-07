@@ -59,6 +59,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalView
+import android.view.WindowManager
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
@@ -240,6 +243,8 @@ fun DxfPreviewScreen(
     var myLoc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var viewRestored by remember { mutableStateOf(false) }
+    val mapViewKey = "map2"
     var mapRotationDeg by remember { mutableStateOf(0f) }
     var rotationEnabled by remember { mutableStateOf(false) } // پیش‌فرض خاموش
     var crosshairMode by remember { mutableStateOf(false) }
@@ -250,6 +255,40 @@ fun DxfPreviewScreen(
     var gotoZone by remember { mutableStateOf("40") }
     var gotoSort by remember { mutableStateOf(0) }
     var canvasSize by remember { mutableStateOf(Offset.Zero) }
+
+    // بازیابی آخرین زوم/جابجایی
+    LaunchedEffect(canvasSize) {
+        if (!viewRestored && canvasSize.x > 0f) {
+            MapViewStore.load(context, mapViewKey)?.let { q ->
+                scale = q.scale
+                offset = Offset(q.ox, q.oy)
+                mapRotationDeg = q.rot
+                viewRestored = true
+            }
+        }
+    }
+    // ذخیره هنگام تغییر
+    LaunchedEffect(scale, offset, mapRotationDeg) {
+        if (viewRestored || scale != 1f) {
+            kotlinx.coroutines.delay(400)
+            MapViewStore.save(context, mapViewKey, scale, offset.x, offset.y, mapRotationDeg)
+            viewRestored = true
+        }
+    }
+    // روشن ماندن صفحه ۵ دقیقه
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = (view.context as? android.app.Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+    LaunchedEffect(Unit) {
+        delay(5 * 60 * 1000L)
+        (view.context as? android.app.Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
     var tiles by remember { mutableStateOf<List<TileBmp>>(emptyList()) }
     var fitTrigger by remember { mutableStateOf(0) }
     var mapInitialized by remember { mutableStateOf(false) }
@@ -593,6 +632,8 @@ LaunchedEffect(profileMode) {
         scale = min(sx, sy).coerceIn(0.000001f, 5000f)
         offset = Offset(w / 2f - ((minX + maxX) / 2.0 * scale).toFloat(),
                         h / 2f + ((minY + maxY) / 2.0 * scale).toFloat())
+        viewRestored = true
+        MapViewStore.save(context, mapViewKey, scale, offset.x, offset.y, mapRotationDeg)
     }
     fun worldToScreen(x: Double, y: Double): Offset {
         val sx0 = (x * scale + offset.x).toFloat()
@@ -1224,6 +1265,30 @@ LaunchedEffect(profileMode) {
 
     Box(Modifier.fillMaxSize().background(Background)) {
 
+            
+            // دکمه‌های چرخش چپ/راست
+            if (rotationEnabled && baseMap == BaseMap.NONE) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, bottom = 72.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = { mapRotationDeg = (mapRotationDeg - 5f + 360f) % 360f },
+                        containerColor = Color(0xCC1E1E1E),
+                        contentColor = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    ) { Text("↺", fontSize = 18.sp) }
+                    FloatingActionButton(
+                        onClick = { mapRotationDeg = (mapRotationDeg + 5f) % 360f },
+                        containerColor = Color(0xCC1E1E1E),
+                        contentColor = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    ) { Text("↻", fontSize = 18.sp) }
+                }
+            }
+
             // —— قطب‌نمای چرخش نقشه ——
             if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
                 Surface(
@@ -1319,7 +1384,7 @@ LaunchedEffect(profileMode) {
                             val allowRotate = rotationEnabled && baseMap == BaseMap.NONE
                             if (allowRotate && kotlin.math.abs(rotation) > 1e-4f) {
                                 // سرعت ۲ برابر کندتر
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.5f) % 360f
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.40f) % 360f
                             }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
@@ -1330,7 +1395,11 @@ LaunchedEffect(profileMode) {
                                     centroid.y - (centroid.y - offset.y) * factor + pan.y
                                 )
                                 scale = newScale
-                            } else offset += pan
+                            } else {
+                                // در زوم بالا حرکت روان‌تر (حساسیت پیکسلی بیشتر)
+                                val panFactor = (1f + (scale / 500f).coerceIn(0f, 2f))
+                                offset += pan * panFactor
+                            }
                             // به‌روز تارگت روی نقطه موجود
                             if (crosshairMode) {
                                 val c = centerWorldSnapped()
@@ -1381,7 +1450,7 @@ LaunchedEffect(profileMode) {
                                         val raw = if (crosshairMode) centerWorldSnapped() else screenToWorld(tap.x, tap.y)
                                         val p = snapWorld(raw.first, raw.second)
                                         val last = profileDraftVertices.lastOrNull()
-                                        if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.01 / scale.coerceAtLeast(1e-6f))) {
+                                        if (last == null || hypot(last.x - p.first, last.y - p.second) > (0.003 / scale.coerceAtLeast(1e-6f))) {
                                             profileDraftVertices = profileDraftVertices + AlignmentVertex(p.first, p.second)
                                             message = "الایمنت: ${profileDraftVertices.size} رأس"
                                         }

@@ -129,7 +129,15 @@ fun ClientsProjectsScreen(
                     Surface(shape = RoundedCornerShape(12.dp), color = appearanceCardColor(), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(e.employer, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = appearanceTextPrimary())
+                                Text(
+                                    e.employer,
+                                    Modifier.weight(1f).clickable {
+                                        tab = 1
+                                        searchEmployer = e.employer
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    color = appearanceTextPrimary()
+                                )
                                 IconButton(onClick = { call(e.phone) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Filled.Call, "تماس", tint = color)
                                 }
@@ -145,7 +153,8 @@ fun ClientsProjectsScreen(
                                 "پروژه: ${e.projectCount} | درآمد: ${moneyM(e.sessions.sumOf { it.amount })} | دریافتی: ${moneyM(e.totalReceived)} | مانده: ${moneyM(e.totalClaims)}",
                                 color = appearanceTextSecondary(), fontSize = 12.sp
                             )
-                            e.sessions.take(8).forEach { s ->
+                            val sessLimit = if (searchEmployer.isNotBlank()) e.sessions.size else 8
+                            e.sessions.take(sessLimit).forEach { s ->
                                 Text(
                                     "• ${s.name} | جلسه ${s.day}/${s.month}/${s.year} | ${moneyM(s.amount)}",
                                     color = if (s.hasLocation) color else appearanceTextPrimary(),
@@ -160,8 +169,16 @@ fun ClientsProjectsScreen(
                                     }
                                 )
                             }
-                            if (e.sessions.size > 8) {
-                                Text("+ ${e.sessions.size - 8} مورد دیگر", color = appearanceTextSecondary(), fontSize = 11.sp)
+                            if (searchEmployer.isBlank() && e.sessions.size > 8) {
+                                Text(
+                                    "+ ${e.sessions.size - 8} مورد دیگر",
+                                    color = appearanceTextSecondary(),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.clickable {
+                                        tab = 1
+                                        searchEmployer = e.employer
+                                    }
+                                )
                             }
                         }
                     }

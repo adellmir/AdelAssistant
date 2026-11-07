@@ -64,8 +64,10 @@ object XlsxReportWriter {
             cellUpdates["G$row"] = formatEn("%.4f", g) to false
             cellUpdates["H$row"] = formatEn("%.4f", h) to false
             cellUpdates["I$row"] = formatEn("%.4f", i) to false
+            // J4: فاصله کیلومتر آخر حفاری جهت کمتر شفت۱ با اتصال (کیلومتر ۲۲۷)
+            val jOut = if (row == 4) kotlin.math.abs(g - 227.0) else j
             if (todayEntry != null || row == 4 || row == 60) {
-                cellUpdates["J$row"] = formatEn("%.4f", j) to false
+                cellUpdates["J$row"] = formatEn("%.4f", jOut) to false
             }
             // توضیحات → ستون T همان ردیف بخش
             if (todayEntry != null && todayEntry.notes.isNotBlank()) {
@@ -120,20 +122,42 @@ object XlsxReportWriter {
 
     private fun applyCellUpdates(xml: String, updates: Map<String, Pair<String, Boolean>>): String {
         var result = xml
+        fun cellXml(ref: String, value: String, isText: Boolean, styleAttr: String): String {
+            return if (isText) {
+                val escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                """<c r="$ref"$styleAttr t="inlineStr"><is><t>$escaped</t></is></c>"""
+            } else {
+                """<c r="$ref"$styleAttr><v>$value</v></c>"""
+            }
+        }
         updates.forEach { (ref, pair) ->
             val (value, isText) = pair
-            val cellRegex = Regex("<c r=\"$ref\"([^>]*)>.*?</c>", RegexOption.DOT_MATCHES_ALL)
+            val cellRegex = Regex("""<c r="$ref"([^>]*)>.*?</c>""", RegexOption.DOT_MATCHES_ALL)
             val match = cellRegex.find(result)
             val styleAttr = match?.groupValues?.get(1)?.let { attrs ->
-                Regex("s=\"(\\d+)\"").find(attrs)?.value?.let { " $it" }
+                Regex("""s="(\d+)"""").find(attrs)?.value?.let { " $it" }
             } ?: ""
-            val newCell = if (isText) {
-                val escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                "<c r=\"$ref\"$styleAttr t=\"inlineStr\"><is><t>$escaped</t></is></c>"
+            val newCell = cellXml(ref, value, isText, styleAttr)
+            if (match != null) {
+                result = result.replaceRange(match.range, newCell)
             } else {
-                "<c r=\"$ref\"$styleAttr><v>$value</v></c>"
+                // سلول در قالب نیست — در ردیف مربوطه درج کن (توضیحات T و فیلدهای ریزش/انحراف)
+                val rowNum = ref.filter { it.isDigit() }
+                if (rowNum.isNotEmpty()) {
+                    val rowOpen = Regex("""<row[^>]*r="$rowNum"[^>]*>""")
+                    val mRow = rowOpen.find(result)
+                    if (mRow != null) {
+                        val insertAt = mRow.range.last + 1
+                        result = result.substring(0, insertAt) + newCell + result.substring(insertAt)
+                    } else {
+                        val close = result.indexOf("</sheetData>")
+                        if (close >= 0) {
+                            val rowXml = """<row r="$rowNum">$newCell</row>"""
+                            result = result.substring(0, close) + rowXml + result.substring(close)
+                        }
+                    }
+                }
             }
-            result = if (match != null) result.replaceRange(match.range, newCell) else result
         }
         return result
     }

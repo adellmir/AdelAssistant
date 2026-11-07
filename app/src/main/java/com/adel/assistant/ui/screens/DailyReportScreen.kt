@@ -364,7 +364,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             // عدد سفید ارتفاع زیر + — بدون به‌هم‌ریختن ردیف
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = { addOrUpdateRow() }) {
-                    Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = Color(0xFFFF9800))
+                    Icon(Icons.Outlined.Add, contentDescription = "افزودن", tint = Color(0xFF4CAF50))
                 }
                 val elevHint = remember(pointNo, length, shaft, side) {
                     val lenCm = length.toDoubleOrNullFa() ?: return@remember null
@@ -431,29 +431,7 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
             ) ?: return@remember null
             TunnelReportStore.dailyProgressWarning(v.dailyProgress)
         }
-        if (progressWarn != null) {
-            Text(
-                progressWarn,
-                color = Color(0xFFFF9800),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-            )
-        }
-        // اخطار پیشرفت برای ردیف‌های ثبت‌شده
-        rows.mapNotNull { r -> TunnelReportStore.dailyProgressWarning(r.dailyProgress) }
-            .distinct()
-            .forEach { alert ->
-                Text(
-                    alert,
-                    color = Color(0xFFFF9800),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp)
-                )
-            }
+        // اخطارها داخل کادر هر ردیف نمایش داده می‌شوند
 
         // یادآوری اتفاق تونل: از ۳ متر قبل تا ۳ متر بعد
         val proximityAlerts = rows.mapNotNull { r ->
@@ -512,6 +490,14 @@ fun DailyReportScreen(color: Color, onBack: () -> Unit) {
                             ),
                             style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C8A6B)
                         )
+                        val rowWarn = TunnelReportStore.dailyProgressWarning(r.dailyProgress)
+                        if (rowWarn != null) {
+                            Text(rowWarn, color = Color(0xFFFF9800), style = MaterialTheme.typography.bodySmall)
+                        }
+                        val codeAlert = TunnelReportStore.codeProximityAlert(context, r)
+                        if (codeAlert != null) {
+                            Text(codeAlert, color = Color(0xFFE53935), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
