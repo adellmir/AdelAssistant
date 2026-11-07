@@ -4,6 +4,7 @@ import com.adel.assistant.ui.components.AdelOutlinedTextField
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -165,39 +166,67 @@ fun WorkCalendarScreen(
                 val bothSlots = mark?.morning == true && mark.afternoon
                 val onlyMorning = mark?.morning == true && mark.afternoon != true
                 val onlyAfternoon = mark?.afternoon == true && mark.morning != true
-                val bgBrush = when {
-                    selected -> null
-                    !hasProject -> null
-                    bothSlots -> null
-                    onlyMorning -> Brush.verticalGradient(listOf(slotSoft, slotSoft, slotStrong, slotStrong))
-                    onlyAfternoon -> Brush.verticalGradient(listOf(slotStrong, slotStrong, slotSoft, slotSoft))
-                    else -> null
-                }
-                val bgSolid = when {
-                    selected -> color
-                    !hasProject -> SurfaceColor
-                    bothSlots -> slotStrong
-                    bgBrush != null -> Color.Transparent
-                    else -> SurfaceColor
-                }
-                Surface(
+
+                Box(
                     modifier = Modifier
                         .aspectRatio(1f)
-                        .clickable { selectDay(d) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = bgSolid,
-                    border = if (isToday) BorderStroke(2.dp, Color.White) else null
+                        .clip(RoundedCornerShape(8.dp))
+                        .then(
+                            if (isToday) Modifier.border(2.dp, Color.White, RoundedCornerShape(8.dp))
+                            else Modifier
+                        )
+                        .clickable { selectDay(d) }
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(8.dp))
-                            .then(
-                                if (bgBrush != null) Modifier.background(bgBrush)
-                                else Modifier
-                            )
-                    ) {
+                    when {
+                        selected -> {
+                            Box(Modifier.fillMaxSize().background(color))
+                        }
+                        !hasProject -> {
+                            Box(Modifier.fillMaxSize().background(SurfaceColor))
+                        }
+                        bothSlots -> {
+                            // صبح و بعدازظهر: رنگ یکدست
+                            Box(Modifier.fillMaxSize().background(color.copy(alpha = 0.55f)))
+                        }
+                        onlyMorning -> {
+                            // صبح: پایین پررنگ، بالا روشن‌تر
+                            Column(Modifier.fillMaxSize()) {
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.22f))
+                                )
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .background(color.copy(alpha = 0.75f))
+                                )
+                            }
+                        }
+                        onlyAfternoon -> {
+                            // بعدازظهر: بالا پررنگ، پایین روشن‌تر
+                            Column(Modifier.fillMaxSize()) {
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .background(color.copy(alpha = 0.75f))
+                                )
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.22f))
+                                )
+                            }
+                        }
+                        else -> {
+                            Box(Modifier.fillMaxSize().background(SurfaceColor))
+                        }
+                    }
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(
                             formatEn("%d", d),
                             style = MaterialTheme.typography.bodySmall,
@@ -205,8 +234,7 @@ fun WorkCalendarScreen(
                         )
                     }
                 }
-            }
-        }
+            }        }
 
         Spacer(modifier = Modifier.height(12.dp))
         if (selectedDay != null) {

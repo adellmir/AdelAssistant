@@ -228,19 +228,19 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                 Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("خط مبنا (دو نقطه)", color = appearanceTextSecondary(), fontSize = 12.sp)
+                Text("خط مبنا — دو نقطه (متر)", color = appearanceTextPrimary(), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AdelOutlinedTextField(x1, { x1 = it }, label = { Text("X1") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                    AdelOutlinedTextField(y1, { y1 = it }, label = { Text("Y1") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(x1, { x1 = it }, label = { Text("X نقطه ۱") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(y1, { y1 = it }, label = { Text("Y نقطه ۱") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AdelOutlinedTextField(x2, { x2 = it }, label = { Text("X2") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
-                    AdelOutlinedTextField(y2, { y2 = it }, label = { Text("Y2") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(x2, { x2 = it }, label = { Text("X نقطه ۲") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
+                    AdelOutlinedTextField(y2, { y2 = it }, label = { Text("Y نقطه ۲") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                 }
 
-                Text("۱) محور موازی اول و عمود اول", color = appearanceTextSecondary(), fontSize = 12.sp)
+                Text("محور اول", color = appearanceTextPrimary(), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 AdelOutlinedTextField(
                     firstOffset, { firstOffset = it },
                     label = { Text("آفست محور موازی اول (متر)") },
@@ -259,7 +259,7 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                     )
                 }
 
-                Text("۲) فواصل بین محورها", color = appearanceTextPrimary(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("فواصل بین محورها", color = appearanceTextPrimary(), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 AdelOutlinedTextField(
                     parallelSpacing, { parallelSpacing = it },
                     label = { Text("فاصله بین محورهای موازی (متر)") },
@@ -271,7 +271,7 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb
                 )
 
-                Text("۳) تعداد و عنوان‌گذاری", color = appearanceTextSecondary(), fontSize = 12.sp)
+                Text("تعداد و عنوان‌گذاری", color = appearanceTextPrimary(), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     AdelOutlinedTextField(
                         parallelCount, { parallelCount = it },
@@ -293,7 +293,7 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb
                 )
 
-                Text("۴) موقعیت ستون‌ها", color = appearanceTextPrimary(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("موقعیت ستون‌ها", color = appearanceTextPrimary(), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { columnMode = "all" }) {
                     RadioButton(selected = columnMode == "all", onClick = { columnMode = "all" })
                     Text("همه تقاطع‌ها", color = appearanceTextPrimary(), fontSize = 12.sp)
@@ -304,22 +304,18 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { columnMode = "none" }) {
                     RadioButton(selected = columnMode == "none", onClick = { columnMode = "none" })
-                    Text("بدون ستون (فقط خطوط محور)", color = appearanceTextPrimary(), fontSize = 12.sp)
+                    Text("بدون ستون (فقط خطوط)", color = appearanceTextPrimary(), fontSize = 12.sp)
                 }
-                Text(
-                    "بعد از ترسیم با لمس هر نقطه، لاین / آفست / مختصات نمایش داده می‌شود.",
-                    color = appearanceTextSecondary(), fontSize = 11.sp
-                )
 
                 if (status.isNotBlank()) {
-                    Text(status, color = appearanceTextSecondary(), fontSize = 12.sp)
+                    Text(status, color = Color(0xFFFFB74D), fontSize = 12.sp)
                 }
                 Button(
                     onClick = { build() },
                     colors = ButtonDefaults.buttonColors(containerColor = color),
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("ترسیم شبکه") }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
             }
         } else {
             Row(
