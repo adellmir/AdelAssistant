@@ -22,7 +22,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
+import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.data.ProjectLocation
 import com.adel.assistant.data.formatEn
 import com.adel.assistant.ui.PendingProjectEdit
@@ -63,7 +66,41 @@ fun WorkCalendarScreen(
     var dayProjects by remember { mutableStateOf(listOf<ProjectEntry>()) }
     var statusMsg by remember { mutableStateOf("") }
 
-    val markedDays = remember(year, month) { ProjectStore.daysWithProjectsIn(context, month.toString(), year.toString()) }
+    data class DaySlotMark(val morning: Boolean, val afternoon: Boolean)
+    fun parseIntLoose(s: String): Int? {
+        val t = s.trim().replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3')
+            .replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7')
+            .replace('۸','8').replace('۹','9')
+        return t.toIntOrNull() ?: t.toDoubleOrNull()?.toInt()
+    }
+    val projectsAll = remember(year, month) {
+        try { ProjectStore.all(context) } catch (_: Exception) { emptyList() }
+    }
+    val dayMarks = remember(year, month, projectsAll) {
+        val map = mutableMapOf<Int, DaySlotMark>()
+        projectsAll.forEach { e ->
+            val m = parseIntLoose(e.month) ?: return@forEach
+            val y = parseIntLoose(e.year) ?: return@forEach
+            if (m != month || y != year) return@forEach
+            val d = parseIntLoose(e.day) ?: return@forEach
+            val h = parseIntLoose(e.hour) ?: 9
+            val prev = map[d]
+            val isMorning = h < 12
+            map[d] = DaySlotMark(
+                morning = (prev?.morning == true) || isMorning,
+                afternoon = (prev?.afternoon == true) || !isMorning
+            )
+        }
+        map
+    }
+    // نیمه قوی / نیمه ۲۰٪ روشن‌تر — تفاوت واضح
+    val slotStrong = color.copy(alpha = 0.70f)
+    val slotSoft = Color(
+        red = (color.red + (1f - color.red) * 0.45f).coerceIn(0f, 1f),
+        green = (color.green + (1f - color.green) * 0.45f).coerceIn(0f, 1f),
+        blue = (color.blue + (1f - color.blue) * 0.45f).coerceIn(0f, 1f),
+        alpha = 0.55f
+    )
     val monthLength = remember(year, month) { CalendarStore.jalaliMonthLength(year, month) }
 
     fun goPrev() { if (month > 1) month-- else { month = 12; year-- }; selectedDay = null; dayProjects = emptyList() }
@@ -121,24 +158,51 @@ fun WorkCalendarScreen(
                 Box(modifier = Modifier.aspectRatio(1f))
             }
             items((1..monthLength).toList()) { d ->
-                val hasProject = markedDays.contains(d)
+                val mark = dayMarks[d]
+                val hasProject = mark != null
                 val selected = selectedDay == d
                 val isToday = year == today.first && month == today.second && d == today.third
+                val bothSlots = mark?.morning == true && mark.afternoon
+                val onlyMorning = mark?.morning == true && mark.afternoon != true
+                val onlyAfternoon = mark?.afternoon == true && mark.morning != true
+                val bgBrush = when {
+                    selected -> null
+                    !hasProject -> null
+                    bothSlots -> null
+                    onlyMorning -> Brush.verticalGradient(listOf(slotSoft, slotSoft, slotStrong, slotStrong))
+                    onlyAfternoon -> Brush.verticalGradient(listOf(slotStrong, slotStrong, slotSoft, slotSoft))
+                    else -> null
+                }
+                val bgSolid = when {
+                    selected -> color
+                    !hasProject -> SurfaceColor
+                    bothSlots -> slotStrong
+                    bgBrush != null -> Color.Transparent
+                    else -> SurfaceColor
+                }
                 Surface(
                     modifier = Modifier
                         .aspectRatio(1f)
                         .clickable { selectDay(d) },
                     shape = RoundedCornerShape(8.dp),
-                    color = when {
-                        selected -> color
-                        hasProject -> color.copy(alpha = 0.25f)
-                        else -> SurfaceColor
-                    },
+                    color = bgSolid,
                     border = if (isToday) BorderStroke(2.dp, Color.White) else null
                 ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Text(formatEn("%d", d), style = MaterialTheme.typography.bodySmall,
-                            color = if (selected) Color.White else Color(0xFFE8ECD9))
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(8.dp))
+                            .then(
+                                if (bgBrush != null) Modifier.background(bgBrush)
+                                else Modifier
+                            )
+                    ) {
+                        Text(
+                            formatEn("%d", d),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (selected) Color.White else Color(0xFFE8ECD9)
+                        )
                     }
                 }
             }

@@ -2,6 +2,7 @@ package com.adel.assistant.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -63,24 +64,26 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     // نقطه ۱ و ۲ (خط مبنا)
-    var x1 by remember { mutableStateOf("0") }
-    var y1 by remember { mutableStateOf("0") }
-    var x2 by remember { mutableStateOf("0") }
-    var y2 by remember { mutableStateOf("14") }
+    var x1 by remember { mutableStateOf("") }
+    var y1 by remember { mutableStateOf("") }
+    var x2 by remember { mutableStateOf("") }
+    var y2 by remember { mutableStateOf("") }
 
     // آفست محور موازی اول + لاین و طول محور عمود اول
-    var firstOffset by remember { mutableStateOf("0.5") }
-    var firstLine by remember { mutableStateOf("1") }
-    var perpLength by remember { mutableStateOf("10") }
+    var firstOffset by remember { mutableStateOf("") }
+    var firstLine by remember { mutableStateOf("") }
+    var perpLength by remember { mutableStateOf("") }
 
     // تعداد محورها
-    var parallelCount by remember { mutableStateOf("5") }
-    var perpCount by remember { mutableStateOf("4") }
+    var parallelCount by remember { mutableStateOf("") }
+    var perpCount by remember { mutableStateOf("") }
     var parallelIsLetter by remember { mutableStateOf(true) } // موازی حروفی؟
+    // موقعیت ستون‌ها: all = همه تقاطع‌ها | corners = فقط گوشه‌ها | none_until_tap = بعداً روی نقشه
+    var columnMode by remember { mutableStateOf("all") }
 
     // فواصل
-    var parallelSpacing by remember { mutableStateOf("1") }
-    var perpSpacing by remember { mutableStateOf("1") }
+    var parallelSpacing by remember { mutableStateOf("") }
+    var perpSpacing by remember { mutableStateOf("") }
 
     var built by remember { mutableStateOf(false) }
     var columns by remember { mutableStateOf(listOf<LoColumn>()) }
@@ -88,14 +91,38 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
     var parallelSegs by remember { mutableStateOf(listOf<Pair<LoPoint, LoPoint>>()) }
     var perpSegs by remember { mutableStateOf(listOf<Pair<LoPoint, LoPoint>>()) }
     var selected by remember { mutableStateOf<LoColumn?>(null) }
+    var allIntersections by remember { mutableStateOf(listOf<LoColumn>()) }
+    var activeKeys by remember { mutableStateOf(setOf<String>()) }
     var status by remember { mutableStateOf("") }
 
     var scale by remember { mutableStateOf(40f) }
     var offset by remember { mutableStateOf(Offset(80f, 120f)) }
 
     fun build() {
-        val p1 = LoPoint(x1.toDoubleOrNullFa() ?: 0.0, y1.toDoubleOrNullFa() ?: 0.0)
-        val p2 = LoPoint(x2.toDoubleOrNullFa() ?: 0.0, y2.toDoubleOrNullFa() ?: 0.0)
+        val p1x = x1.toDoubleOrNullFa()
+        val p1y = y1.toDoubleOrNullFa()
+        val p2x = x2.toDoubleOrNullFa()
+        val p2y = y2.toDoubleOrNullFa()
+        if (p1x == null || p1y == null || p2x == null || p2y == null) {
+            status = "مختصات نقطه ۱ و ۲ را کامل وارد کنید"
+            return
+        }
+        val o0 = firstOffset.toDoubleOrNullFa()
+        val s0 = firstLine.toDoubleOrNullFa()
+        val pLen = perpLength.toDoubleOrNullFa()
+        val nPar = parallelCount.toIntOrNullFa()
+        val nPer = perpCount.toIntOrNullFa()
+        val dPar = parallelSpacing.toDoubleOrNullFa()
+        val dPer = perpSpacing.toDoubleOrNullFa()
+        if (o0 == null) { status = "آفست محور موازی اول را وارد کنید"; return }
+        if (s0 == null) { status = "لاین محور عمود اول را وارد کنید"; return }
+        if (pLen == null) { status = "طول محور عمود را وارد کنید"; return }
+        if (nPar == null || nPar < 1) { status = "تعداد محور موازی را وارد کنید"; return }
+        if (nPer == null || nPer < 1) { status = "تعداد محور عمود را وارد کنید"; return }
+        if (dPar == null || dPar <= 0) { status = "فاصله بین محورهای موازی را وارد کنید"; return }
+        if (dPer == null || dPer <= 0) { status = "فاصله بین محورهای عمود را وارد کنید"; return }
+        val p1 = LoPoint(p1x, p1y)
+        val p2 = LoPoint(p2x, p2y)
         val dx = p2.x - p1.x
         val dy = p2.y - p1.y
         val len = hypot(dx, dy)
@@ -109,13 +136,8 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
         val nx = uy
         val ny = -ux
 
-        val o0 = firstOffset.toDoubleOrNullFa() ?: 0.0
-        val s0 = firstLine.toDoubleOrNullFa() ?: 0.0
-        val pLen = perpLength.toDoubleOrNullFa() ?: len
-        val nPar = (parallelCount.toIntOrNullFa() ?: 1).coerceIn(1, 50)
-        val nPer = (perpCount.toIntOrNullFa() ?: 1).coerceIn(1, 50)
-        val dPar = parallelSpacing.toDoubleOrNullFa() ?: 1.0
-        val dPer = perpSpacing.toDoubleOrNullFa() ?: 1.0
+        val nParC = nPar.coerceIn(1, 50)
+        val nPerC = nPer.coerceIn(1, 50)
 
         fun world(station: Double, off: Double) = LoPoint(
             p1.x + station * ux + off * nx,
@@ -123,8 +145,8 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
         )
 
         // محدوده ایستگاه‌ها و آفست‌ها
-        val stations = (0 until nPer).map { s0 + it * dPer }
-        val offsets = (0 until nPar).map { o0 + it * dPar }
+        val stations = (0 until nPerC).map { s0 + it * dPer }
+        val offsets = (0 until nParC).map { o0 + it * dPar }
         val sMin = stations.minOrNull() ?: s0
         val sMax = max(stations.maxOrNull() ?: s0, sMin + pLen)
         // اگر طول عمود مشخص شده، انتهای محور موازی را با آن هم‌تراز کن
@@ -165,10 +187,21 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
         baseline = p1 to p2
         parallelSegs = pars
         perpSegs = perps
-        columns = cols
+        allIntersections = cols
+        val finalCols = when (columnMode) {
+            "corners" -> {
+                val maxI = (nPar - 1).coerceAtLeast(0)
+                val maxJ = (nPer - 1).coerceAtLeast(0)
+                cols.filter { (it.parallelIndex == 0 || it.parallelIndex == maxI) && (it.perpIndex == 0 || it.perpIndex == maxJ) }
+            }
+            "none" -> emptyList()
+            else -> cols // all
+        }
+        columns = finalCols
+        activeKeys = finalCols.map { "${it.parallelIndex}_${it.perpIndex}" }.toSet()
         built = true
         selected = null
-        status = "شبکه ساخته شد: ${cols.size} تقاطع"
+        status = "شبکه ساخته شد — ستون: ${finalCols.size} از ${cols.size} تقاطع"
         // فیت تقریبی
         val xs = cols.map { it.x } + listOf(p1.x, p2.x)
         val ys = cols.map { it.y } + listOf(p1.y, p2.y)
@@ -207,30 +240,42 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                     AdelOutlinedTextField(y2, { y2 = it }, label = { Text("Y2") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb)
                 }
 
-                Text("محور موازی اول / عمود اول", color = appearanceTextSecondary(), fontSize = 12.sp)
+                Text("۱) محور موازی اول و عمود اول", color = appearanceTextSecondary(), fontSize = 12.sp)
                 AdelOutlinedTextField(
                     firstOffset, { firstOffset = it },
-                    label = { Text("آفست محور موازی اول (m)") },
+                    label = { Text("آفست محور موازی اول (متر)") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     AdelOutlinedTextField(
                         firstLine, { firstLine = it },
-                        label = { Text("لاین محور عمود اول (m)") },
+                        label = { Text("لاین محور عمود اول (متر)") },
                         modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
                     )
                     AdelOutlinedTextField(
                         perpLength, { perpLength = it },
-                        label = { Text("طول محور عمود (m)") },
+                        label = { Text("طول محور عمود (متر)") },
                         modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
                     )
                 }
 
-                Text("تعداد محورها و عنوان", color = appearanceTextSecondary(), fontSize = 12.sp)
+                Text("۲) فواصل بین محورها", color = appearanceTextPrimary(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                AdelOutlinedTextField(
+                    parallelSpacing, { parallelSpacing = it },
+                    label = { Text("فاصله بین محورهای موازی (متر)") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb
+                )
+                AdelOutlinedTextField(
+                    perpSpacing, { perpSpacing = it },
+                    label = { Text("فاصله بین محورهای عمود (متر)") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb
+                )
+
+                Text("۳) تعداد و عنوان‌گذاری", color = appearanceTextSecondary(), fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     AdelOutlinedTextField(
                         parallelCount, { parallelCount = it },
-                        label = { Text("تعداد موازی") },
+                        label = { Text("تعداد محور موازی") },
                         modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -244,23 +289,27 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                 }
                 AdelOutlinedTextField(
                     perpCount, { perpCount = it },
-                    label = { Text("تعداد عمود (عنوان مخالف موازی)") },
+                    label = { Text("تعداد محور عمود") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = numKb
                 )
 
-                Text("فواصل بین محورها", color = appearanceTextSecondary(), fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AdelOutlinedTextField(
-                        parallelSpacing, { parallelSpacing = it },
-                        label = { Text("فاصله موازی‌ها (m)") },
-                        modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
-                    )
-                    AdelOutlinedTextField(
-                        perpSpacing, { perpSpacing = it },
-                        label = { Text("فاصله عمودها (m)") },
-                        modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = numKb
-                    )
+                Text("۴) موقعیت ستون‌ها", color = appearanceTextPrimary(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { columnMode = "all" }) {
+                    RadioButton(selected = columnMode == "all", onClick = { columnMode = "all" })
+                    Text("همه تقاطع‌ها", color = appearanceTextPrimary(), fontSize = 12.sp)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { columnMode = "corners" }) {
+                    RadioButton(selected = columnMode == "corners", onClick = { columnMode = "corners" })
+                    Text("فقط گوشه‌های شبکه", color = appearanceTextPrimary(), fontSize = 12.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { columnMode = "none" }) {
+                    RadioButton(selected = columnMode == "none", onClick = { columnMode = "none" })
+                    Text("بدون ستون (فقط خطوط محور)", color = appearanceTextPrimary(), fontSize = 12.sp)
+                }
+                Text(
+                    "بعد از ترسیم با لمس هر نقطه، لاین / آفست / مختصات نمایش داده می‌شود.",
+                    color = appearanceTextSecondary(), fontSize = 11.sp
+                )
 
                 if (status.isNotBlank()) {
                     Text(status, color = appearanceTextSecondary(), fontSize = 12.sp)
