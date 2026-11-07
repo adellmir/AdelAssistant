@@ -348,15 +348,16 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                             center = s
                         )
                         // برچسب کوچک
+                        val labelPaint = android.graphics.Paint().apply {
+                            this.color = android.graphics.Color.WHITE
+                            textSize = 28f
+                            isAntiAlias = true
+                        }
                         drawContext.canvas.nativeCanvas.drawText(
                             "${c.parallelLabel}${c.perpLabel}",
                             s.x + 8f,
                             s.y - 8f,
-                            android.graphics.Paint().apply {
-                                color = android.graphics.Color.WHITE
-                                textSize = 28f
-                                isAntiAlias = true
-                            }
+                            labelPaint
                         )
                     }
                 }
