@@ -41,5 +41,6 @@ object Routes {
     const val TOOL_TOTAL_STATION = "tool/total_station"
     const val TOOL_LETTER = "tool/letter"
     const val TOOL_PLUMB = "tool/plumb"
+    const val TOOL_LINE_OFFSET = "tool/line_offset"
     const val TOOL_MONITORING = "tool/monitoring"
 }

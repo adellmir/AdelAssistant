@@ -85,6 +85,7 @@ object AppMenu {
                 MenuItem("مبدل", Icons.Filled.SwapHoriz, Routes.TOOL_GSI),
                 MenuItem("مکان", Icons.Filled.MyLocation, Routes.TOOL_LOCATION),
                 MenuItem("شاقولی", Icons.Filled.VerticalAlignCenter, Routes.TOOL_PLUMB),
+                MenuItem("لاین آف‌ست", Icons.Filled.GridOn, Routes.TOOL_LINE_OFFSET),
                 MenuItem("پایش", Icons.Filled.Timeline, Routes.TOOL_MONITORING),
                 MenuItem("محاسبه احجام", Icons.Filled.ViewInAr, Routes.TOOL_VOLUME),
                 MenuItem("محیط و مساحت", Icons.Filled.SquareFoot, Routes.TOOL_AREA),

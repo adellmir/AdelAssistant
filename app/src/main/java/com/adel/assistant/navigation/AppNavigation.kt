@@ -29,6 +29,7 @@ import com.adel.assistant.ui.screens.InterpolateScreen
 import com.adel.assistant.ui.screens.InvoiceScreen
 import com.adel.assistant.ui.screens.LetterScreen
 import com.adel.assistant.ui.screens.PlumbScreen
+import com.adel.assistant.ui.screens.LineOffsetScreen
 import com.adel.assistant.ui.screens.MonitoringScreen
 import com.adel.assistant.ui.screens.LocationScreen
 import com.adel.assistant.ui.screens.ProjectEventsScreen
@@ -286,6 +287,9 @@ composable(Routes.SURVEY_PROJECT_EVENTS) {
         }
         composable(Routes.TOOL_PLUMB) {
             PlumbScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOOL_LINE_OFFSET) {
+            LineOffsetScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.TOOL_MONITORING) {
             MonitoringScreen(color = ToolPrimary, onBack = { navController.popBackStack() })
