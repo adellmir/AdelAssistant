@@ -41,6 +41,10 @@ import com.adel.assistant.data.FileExport
 import com.adel.assistant.data.ExportHub
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
+import androidx.compose.ui.unit.sp
+import com.adel.assistant.ui.appearanceTextSecondary
+import com.adel.assistant.ui.appearanceTextPrimary
+import com.adel.assistant.data.ProjectEventEntry
 import com.adel.assistant.data.ProjectEventStore
 import com.adel.assistant.ui.PendingProjectEdit
 import com.adel.assistant.data.formatEn
@@ -398,16 +402,29 @@ fun ProjectRegisterScreen(
             }
         }
 
-        
+
             // یادداشت‌های پروژه (جدا از توضیحات جلسه)
-            val projectNotes = remember(name) {
+            val projectNotes: List<ProjectEventEntry> = remember(name) {
                 if (name.isBlank()) emptyList()
-                else try { ProjectEventStore.forProject(context, name) } catch (_: Exception) { emptyList() }
+                else try {
+                    ProjectEventStore.forProject(context, name)
+                } catch (_: Exception) {
+                    emptyList()
+                }
             }
             if (projectNotes.isNotEmpty()) {
-                Text("یادداشت‌های قبلی این پروژه", color = appearanceTextSecondary(), fontSize = 12.sp)
-                projectNotes.take(5).forEach { n ->
-                    Text("• ${n.text}", color = appearanceTextPrimary(), fontSize = 12.sp, maxLines = 2)
+                Text(
+                    "یادداشت‌های قبلی این پروژه",
+                    color = appearanceTextSecondary(),
+                    fontSize = 12.sp
+                )
+                projectNotes.take(5).forEach { n: ProjectEventEntry ->
+                    Text(
+                        "• ${n.text}",
+                        color = appearanceTextPrimary(),
+                        fontSize = 12.sp,
+                        maxLines = 2
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
             }
