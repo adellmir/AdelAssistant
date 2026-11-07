@@ -640,9 +640,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
             // ---- نتایج هوشمند چندمنبعی (ماه / تاریخ / مطالبات / درآمد / …) ----
             if (query.isNotEmpty()) {
                 val qLower = query.lowercase().trim()
+                val qEn = query.toEnglishDigits().trim()
                 val isMandeh = qLower.contains("مانده") || qEn.contains("مانده")
                 val isProgressKw = qLower.contains("پیشرفت") || qEn.contains("پیشرفت")
-                val qEn = query.toEnglishDigits().trim()
 
                 fun moneyM(v: Double): String =
                     if (kotlin.math.abs(v - v.toLong().toDouble()) < 1e-9)
@@ -1037,45 +1037,37 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     }
                                 }
                                 "mande_tunnel", "mande_shafts", "prog_tunnel" -> {
-                                    val layout = try { com.adel.assistant.data.TunnelReportStore.TUNNEL_LAYOUT } catch (_: Exception) { emptyList() }
-                                    val shafts = layout.map { it.first }.distinct()
+                                    val entries = com.adel.assistant.data.TunnelReportStore.allEntries(context)
+                                    val byShaft = entries.groupBy { it.shaft }
                                     var sumProg = 0.0
                                     var sumRem = 0.0
                                     val lines = mutableListOf<String>()
-                                    for (sh in shafts) {
-                                        val sides = layout.filter { it.first == sh }.map { it.second }
-                                        var p = 0.0; var r = 0.0
-                                        for (sd in sides) {
-                                            try {
-                                                val fixed = com.adel.assistant.data.TunnelReportStore.shaftFixedKm(context, sh) ?: 0.0
-                                                val km = com.adel.assistant.data.null /* removed */ ?: fixed
-                                                p += kotlin.math.abs(km - fixed)
-                                                // remaining approx via opposite if available
-                                            } catch (_: Exception) {}
+                                    byShaft.keys.sorted().forEach { sh ->
+                                        val list = byShaft[sh].orEmpty()
+                                        val last = list.maxByOrNull { e ->
+                                            val y = e.year.padStart(4, '0')
+                                            val mth = e.month.padStart(2, '0')
+                                            val d = e.day.padStart(2, '0')
+                                            "$y$mth$d"
                                         }
-                                        // use progress screen logic lightly
-                                        lines += "شفت $sh"
-                                        sumProg += p
+                                        if (last != null) {
+                                            sumProg += last.shaftProgress
+                                            sumRem += last.remaining
+                                            lines += "شفت $sh — پیشرفت: ${String.format(java.util.Locale.US, "%.2f", last.shaftProgress)} م  مانده: ${String.format(java.util.Locale.US, "%.2f", last.remaining)} م"
+                                        }
                                     }
-                                    Text("حفاری کل: ${String.format(java.util.Locale.US, "%.2f", sumProg)} م", color = appearanceTextPrimary(), fontSize = 13.sp)
-                                    Text("مانده کل: (از برنامه پیشرفت تونل دقیق‌تر ببینید)", color = appearanceTextSecondary(), fontSize = 12.sp)
+                                    Text(
+                                        "حفاری کل: ${String.format(java.util.Locale.US, "%.2f", sumProg)} م  |  مانده کل: ${String.format(java.util.Locale.US, "%.2f", sumRem)} م",
+                                        color = appearanceTextPrimary(),
+                                        fontSize = 13.sp
+                                    )
                                     Spacer(Modifier.height(4.dp))
-                                    // از کارت‌های پیشرفت
-                                    try {
-                                        // ساده: آخرین گزارش‌ها
-                                        val entries = com.adel.assistant.data.TunnelReportStore.allEntries(context)
-                                        val byShaft = entries.groupBy { it.shaft }
-                                        byShaft.keys.sorted().forEach { sh ->
-                                            val last = byShaft[sh]?.maxByOrNull { "${it.year}${it.month.padStart(2,'0')}${it.day.padStart(2,'0')}" }
-                                            if (last != null) {
-                                                Text(
-                                                    "شفت $sh — پیشرفت: ${String.format(java.util.Locale.US, "%.2f", last.shaftProgress)} م  مانده: ${String.format(java.util.Locale.US, "%.2f", last.remaining)} م",
-                                                    color = appearanceTextPrimary(), fontSize = 12.sp
-                                                )
-                                            }
-                                        }
-                                    } catch (_: Exception) {
+                                    if (lines.isEmpty()) {
                                         Text("داده تونل در دسترس نیست", color = appearanceTextMuted(), fontSize = 12.sp)
+                                    } else {
+                                        lines.forEach { line ->
+                                            Text(line, color = appearanceTextPrimary(), fontSize = 12.sp)
+                                        }
                                     }
                                 }
 
