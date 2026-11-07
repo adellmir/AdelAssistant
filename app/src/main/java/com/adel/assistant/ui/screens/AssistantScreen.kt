@@ -47,6 +47,32 @@ import com.adel.assistant.ui.theme.TextSecondary
 import com.adel.assistant.ui.theme.ToolPrimary
 import kotlinx.coroutines.launch
 
+
+private fun localKeywordReply(context: android.content.Context, q: String): String? {
+    val qLower = q.lowercase().trim()
+    val digs = try {
+        val entries = com.adel.assistant.data.TunnelReportStore.allEntries(context)
+        val byShaft = entries.groupBy { it.shaft }
+        var sumProg = 0.0
+        val lines = mutableListOf<String>()
+        byShaft.keys.sorted().forEach { sh ->
+            val last = byShaft[sh].orEmpty().maxByOrNull { e ->
+                "${e.year.padStart(4,'0')}${e.month.padStart(2,'0')}${e.day.padStart(2,'0')}"
+            }
+            if (last != null) {
+                sumProg += last.shaftProgress
+                lines += "شفت $sh: پیشرفت ${"%.2f".format(last.shaftProgress)} م"
+            }
+        }
+        val rem = 1258.0 - (sumProg + 227.0)
+        "حفاری کل: ${"%.2f".format(sumProg)} م\nمانده کل: ${"%.2f".format(rem)} م\n" + lines.joinToString("\n")
+    } catch (_: Exception) { null }
+    return when {
+        qLower.contains("مانده") || qLower.contains("پیشرفت") || qLower.contains("آمار") -> digs
+        else -> null
+    }
+}
+
 private data class ChatLine(
     val fromUser: Boolean,
     val text: String,
@@ -137,6 +163,13 @@ fun AssistantScreen(
         appendMessage(ChatLine(true, t))
         input = ""
         scrollToEnd()
+
+        // پاسخ سریع کلمات کلیدی مثل نوار جستجو
+        val quick = localKeywordReply(context, t)
+        if (quick != null) {
+            appendMessage(ChatLine(false, quick))
+            return
+        }
 
         // همیشه اول موتور محلی با دانش پایگاه/عملیات
         val local: AgentReply = try {

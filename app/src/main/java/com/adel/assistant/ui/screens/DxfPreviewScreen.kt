@@ -1384,7 +1384,7 @@ LaunchedEffect(profileMode) {
                             val allowRotate = rotationEnabled && baseMap == BaseMap.NONE
                             if (allowRotate && kotlin.math.abs(rotation) > 1e-4f) {
                                 // سرعت ۲ برابر کندتر
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.40f) % 360f
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.24f) % 360f
                             }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)

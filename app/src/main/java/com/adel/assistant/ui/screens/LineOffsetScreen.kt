@@ -24,6 +24,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adel.assistant.data.toDoubleOrNullFa
+import com.adel.assistant.data.LineOffsetStore
+import com.adel.assistant.data.LineOffsetProject
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.appearanceCardColor
@@ -61,9 +63,15 @@ private fun letterLabel(i: Int): String {
 
 @Composable
 fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
+    val context = LocalContext.current
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
 
     // نقطه ۱ و ۲ (خط مبنا)
+    var screenMode by remember { mutableStateOf("list") } // list | form | map
+    var projectName by remember { mutableStateOf("") }
+    var projectId by remember { mutableStateOf<String?>(null) }
+    var listTick by remember { mutableStateOf(0) }
+    val savedProjects = remember(listTick) { LineOffsetStore.all(context) }
     var x1 by remember { mutableStateOf("") }
     var y1 by remember { mutableStateOf("") }
     var x2 by remember { mutableStateOf("") }
@@ -84,6 +92,8 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
     // فواصل
     var parallelSpacing by remember { mutableStateOf("") }
     var perpSpacing by remember { mutableStateOf("") }
+    var parSpaceList by remember { mutableStateOf(listOf<String>()) }
+    var perSpaceList by remember { mutableStateOf(listOf<String>()) }
 
     var built by remember { mutableStateOf(false) }
     var columns by remember { mutableStateOf(listOf<LoColumn>()) }

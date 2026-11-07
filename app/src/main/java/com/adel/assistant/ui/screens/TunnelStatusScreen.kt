@@ -124,7 +124,8 @@ fun TunnelStatusScreen(color: Color, onBack: () -> Unit) {
         )
         // جمع کل
         val totalProg = cards.sumOf { it.moreProgress + it.lessProgress }
-        val totalRem = cards.sumOf { it.moreRemain + it.lessRemain }
+        // فرمول مانده: ۱۲۵۸ منهای (جمع حفاری + ۲۲۷)
+        val totalRem = 1258.0 - (totalProg + 227.0)
         Text(
             "حفاری کل: ${String.format(java.util.Locale.US, "%.2f", totalProg)} م  |  مانده کل: ${String.format(java.util.Locale.US, "%.2f", totalRem)} م",
             color = appearanceTextPrimary(),

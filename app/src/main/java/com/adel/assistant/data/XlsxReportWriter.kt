@@ -70,8 +70,11 @@ object XlsxReportWriter {
                 cellUpdates["J$row"] = formatEn("%.4f", jOut) to false
             }
             // توضیحات → ستون T همان ردیف بخش
-            if (todayEntry != null && todayEntry.notes.isNotBlank()) {
-                cellUpdates["T$row"] = todayEntry.notes to true
+            if (todayEntry != null) {
+                if (todayEntry.notes.isNotBlank()) {
+                    cellUpdates["T$row"] = todayEntry.notes.trim() to true
+                }
+                // اگر فقط notes روی entry جدا ذخیره شده
             }
             // انحراف → ردیف base+1 ستون‌های L..R (فیلد ۱..۷)
             // ریزش → ردیف base+3

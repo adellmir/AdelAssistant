@@ -610,18 +610,6 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                         textStyle = TextStyle(fontSize = 14.sp, color = appearanceTextPrimary()),
                         leadingIcon = {
                             Icon(Icons.Filled.Search, null, tint = appearanceTextMuted(), modifier = Modifier.size(18.dp))
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "پاک",
-                                    tint = appearanceTextMuted(),
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clickable { searchQuery = "" }
-                                )
-                            }
                         }
                     )
                 }
@@ -822,13 +810,21 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     if (isClaims) {
                         add(SearchTab("claims_proj", "مطالبات پروژه", 1))
                         add(SearchTab("claims_tunnel", "مطالبات تونل", 1))
-                        if (isMandeh) {
-                            add(SearchTab("mande_tunnel", "مانده تونل", 1))
-                            add(SearchTab("mande_shafts", "مانده شفت‌ها", 1))
-                        }
-                        if (isProgressKw) {
-                            add(SearchTab("prog_tunnel", "پیشرفت تونل", 1))
-                        }
+                    }
+                    if (isMandeh) {
+                        add(SearchTab("mande_apps", "برنامه‌ها", 3))
+                        add(SearchTab("mande_tunnel", "تونل", 1))
+                        add(SearchTab("mande_claims_p", "مطالبات پروژه", 1))
+                        add(SearchTab("mande_claims_t", "مطالبات تونل", 1))
+                    }
+                    if (isProgressKw) {
+                        add(SearchTab("prog_apps", "برنامه‌ها", 1))
+                        add(SearchTab("prog_tunnel", "پیشرفت تونل", 1))
+                    }
+                    if (qLower.contains("آمار") || qEn.contains("آمار") || qLower.contains("amar")) {
+                        add(SearchTab("amar_tunnel", "حفاری و مانده", 1))
+                        add(SearchTab("amar_proj", "مالی پروژه", 1))
+                        add(SearchTab("amar_tun_fin", "مالی تونل", 1))
                     }
                     if (isFallQ) {
                         val n = allTunnelEntries.count { it.collapse.isNotBlank() }
@@ -1036,7 +1032,34 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                         Text("داده مالی تونل نیست", color = appearanceTextMuted(), fontSize = 12.sp)
                                     }
                                 }
-                                "mande_tunnel", "mande_shafts", "prog_tunnel" -> {
+                                "mande_apps" -> {
+                                    Text("میانبر برنامه‌ها", color = appearanceTextSecondary(), fontSize = 12.sp)
+                                    Text("• پیشرفت تونل", color = appearanceTextPrimary(), fontSize = 13.sp,
+                                        modifier = Modifier.clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }.padding(vertical = 4.dp))
+                                    Text("• مطالبات پروژه‌ها", color = appearanceTextPrimary(), fontSize = 13.sp,
+                                        modifier = Modifier.clickable { onNavigate(Routes.SURVEY_PROJECT_CLIENTS) }.padding(vertical = 4.dp))
+                                    Text("• مطالبات تونل", color = appearanceTextPrimary(), fontSize = 13.sp,
+                                        modifier = Modifier.clickable { onNavigate(Routes.FIN_TUNNEL_SUMMARY) }.padding(vertical = 4.dp))
+                                }
+                                "prog_apps" -> {
+                                    Text("• پیشرفت تونل", color = appearanceTextPrimary(), fontSize = 13.sp,
+                                        modifier = Modifier.clickable { onNavigate(Routes.SURVEY_TUNNEL_STATUS) }.padding(vertical = 4.dp))
+                                }
+                                "mande_claims_p", "claims_proj" -> {
+                                    val rem = allProjects.filter { !ProjectStore.isFullySettled(it) }
+                                    Text("مانده پروژه‌ها: ${rem.size} مورد", color = appearanceTextPrimary(), fontSize = 13.sp)
+                                    rem.take(20).forEach { p ->
+                                        Text("${p.name} — ${moneyM(p.amount)}", color = appearanceTextPrimary(), fontSize = 12.sp)
+                                    }
+                                }
+                                "mande_claims_t", "claims_tunnel" -> {
+                                    val sum = try { TunnelFinanceStore.summary(context) } catch (_: Exception) { null }
+                                    if (sum != null) {
+                                        Text("مانده مالی تونل: ${moneyM(sum.remaining)}", color = appearanceTextPrimary(), fontSize = 13.sp)
+                                        Text("کارکرد: ${moneyM(sum.totalWork)}  دریافتی: ${moneyM(sum.totalReceived)}", color = appearanceTextSecondary(), fontSize = 12.sp)
+                                    } else Text("داده مالی تونل نیست", color = appearanceTextMuted(), fontSize = 12.sp)
+                                }
+                                "amar_tunnel", "mande_tunnel", "mande_shafts", "prog_tunnel" -> {
                                     val entries = com.adel.assistant.data.TunnelReportStore.allEntries(context)
                                     val byShaft = entries.groupBy { it.shaft }
                                     var sumProg = 0.0
@@ -1056,8 +1079,9 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                             lines += "شفت $sh — پیشرفت: ${String.format(java.util.Locale.US, "%.2f", last.shaftProgress)} م  مانده: ${String.format(java.util.Locale.US, "%.2f", last.remaining)} م"
                                         }
                                     }
+                                    val remFormula = 1258.0 - (sumProg + 227.0)
                                     Text(
-                                        "حفاری کل: ${String.format(java.util.Locale.US, "%.2f", sumProg)} م  |  مانده کل: ${String.format(java.util.Locale.US, "%.2f", sumRem)} م",
+                                        "حفاری کل: ${String.format(java.util.Locale.US, "%.2f", sumProg)} م  |  مانده کل: ${String.format(java.util.Locale.US, "%.2f", remFormula)} م",
                                         color = appearanceTextPrimary(),
                                         fontSize = 13.sp
                                     )
