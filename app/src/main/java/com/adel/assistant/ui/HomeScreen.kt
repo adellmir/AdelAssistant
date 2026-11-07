@@ -1056,7 +1056,7 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                                     val sum = try { TunnelFinanceStore.summary(context) } catch (_: Exception) { null }
                                     if (sum != null) {
                                         Text("مانده مالی تونل: ${moneyM(sum.remaining)}", color = appearanceTextPrimary(), fontSize = 13.sp)
-                                        Text("کارکرد: ${moneyM(sum.totalWork)}  دریافتی: ${moneyM(sum.totalReceived)}", color = appearanceTextSecondary(), fontSize = 12.sp)
+                                        Text("کارکرد: ${moneyM(sum.sumPayable)}  دریافتی: ${moneyM(sum.sumReceived)}", color = appearanceTextSecondary(), fontSize = 12.sp)
                                     } else Text("داده مالی تونل نیست", color = appearanceTextMuted(), fontSize = 12.sp)
                                 }
                                 "amar_tunnel", "mande_tunnel", "mande_shafts", "prog_tunnel" -> {
