@@ -64,9 +64,14 @@ object XlsxReportWriter {
             cellUpdates["G$row"] = formatEn("%.4f", g) to false
             cellUpdates["H$row"] = formatEn("%.4f", h) to false
             cellUpdates["I$row"] = formatEn("%.4f", i) to false
-            // J4: فاصله کیلومتر آخر حفاری جهت کمتر شفت۱ با اتصال (کیلومتر ۲۲۷)
-            val jOut = if (row == 4) kotlin.math.abs(g - 227.0) else j
-            if (todayEntry != null || row == 4 || row == 60) {
+            // J4: فاصله تا اتصال ۲۲۷ | J44: فاصله تا ۱۲۰۰ (شفت۳→۴) | J60: ثابت ۵۸
+            val jOut = when (row) {
+                4 -> kotlin.math.abs(g - 227.0)
+                44 -> kotlin.math.abs(g - 1200.0)
+                60 -> 58.0
+                else -> j
+            }
+            if (todayEntry != null || row == 4 || row == 44 || row == 60) {
                 cellUpdates["J$row"] = formatEn("%.4f", jOut) to false
             }
             // توضیحات → ستون T همان ردیف بخش
@@ -92,6 +97,17 @@ object XlsxReportWriter {
                 }
             }
         }
+        // ردیف‌های اتصال شفت۴ / انتهای تونل: F..H = ۱۲۰۰ و I63/I66 = ۰
+        for (r in listOf(52, 55, 58, 60, 63, 66)) {
+            cellUpdates["F$r"] = formatEn("%.4f", 1200.0) to false
+            cellUpdates["G$r"] = formatEn("%.4f", 1200.0) to false
+            cellUpdates["H$r"] = formatEn("%.4f", 1200.0) to false
+        }
+        cellUpdates["I63"] = formatEn("%.4f", 0.0) to false
+        cellUpdates["I66"] = formatEn("%.4f", 0.0) to false
+        // J60 ثابت
+        cellUpdates["J60"] = formatEn("%.4f", 58.0) to false
+
         cellUpdates["E69"] = formatEn("%.4f", sumI) to false
 
         val templateBytes = context.assets.open("report_template.xlsx").use { it.readBytes() }

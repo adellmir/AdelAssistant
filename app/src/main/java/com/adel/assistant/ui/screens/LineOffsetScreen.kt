@@ -891,7 +891,19 @@ fun LineOffsetScreen(color: Color, onBack: () -> Unit) {
                         val pl = plateLen.toDoubleOrNullFa()
                         val pw = plateWid.toDoubleOrNullFa() ?: pl
                         if (pl != null && pw != null) {
-                            rects = rects + LoRect(keyP, c.x, c.y, pl, pw, plateAlongNumeric, false, "${pl.toInt()}×${pw.toInt()}")
+                            // موقعیت روی تقاطع محور صفحه پلیت (نه ستون)
+                            val dOff = plateParOff.getOrNull(c.pi)?.toDoubleOrNullFa() ?: 0.0
+                            val dSt = platePerOff.getOrNull(c.qi)?.toDoubleOrNullFa() ?: 0.0
+                            val p1 = baseline.first; val p2 = baseline.second
+                            val dx0 = p2.x - p1.x; val dy0 = p2.y - p1.y
+                            val ln = hypot(dx0, dy0).coerceAtLeast(1e-9)
+                            val ux0 = dx0 / ln; val uy0 = dy0 / ln
+                            val nx0 = uy0; val ny0 = -ux0
+                            val stP = c.station + dSt
+                            val offP = c.offset + dOff
+                            val px = p1.x + stP * ux0 + offP * nx0
+                            val py = p1.y + stP * uy0 + offP * ny0
+                            rects = rects + LoRect(keyP, px, py, pl, pw, plateAlongNumeric, false, "${pl.toInt()}×${pw.toInt()}")
                         }
                         status = "ستون ثبت شد"
                     }

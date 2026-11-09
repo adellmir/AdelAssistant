@@ -1275,13 +1275,13 @@ LaunchedEffect(profileMode) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FloatingActionButton(
-                        onClick = { mapRotationDeg = (mapRotationDeg - 5f + 360f) % 360f },
+                        onClick = { mapRotationDeg = (mapRotationDeg - 10f + 360f) % 360f },
                         containerColor = Color(0xCC1E1E1E),
                         contentColor = Color.White,
                         modifier = Modifier.size(40.dp)
                     ) { Text("↺", fontSize = 18.sp) }
                     FloatingActionButton(
-                        onClick = { mapRotationDeg = (mapRotationDeg + 5f) % 360f },
+                        onClick = { mapRotationDeg = (mapRotationDeg + 10f) % 360f },
                         containerColor = Color(0xCC1E1E1E),
                         contentColor = Color.White,
                         modifier = Modifier.size(40.dp)
@@ -1384,7 +1384,7 @@ LaunchedEffect(profileMode) {
                             val allowRotate = rotationEnabled && baseMap == BaseMap.NONE
                             if (allowRotate && kotlin.math.abs(rotation) > 1e-4f) {
                                 // سرعت ۲ برابر کندتر
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.24f) % 360f
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.14f) % 360f
                             }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
