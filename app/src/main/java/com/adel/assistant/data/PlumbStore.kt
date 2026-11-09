@@ -46,6 +46,14 @@ data class PlumbNeighbor(
     var street: String = ""
 )
 
+data class PlumbWorkOrder(
+    val aLetter: Int,
+    val aNumber: Int,
+    val bLetter: Int,
+    val bNumber: Int,
+    var label: String = "mm"
+)
+
 data class PlumbProject(
     val id: String = UUID.randomUUID().toString(),
     var name: String = "",
@@ -70,6 +78,8 @@ data class PlumbProject(
     var rightN: PlumbNeighbor = PlumbNeighbor(),
     var leftN: PlumbNeighbor = PlumbNeighbor(),
     var axesVisible: Boolean = true,
+    var workOrdersVisible: Boolean = true,
+    var workOrders: MutableList<PlumbWorkOrder> = mutableListOf(),
     /** محور رفرنس: تقاطع A و B (letterIdx/numberIdx)؛ -1 = تعریف‌نشده */
     var axisALetter: Int = -1,
     var axisANumber: Int = -1,
@@ -355,6 +365,16 @@ object PlumbStore {
         put("letterGaps", JSONArray(p.letterGaps))
         put("numberGaps", JSONArray(p.numberGaps))
         put("axesVisible", p.axesVisible)
+        put("workOrdersVisible", p.workOrdersVisible)
+        put("workOrders", JSONArray().apply {
+            p.workOrders.forEach { w ->
+                put(JSONObject().apply {
+                    put("aL", w.aLetter); put("aN", w.aNumber)
+                    put("bL", w.bLetter); put("bN", w.bNumber)
+                    put("label", w.label)
+                })
+            }
+        })
         put("axisALetter", p.axisALetter)
         put("axisANumber", p.axisANumber)
         put("axisBLetter", p.axisBLetter)
@@ -430,6 +450,24 @@ object PlumbStore {
             rightN = parseNeighbor(o.optJSONObject("rightN")),
             leftN = parseNeighbor(o.optJSONObject("leftN")),
             axesVisible = o.optBoolean("axesVisible", true),
+            workOrdersVisible = o.optBoolean("workOrdersVisible", true),
+            workOrders = mutableListOf<PlumbWorkOrder>().apply {
+                val arr = o.optJSONArray("workOrders")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val w = arr.optJSONObject(i) ?: continue
+                        add(
+                            PlumbWorkOrder(
+                                aLetter = w.optInt("aL", -1),
+                                aNumber = w.optInt("aN", -1),
+                                bLetter = w.optInt("bL", -1),
+                                bNumber = w.optInt("bN", -1),
+                                label = w.optString("label", "mm")
+                            )
+                        )
+                    }
+                }
+            },
             axisALetter = o.optInt("axisALetter", -1),
             axisANumber = o.optInt("axisANumber", -1),
             axisBLetter = o.optInt("axisBLetter", -1),

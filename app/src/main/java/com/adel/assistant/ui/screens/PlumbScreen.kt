@@ -252,6 +252,12 @@ private fun PlumbWorkspace(
     }
     var showSettings by remember { mutableStateOf(false) }
     var axisPickMode by remember { mutableStateOf(false) } // انتخاب تقاطع A سپس B
+    var workOrderPickMode by remember { mutableStateOf(false) }
+    var workOrderStep by remember { mutableStateOf(0) }
+    var workOrderA by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var workOrderB by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var editWorkOrderIdx by remember { mutableStateOf<Int?>(null) }
+    var editWorkOrderText by remember { mutableStateOf("") }
     var axisPickStep by remember { mutableStateOf(0) } // 0=A 1=B
     var axisDraftA by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var axisDraftB by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -317,7 +323,7 @@ private fun PlumbWorkspace(
                         offset += pan
                     }
                 }
-                .pointerInput(pickColumns, axisPickMode, axisPickStep, p.columns, p.letterCount, p.numberCount, scale, offset, mode) {
+                .pointerInput(pickColumns, axisPickMode, axisPickStep, workOrderPickMode, workOrderStep, p.columns, p.letterCount, p.numberCount, p.workOrders, scale, offset, mode) {
                     detectTapGestures { tap ->
                         val world = screenToWorld(tap, scale, offset)
                         if (axisPickMode) {
@@ -334,6 +340,59 @@ private fun PlumbWorkspace(
                                 }
                             }
                             return@detectTapGestures
+                        }
+                        if (workOrderPickMode) {
+                            val ix = nearestIntersection(p, world)
+                            if (ix != null) {
+                                val (li, ni, name) = ix
+                                if (workOrderStep == 0) {
+                                    workOrderA = li to ni
+                                    workOrderStep = 1
+                                    message = "دستور کار: اول=$name — تقاطع دوم را بزنید"
+                                } else {
+                                    workOrderB = li to ni
+                                    val a = workOrderA
+                                    if (a != null) {
+                                        p.workOrders.add(
+                                            com.adel.assistant.data.PlumbWorkOrder(
+                                                aLetter = a.first, aNumber = a.second,
+                                                bLetter = li, bNumber = ni,
+                                                label = "mm"
+                                            )
+                                        )
+                                        persist()
+                                        message = "دستور کار ثبت شد ($name)"
+                                    }
+                                    workOrderPickMode = false
+                                    workOrderStep = 0
+                                    workOrderA = null
+                                    workOrderB = null
+                                }
+                            }
+                            return@detectTapGestures
+                        }
+                        // لمس برچسب mm برای ویرایش
+                        if (p.workOrdersVisible && p.workOrders.isNotEmpty()) {
+                            p.workOrders.forEachIndexed { wi, wo ->
+                                val (ax, ay) = intersectionWorld(p, wo.aLetter, wo.aNumber)
+                                val (bx, by) = intersectionWorld(p, wo.bLetter, wo.bNumber)
+                                val dx = bx - ax; val dy = by - ay
+                                val len = kotlin.math.hypot(dx, dy)
+                                if (len < 1e-6) return@forEachIndexed
+                                val ux = dx / len; val uy = dy / len
+                                val lx = -uy; val ly = ux
+                                val off = 0.50
+                                val mx = (ax + bx) / 2.0 + lx * off
+                                val my = (ay + by) / 2.0 + ly * off
+                                val sm = Offset((mx * scale + offset.x).toFloat(), (-my * scale + offset.y).toFloat())
+                                val hitR = (0.35 * scale).toFloat().coerceIn(24f, 64f)
+                                if (kotlin.math.hypot((sm.x - tap.x).toDouble(), (sm.y - tap.y).toDouble()) < hitR) {
+                                    editWorkOrderIdx = wi
+                                    val cur = wo.label.removeSuffix("mm").trim()
+                                    editWorkOrderText = if (cur == "mm" || cur.isBlank()) "" else cur
+                                    return@detectTapGestures
+                                }
+                            }
                         }
                         if (pickColumns) {
                             val hitCol = hitColumn(p, world, 0.15)
@@ -378,7 +437,9 @@ private fun PlumbWorkspace(
                     val x = longPos(i)
                     val a = w2s(x, 0.0)
                     val b = w2s(x, maxY)
-                    drawLine(Color(0xFF90A4AE), a, b, 2f)
+                    // حروف زرد · عدد آبی کم‌رنگ
+                    val axisCol = if (longIsLet) Color(0xFFFFEB3B) else Color(0xFF81D4FA)
+                    drawLine(axisCol, a, b, 2.5f)
                     val label = if (longIsLet) PlumbStore.letterLabel(i) else (i + 1).toString()
                     val tp = w2s(x, maxY + 1.0)
                     drawContext.canvas.nativeCanvas.drawText(
@@ -395,7 +456,9 @@ private fun PlumbWorkspace(
                     val y = crossPos(j)
                     val a = w2s(0.0, y)
                     val b = w2s(maxX, y)
-                    drawLine(Color(0xFF90A4AE), a, b, 2f)
+                    // cross: اگر long حروفی است پس cross عددی=آبی، وگرنه حروف=زرد
+                    val axisCol = if (longIsLet) Color(0xFF81D4FA) else Color(0xFFFFEB3B)
+                    drawLine(axisCol, a, b, 2.5f)
                     val label = if (longIsLet) (j + 1).toString() else PlumbStore.letterLabel(j)
                     val tp = w2s(maxX + 1.0, y)
                     drawContext.canvas.nativeCanvas.drawText(
@@ -437,6 +500,62 @@ private fun PlumbWorkspace(
                             this.color = android.graphics.Color.YELLOW
                             textSize = 28f
                             isAntiAlias = true
+                        }
+                    )
+                }
+            }
+
+
+            // دستور کار: خط موازی ۵۰cm چپ، فلش ۳۰cm، برچسب mm
+            if (p.workOrdersVisible) {
+                p.workOrders.forEachIndexed { wi, wo ->
+                    if (wo.aLetter < 0 || wo.bLetter < 0) return@forEachIndexed
+                    val (ax, ay) = intersectionWorld(p, wo.aLetter, wo.aNumber)
+                    val (bx, by) = intersectionWorld(p, wo.bLetter, wo.bNumber)
+                    val dx = bx - ax
+                    val dy = by - ay
+                    val len = kotlin.math.hypot(dx, dy)
+                    if (len < 1e-6) return@forEachIndexed
+                    val ux = dx / len
+                    val uy = dy / len
+                    // چپ در دستگاه y-بالا: (-uy, ux)
+                    val lx = -uy
+                    val ly = ux
+                    val off = 0.50 // متر
+                    val x1 = ax + lx * off
+                    val y1 = ay + ly * off
+                    val x2 = bx + lx * off
+                    val y2 = by + ly * off
+                    val s1 = w2s(x1, y1)
+                    val s2 = w2s(x2, y2)
+                    drawLine(Color(0xFFE0E0E0), s1, s2, 3f)
+                    // فلش ۳۰cm در انتهای جهت ۱→۲
+                    val arr = 0.30
+                    val tip = w2s(x2, y2)
+                    val base = w2s(x2 - ux * arr, y2 - uy * arr)
+                    val px = -uy
+                    val py = ux
+                    val wing = 0.10
+                    val left = w2s(x2 - ux * arr + px * wing, y2 - uy * arr + py * wing)
+                    val right = w2s(x2 - ux * arr - px * wing, y2 - uy * arr - py * wing)
+                    drawLine(Color(0xFFE0E0E0), tip, left, 3f)
+                    drawLine(Color(0xFFE0E0E0), tip, right, 3f)
+                    drawLine(Color(0xFFE0E0E0), left, right, 2f)
+                    // متن mm در وسط خط — سایز ۳۰cm
+                    val mx = (x1 + x2) / 2.0
+                    val my = (y1 + y2) / 2.0
+                    val sm = w2s(mx, my)
+                    val textH = (0.30 * scale).toFloat().coerceIn(16f, 56f)
+                    drawContext.canvas.nativeCanvas.drawText(
+                        wo.label.ifBlank { "mm" },
+                        sm.x,
+                        sm.y - 4f,
+                        android.graphics.Paint().apply {
+                            this.color = android.graphics.Color.WHITE
+                            textSize = textH
+                            isAntiAlias = true
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            isFakeBoldText = true
                         }
                     )
                 }
@@ -763,6 +882,40 @@ private fun PlumbWorkspace(
         )
     }
 
+
+    if (editWorkOrderIdx != null) {
+        AlertDialog(
+            onDismissRequest = { editWorkOrderIdx = null },
+            title = { Text("مقدار mm") },
+            text = {
+                AdelOutlinedTextField(
+                    value = editWorkOrderText,
+                    onValueChange = { editWorkOrderText = it },
+                    label = { Text("عدد (مثلاً ۵۰)") },
+                    singleLine = true,
+                    keyboardOptions = numKb
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val idx = editWorkOrderIdx
+                    if (idx != null && idx in p.workOrders.indices) {
+                        val n = editWorkOrderText.trim()
+                        p.workOrders[idx].label = if (n.isBlank()) "mm" else {
+                            val digits = n.removeSuffix("mm").trim()
+                            if (digits.isEmpty()) "mm" else "${digits}mm"
+                        }
+                        persist()
+                    }
+                    editWorkOrderIdx = null
+                }) { Text("ثبت") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editWorkOrderIdx = null }) { Text("لغو") }
+            }
+        )
+    }
+
     if (showSettings) {
         AlertDialog(
             onDismissRequest = { showSettings = false },
@@ -798,12 +951,17 @@ private fun PlumbWorkspace(
                             showSettings = false
                             message = "DXF ذخیره شد"
                         },
-                        "صدور PDF/اشتراک متن" to {
-                            val txt = buildPlumbText(p)
-                            ExportHub.exportText(context, "${p.name}_plumb.txt", txt, "text/plain")
-                            try {
-                                ReportHub.shareText(context, txt, "اشتراک گزارش شاقولی")
-                            } catch (_: Exception) {}
+                        "دستور کار" to {
+                            workOrderPickMode = true
+                            workOrderStep = 0
+                            workOrderA = null
+                            workOrderB = null
+                            showSettings = false
+                            message = "دستور کار: تقاطع اول را انتخاب کنید"
+                        },
+                        (if (p.workOrdersVisible) "عدم نمایش دستور کار" else "نمایش دستور کار") to {
+                            p.workOrdersVisible = !p.workOrdersVisible
+                            persist()
                             showSettings = false
                         },
                         (if (mode == "report") "برو به کنترل" else "برو به گزارش") to {
