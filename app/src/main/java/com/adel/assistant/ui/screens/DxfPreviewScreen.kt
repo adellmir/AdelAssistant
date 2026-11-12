@@ -1265,27 +1265,43 @@ LaunchedEffect(profileMode) {
 
     Box(Modifier.fillMaxSize().background(Background)) {
 
-            
-            // دکمه‌های چرخش چپ/راست
-            if (rotationEnabled && baseMap == BaseMap.NONE) {
+
+
+            // دکمه‌های چرخش چپ/راست — همیشه روی همه لایه‌ها (zIndex بالا)
+            if (rotationEnabled) {
                 Row(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = 72.dp),
+                        .align(Alignment.CenterStart)
+                        .padding(start = 10.dp)
+                        .zIndex(50f),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FloatingActionButton(
-                        onClick = { mapRotationDeg = (mapRotationDeg - 10f + 360f) % 360f },
-                        containerColor = Color(0xCC1E1E1E),
-                        contentColor = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    ) { Text("↺", fontSize = 18.sp) }
-                    FloatingActionButton(
-                        onClick = { mapRotationDeg = (mapRotationDeg + 10f) % 360f },
-                        containerColor = Color(0xCC1E1E1E),
-                        contentColor = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    ) { Text("↻", fontSize = 18.sp) }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xEE1B1B1B),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable {
+                                mapRotationDeg = (mapRotationDeg - 10f + 360f) % 360f
+                            }
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("↺", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xEE1B1B1B),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable {
+                                mapRotationDeg = (mapRotationDeg + 10f) % 360f
+                            }
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("↻", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 

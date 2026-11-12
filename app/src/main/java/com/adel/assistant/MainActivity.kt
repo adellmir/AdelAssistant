@@ -61,10 +61,21 @@ class MainActivity : ComponentActivity() {
     private fun captureRoute(intent: Intent?) {
         if (intent == null) return
         val route = intent.getStringExtra("open_route")
+            ?: intent.getStringExtra("route")
             ?: intent.data?.getQueryParameter("route")
         if (!route.isNullOrBlank()) {
             DeepLinkHolder.setRoute(route)
             intent.removeExtra("open_route")
+            intent.removeExtra("route")
+        }
+        val y = intent.getIntExtra("cal_year", -1)
+        val m = intent.getIntExtra("cal_month", -1)
+        val d = intent.getIntExtra("cal_day", -1)
+        if (y > 0 && m > 0 && d > 0) {
+            DeepLinkHolder.setCalendarTarget(y, m, d)
+            intent.removeExtra("cal_year")
+            intent.removeExtra("cal_month")
+            intent.removeExtra("cal_day")
         }
     }
 

@@ -15,12 +15,12 @@ import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.toIntOrNullFa
 import com.adel.assistant.navigation.Routes
 
-/** ویجت ۲×۲ تقویم شمسی با رنگ روزهای کاری (صبح/بعدازظهر) */
+/** ویجت ۲×۲ تقویم شمسی با رنگ روزهای کاری و حاشیه سفید روز جاری */
 class AdelCalendarWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         appWidgetIds.forEach { id ->
-            appWidgetManager.updateAppWidget(id, buildViews(context))
+            appWidgetManager.updateAppWidget(id, buildViews(context, id))
         }
     }
 
@@ -29,10 +29,6 @@ class AdelCalendarWidgetProvider : AppWidgetProvider() {
             "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
             "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
         )
-
-        private val DAY_IDS = IntArray(42) { i ->
-            contextDayId(i)
-        }
 
         private fun contextDayId(i: Int): Int = when (i) {
             0 -> R.id.cal_d_0; 1 -> R.id.cal_d_1; 2 -> R.id.cal_d_2; 3 -> R.id.cal_d_3
@@ -52,13 +48,28 @@ class AdelCalendarWidgetProvider : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(context)
             val ids = mgr.getAppWidgetIds(ComponentName(context, AdelCalendarWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            val views = buildViews(context)
-            ids.forEach { mgr.updateAppWidget(it, views) }
+            ids.forEach { mgr.updateAppWidget(it, buildViews(context, it)) }
         }
 
         data class Slot(val morning: Boolean, val afternoon: Boolean)
 
-        fun buildViews(context: Context): RemoteViews {
+        private fun openCalendar(context: Context, req: Int, y: Int?, m: Int?, d: Int?): PendingIntent {
+            val open = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("open_route", Routes.SURVEY_PROJECT_CALENDAR)
+                if (y != null && m != null && d != null) {
+                    putExtra("cal_year", y)
+                    putExtra("cal_month", m)
+                    putExtra("cal_day", d)
+                }
+            }
+            return PendingIntent.getActivity(
+                context, req, open,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        fun buildViews(context: Context, widgetId: Int = 0): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.adel_calendar_widget)
             val (y, m, dToday) = try {
                 CalendarStore.todayJalali()
@@ -97,21 +108,20 @@ class AdelCalendarWidgetProvider : AppWidgetProvider() {
             } catch (_: Exception) {
             }
 
-            // رنگ‌ها: خالی، هر دو، فقط صبح (نیمه پایین پررنگ‌تر با یک رنگ تیره‌تر)، فقط عصر
-            val emptyBg = Color.parseColor("#332A3A20")
-            val bothBg = Color.parseColor("#996C9A4E")      // یکدست
-            val morningBg = Color.parseColor("#AA8FBC6A")  // صبح
-            val afternoonBg = Color.parseColor("#AA558B2F") // بعدازظهر
-            val todayBorder = Color.parseColor("#FFFFFFFF")
-
             for (i in 0 until 42) {
                 val id = contextDayId(i)
                 val dayNum = i - firstOffset + 1
                 if (dayNum in 1..monthLen) {
                     views.setTextViewText(id, dayNum.toString())
                     val mark = marks[dayNum]
+                    val isToday = dayNum == dToday
+                    // روز جاری بدون کار: فقط حاشیه سفید، بدون رنگ کار
+                    // روز جاری با کار: همان رنگ کار + حاشیه سفید (drawable today)
                     val bgRes = when {
-                        dayNum == dToday && mark == null -> R.drawable.cal_day_today
+                        isToday && mark == null -> R.drawable.cal_day_today_empty
+                        isToday && mark != null && mark.morning && mark.afternoon -> R.drawable.cal_day_today
+                        isToday && mark != null && mark.morning -> R.drawable.cal_day_today_morning
+                        isToday && mark != null && mark.afternoon -> R.drawable.cal_day_today_afternoon
                         mark == null -> R.drawable.cal_day_empty
                         mark.morning && mark.afternoon -> R.drawable.cal_day_both
                         mark.morning -> R.drawable.cal_day_morning
@@ -121,25 +131,22 @@ class AdelCalendarWidgetProvider : AppWidgetProvider() {
                     views.setInt(id, "setBackgroundResource", bgRes)
                     views.setTextColor(
                         id,
-                        if (dayNum == dToday) Color.parseColor("#FFFFF59D")
+                        if (isToday) Color.parseColor("#FFFFFFFF")
                         else Color.parseColor("#FFE8EDE0")
+                    )
+                    views.setOnClickPendingIntent(
+                        id,
+                        openCalendar(context, 7200 + widgetId * 50 + dayNum, y, m, dayNum)
                     )
                 } else {
                     views.setTextViewText(id, "")
                     views.setInt(id, "setBackgroundColor", Color.TRANSPARENT)
+                    views.setOnClickPendingIntent(id, openCalendar(context, 7100 + widgetId, null, null, null))
                 }
             }
 
-            val open = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("route", Routes.SURVEY_PROJECT_CALENDAR)
-            }
-            val pi = PendingIntent.getActivity(
-                context, 7101, open,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.cal_root, pi)
-            views.setOnClickPendingIntent(R.id.cal_month, pi)
+            views.setOnClickPendingIntent(R.id.cal_root, openCalendar(context, 7100 + widgetId, null, null, null))
+            views.setOnClickPendingIntent(R.id.cal_month, openCalendar(context, 7101 + widgetId, null, null, null))
             return views
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -76,23 +77,24 @@ fun AdelOutlinedTextField(
     val treatNumeric = numeric || kbNumeric
 
     var hadFocus by remember { mutableStateOf(false) }
+    var isFocused by remember { mutableStateOf(false) }
 
+    // ضربدر فقط وقتی فوکوس است تا عدد در کادر کامل دیده شود
     val clearableTrailing: @Composable (() -> Unit)? =
-        if (enabled && !readOnly && value.isNotEmpty()) {
+        if (enabled && !readOnly && value.isNotEmpty() && isFocused) {
             {
                 Row {
                     trailingIcon?.invoke()
-                    // فضای ضربدر نصف شد (قبلاً IconButton ۲۸dp + آیکن ۱۶)
                     Box(
                         modifier = Modifier
-                            .size(18.dp)
+                            .size(16.dp)
                             .clickable { onValueChange("") },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Outlined.Close,
                             contentDescription = "پاک کردن",
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(11.dp)
                         )
                     }
                 }
@@ -114,6 +116,7 @@ fun AdelOutlinedTextField(
             }
         },
         modifier = modifier.onFocusChanged { st ->
+            isFocused = st.isFocused
             if (hadFocus && !st.isFocused && treatNumeric && value.isNotEmpty()) {
                 val eng = value.toEnglishDigits()
                 if (eng != value) onValueChange(eng)
@@ -127,6 +130,12 @@ fun AdelOutlinedTextField(
         placeholder = placeholder,
         leadingIcon = leadingIcon,
         trailingIcon = clearableTrailing,
+        contentPadding = PaddingValues(
+            start = 12.dp,
+            end = if (enabled && !readOnly && value.isNotEmpty() && isFocused) 4.dp else 12.dp,
+            top = 10.dp,
+            bottom = 10.dp
+        ),
         prefix = prefix,
         suffix = suffix,
         supportingText = supportingText,

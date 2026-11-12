@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.adel.assistant.data.CalendarStore
+import com.adel.assistant.data.DeepLinkHolder
 import com.adel.assistant.data.ProjectEntry
 import com.adel.assistant.data.ProjectStore
 import com.adel.assistant.data.toIntOrNullFa
@@ -61,9 +62,10 @@ fun WorkCalendarScreen(
     val context = LocalContext.current
     val numKb = KeyboardOptions(keyboardType = KeyboardType.Number)
     val today = remember { CalendarStore.todayJalali() }
-    var year by remember { mutableStateOf(today.first) }
-    var month by remember { mutableStateOf(today.second) }
-    var selectedDay by remember { mutableStateOf<Int?>(null) }
+    val deepCal = remember { DeepLinkHolder.consumeCalendarTarget() }
+    var year by remember { mutableStateOf(deepCal?.first ?: today.first) }
+    var month by remember { mutableStateOf(deepCal?.second ?: today.second) }
+    var selectedDay by remember { mutableStateOf<Int?>(deepCal?.third) }
     var dayProjects by remember { mutableStateOf(listOf<ProjectEntry>()) }
     var statusMsg by remember { mutableStateOf("") }
 
@@ -110,6 +112,14 @@ fun WorkCalendarScreen(
     fun selectDay(d: Int) {
         selectedDay = d
         dayProjects = ProjectStore.forDate(context, d.toString(), month.toString(), year.toString())
+    }
+    LaunchedEffect(Unit) {
+        val t = deepCal
+        if (t != null) {
+            year = t.first
+            month = t.second
+            selectDay(t.third)
+        }
     }
 
     Column(
