@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -130,12 +129,6 @@ fun AdelOutlinedTextField(
         placeholder = placeholder,
         leadingIcon = leadingIcon,
         trailingIcon = clearableTrailing,
-        contentPadding = PaddingValues(
-            start = 12.dp,
-            end = if (enabled && !readOnly && value.isNotEmpty() && isFocused) 4.dp else 12.dp,
-            top = 10.dp,
-            bottom = 10.dp
-        ),
         prefix = prefix,
         suffix = suffix,
         supportingText = supportingText,
