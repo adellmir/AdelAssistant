@@ -160,10 +160,7 @@ object XlsxReportWriter {
             val (value, isText) = pair
             // پشتیبانی از <c r="T4" s="34"/> و <c r="F4" s="28"><f>...</f><v>..</v></c>
             // و ترتیب متفاوت ویژگی‌ها
-            val cellRegex = Regex(
-                """<c([^>]*\br="$ref"[^>]*)(?:/>|>.*?</c>)""",
-                setOf(RegexOption.DOT_MATCHES, RegexOption.IGNORE_CASE)
-            )
+            val cellRegex = Regex("""<c([^>]*\br="$ref"[^>]*)(?:/>|>[\s\S]*?</c>)""", RegexOption.IGNORE_CASE)
             val match = cellRegex.find(result)
             val styleAttr = if (match != null) extractStyle(match.groupValues[1]) else ""
             val newCell = cellXml(ref, value, isText, styleAttr)
