@@ -253,8 +253,16 @@ object TunnelReportStore {
     }
 
     fun kmBefore(context: Context, shaft: String, side: String, dateKey: String): Double {
-        val key = "$shaft-${normalizeSide(side)}"
-        val latest = allEntries(context).filter { it.key == key && it.dateSortKey < dateKey }.maxByOrNull { it.dateSortKey }
+        val ns = normalizeSide(side)
+        val key = "$shaft-$ns"
+        val latest = allEntries(context)
+            .filter { e ->
+                val ek = e.key
+                val sameDir = ek == key ||
+                    (e.shaft.trim() == shaft.trim() && normalizeSide(e.side) == ns)
+                sameDir && e.dateSortKey.isNotBlank() && e.dateSortKey < dateKey
+            }
+            .maxByOrNull { it.dateSortKey }
         return latest?.km ?: shaftFixedKm(context, shaft) ?: 0.0
     }
 

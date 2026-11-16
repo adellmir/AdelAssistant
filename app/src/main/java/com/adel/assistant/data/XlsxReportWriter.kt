@@ -26,7 +26,8 @@ object XlsxReportWriter {
     fun generate(context: Context, year: String, month: String, day: String, weekday: String?): android.net.Uri? {
         val m = month.toIntOrNullFa() ?: 0
         val d = day.toIntOrNullFa() ?: 0
-        val todayKey = "%s%02d%02d".format(year, m, d)
+        // حتماً همان قالب dateSortKey (مثلاً 14050515) تا kmBefore درست کار کند
+        val todayKey = TunnelReportStore.dateKey(year, month, day)
 
         val cellUpdates = mutableMapOf<String, Pair<String, Boolean>>()
         cellUpdates["Q1"] = formatEn("%02d/%02d", m, d) to true
@@ -74,12 +75,9 @@ object XlsxReportWriter {
             if (todayEntry != null || row == 4 || row == 44 || row == 60) {
                 cellUpdates["J$row"] = formatEn("%.4f", jOut) to false
             }
-            // توضیحات → ستون T همان ردیف بخش
-            if (todayEntry != null) {
-                if (todayEntry.notes.isNotBlank()) {
-                    cellUpdates["T$row"] = todayEntry.notes.trim() to true
-                }
-                // اگر فقط notes روی entry جدا ذخیره شده
+            // توضیحات → ستون T همان ردیف (T4/T12/… طبق قالب)
+            if (todayEntry != null && todayEntry.notes.isNotBlank()) {
+                cellUpdates["T$row"] = todayEntry.notes.trim() to true
             }
             // انحراف → ردیف base+1 ستون‌های L..R (فیلد ۱..۷)
             // ریزش → ردیف base+3
@@ -143,27 +141,38 @@ object XlsxReportWriter {
         var result = xml
         fun cellXml(ref: String, value: String, isText: Boolean, styleAttr: String): String {
             return if (isText) {
-                val escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                """<c r="$ref"$styleAttr t="inlineStr"><is><t>$escaped</t></is></c>"""
+                val escaped = value
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                // inlineStr تا به sharedStrings وابسته نباشد
+                """<c r="$ref"$styleAttr t="inlineStr"><is><t xml:space="preserve">$escaped</t></is></c>"""
             } else {
                 """<c r="$ref"$styleAttr><v>$value</v></c>"""
             }
         }
+        fun extractStyle(attrs: String): String {
+            val m = Regex("""s="(\d+)"""").find(attrs)
+            return if (m != null) """ s="${m.groupValues[1]}"""" else ""
+        }
         updates.forEach { (ref, pair) ->
             val (value, isText) = pair
-            val cellRegex = Regex("""<c r="$ref"([^>]*)>.*?</c>""", RegexOption.DOT_MATCHES_ALL)
+            // پشتیبانی از <c r="T4" s="34"/> و <c r="F4" s="28"><f>...</f><v>..</v></c>
+            // و ترتیب متفاوت ویژگی‌ها
+            val cellRegex = Regex(
+                """<c([^>]*\br="$ref"[^>]*)(?:/>|>.*?</c>)""",
+                setOf(RegexOption.DOT_MATCHES, RegexOption.IGNORE_CASE)
+            )
             val match = cellRegex.find(result)
-            val styleAttr = match?.groupValues?.get(1)?.let { attrs ->
-                Regex("""s="(\d+)"""").find(attrs)?.value?.let { " $it" }
-            } ?: ""
+            val styleAttr = if (match != null) extractStyle(match.groupValues[1]) else ""
             val newCell = cellXml(ref, value, isText, styleAttr)
             if (match != null) {
                 result = result.replaceRange(match.range, newCell)
             } else {
-                // سلول در قالب نیست — در ردیف مربوطه درج کن (توضیحات T و فیلدهای ریزش/انحراف)
                 val rowNum = ref.filter { it.isDigit() }
                 if (rowNum.isNotEmpty()) {
-                    val rowOpen = Regex("""<row[^>]*r="$rowNum"[^>]*>""")
+                    val rowOpen = Regex("""<row[^>]*\br="$rowNum"[^>]*>""")
                     val mRow = rowOpen.find(result)
                     if (mRow != null) {
                         val insertAt = mRow.range.last + 1
