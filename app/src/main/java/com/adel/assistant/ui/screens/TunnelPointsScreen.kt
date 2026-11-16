@@ -1,5 +1,8 @@
 package com.adel.assistant.ui.screens
 
+import com.adel.assistant.data.PendingNavigate
+import com.adel.assistant.navigation.Routes
+
 import com.adel.assistant.ui.components.AdelOutlinedTextField
 
 import android.Manifest
@@ -54,7 +57,7 @@ import com.adel.assistant.ui.theme.Surface as SurfaceColor
 private val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
 
 @Composable
-fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
+fun TunnelPointsScreen(color: Color, onBack: () -> Unit, onNavigate: (String) -> Unit = {}) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
@@ -390,6 +393,18 @@ fun TunnelPointsScreen(color: Color, onBack: () -> Unit) {
                                 }
                         ) {
                             Text("Google Maps", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodySmall, color = color)
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = color.copy(alpha = 0.18f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    PendingNavigate.setUtm("نقطه ${p.pointNo}", p.x, p.y, 40)
+                                    onNavigate(Routes.TOOL_LOCATION)
+                                }
+                        ) {
+                            Text("جهت‌یابی", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodySmall, color = color)
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),

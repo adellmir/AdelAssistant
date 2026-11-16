@@ -1264,47 +1264,6 @@ LaunchedEffect(profileMode) {
     }
 
     Box(Modifier.fillMaxSize().background(Background)) {
-
-
-
-            // دکمه‌های چرخش چپ/راست — همیشه روی همه لایه‌ها (zIndex بالا)
-            if (rotationEnabled) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 10.dp)
-                        .zIndex(50f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xEE1B1B1B),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable {
-                                mapRotationDeg = (mapRotationDeg - 10f + 360f) % 360f
-                            }
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("↺", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xEE1B1B1B),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable {
-                                mapRotationDeg = (mapRotationDeg + 10f) % 360f
-                            }
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("↻", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
             // —— قطب‌نمای چرخش نقشه ——
             if (kotlin.math.abs(mapRotationDeg) > 0.5f) {
                 Surface(
@@ -1400,7 +1359,7 @@ LaunchedEffect(profileMode) {
                             val allowRotate = rotationEnabled && baseMap == BaseMap.NONE
                             if (allowRotate && kotlin.math.abs(rotation) > 1e-4f) {
                                 // سرعت ۲ برابر کندتر
-                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.14f) % 360f
+                                mapRotationDeg = (mapRotationDeg + Math.toDegrees(rotation.toDouble()).toFloat() * 0.10f) % 360f
                             }
                             val oldScale = scale
                             val newScale = (scale * zoom).coerceIn(0.000001f, 5000f)
@@ -2134,6 +2093,43 @@ if (zoomWindowMode) {
         }
 
         
+
+
+        // دکمه‌های چرخش — لایه بالا (بعد از Canvas تا زیر منو نمانند)
+        if (rotationEnabled) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 12.dp)
+                    .zIndex(80f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xF01A1A1A),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.size(52.dp).clickable {
+                        mapRotationDeg = (mapRotationDeg - 10f + 360f) % 360f
+                    }
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("↺ ۱۰°", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xF01A1A1A),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.size(52.dp).clickable {
+                        mapRotationDeg = (mapRotationDeg + 10f) % 360f
+                    }
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("↻ ۱۰°", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
 
         // ——— منوی شیشه‌ای ۹ ستونه + زیرمنوی عمود ———
         val glass = Color(0x66FFFFFF)

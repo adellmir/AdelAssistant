@@ -52,6 +52,7 @@ import com.adel.assistant.data.LocationStore
 import com.adel.assistant.data.PointConverter
 import com.adel.assistant.data.SurveyPoint
 import com.adel.assistant.data.UtmGeo
+import com.adel.assistant.data.PendingNavigate
 import com.adel.assistant.data.LiveLocationStore
 import com.adel.assistant.data.CoordGoto
 import com.adel.assistant.data.PendingMapGoto
@@ -90,6 +91,16 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
     var status by remember { mutableStateOf("") }
     var gotoCoordLine by remember { mutableStateOf("") }
     var gotoZoneText by remember { mutableStateOf("40") }
+    // —— جهت‌یابی ——
+    var navMode by remember { mutableStateOf(false) }
+    var navLabel by remember { mutableStateOf("") }
+    var navLat by remember { mutableStateOf<Double?>(null) }
+    var navLon by remember { mutableStateOf<Double?>(null) }
+    var navCoordInput by remember { mutableStateOf("") }
+    var navZoneInput by remember { mutableStateOf("40") }
+    var navShowMap by remember { mutableStateOf(false) }
+    var navDistM by remember { mutableStateOf<Double?>(null) }
+    var navBearing by remember { mutableStateOf<Double?>(null) }
     var geoidNText by remember { mutableStateOf(GeoidHeight.IRAN_DEFAULT_N.toString()) }
     val compassHeading = rememberCompassHeading()
     var zoneText by remember { mutableStateOf(UtmGeo.DEFAULT_ZONE.toString()) }
@@ -133,6 +144,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasPermission = granted }
 
+
     fun zone(): Int = zoneText.toIntOrNull() ?: UtmGeo.DEFAULT_ZONE
 
     fun persist(list: List<LocationPoint>) {
@@ -165,6 +177,51 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         return best
     }
 
+    LaunchedEffect(Unit) {
+        if (PendingNavigate.active) {
+            navMode = true
+            navLabel = PendingNavigate.targetLabel
+            navLat = PendingNavigate.lat
+            navLon = PendingNavigate.lon
+            if (PendingNavigate.easting != null && PendingNavigate.northing != null) {
+                navCoordInput = String.format(java.util.Locale.US, "%.3f %.3f", PendingNavigate.easting, PendingNavigate.northing)
+                navZoneInput = PendingNavigate.zone.toString()
+            } else if (PendingNavigate.lat != null && PendingNavigate.lon != null) {
+                navCoordInput = String.format(java.util.Locale.US, "%.8f %.8f", PendingNavigate.lat, PendingNavigate.lon)
+            }
+            PendingNavigate.clear()
+        }
+    }
+    LaunchedEffect(navMode, navLat, navLon) {
+        while (navMode) {
+            try {
+                if (LiveLocationStore.hasFix) {
+                    liveLat = LiveLocationStore.lat
+                    liveLon = LiveLocationStore.lon
+                    liveAlt = LiveLocationStore.alt
+                    liveAcc = LiveLocationStore.accuracy
+                } else {
+                    val b = readBestLocation()
+                    if (b != null) {
+                        liveLat = b.latitude
+                        liveLon = b.longitude
+                        liveAlt = b.altitude
+                        liveAcc = b.accuracy
+                    }
+                }
+            } catch (_: Exception) {}
+            val tLat = navLat
+            val tLon = navLon
+            val cLat = liveLat
+            val cLon = liveLon
+            if (tLat != null && tLon != null && cLat != null && cLon != null) {
+                val pair = LocationStore.distanceAndAzimuth(cLat, cLon, tLat, tLon)
+                navDistM = pair.first
+                navBearing = pair.second
+            }
+            kotlinx.coroutines.delay(500)
+        }
+    }
     fun updateLiveFrom(loc: Location) {
         liveLat = loc.latitude
         liveLon = loc.longitude
@@ -195,7 +252,7 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
         }
         try {
             for (p in lm.getProviders(true)) {
-                lm.requestLocationUpdates(p, 5_000L, 0f, listener, Looper.getMainLooper())
+                lm.requestLocationUpdates(p, 500L, 0f, listener, Looper.getMainLooper())
                 LiveLocationStore.ensure(context)
             }
             readBestLocation()?.let { updateLiveFrom(it) }
@@ -575,6 +632,123 @@ fun LocationScreen(color: Color, onBack: () -> Unit) {
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(if (averaging) "…${avgSamples.size}" else "میانگین‌گیری")
+                        }
+                    }
+                }
+            }
+
+            // —— جهت‌یابی پیشرفته ——
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = appearanceCardColor(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("جهت‌یابی", fontWeight = FontWeight.Bold, color = appearanceTextPrimary(), modifier = Modifier.weight(1f))
+                        Switch(checked = navMode, onCheckedChange = { navMode = it })
+                    }
+                    if (navMode) {
+                        if (navLabel.isNotBlank()) {
+                            Text("هدف: $navLabel", color = color, fontSize = 13.sp)
+                        }
+                        AdelOutlinedTextField(
+                            navCoordInput, { navCoordInput = it },
+                            label = { Text("مختصات هدف (lat,lon یا E N)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AdelOutlinedTextField(
+                                navZoneInput, { navZoneInput = it.filter { ch -> ch.isDigit() }.take(2) },
+                                label = { Text("زون UTM") },
+                                modifier = Modifier.width(100.dp),
+                                singleLine = true,
+                                keyboardOptions = numKb
+                            )
+                            Text("پیش‌فرض ۴۰ شمالی", fontSize = 11.sp, color = appearanceTextSecondary())
+                            Button(
+                                onClick = {
+                                    val line = navCoordInput.trim()
+                                    val parts = line.replace(',', ' ').split(Regex("\\s+")).filter { it.isNotBlank() }
+                                    if (parts.size >= 2) {
+                                        val a = parts[0].toDoubleOrNullFa()
+                                        val b = parts[1].toDoubleOrNullFa()
+                                        if (a != null && b != null) {
+                                            // تشخیص UTM در برابر lat/lon
+                                            if (kotlin.math.abs(a) <= 90 && kotlin.math.abs(b) <= 180) {
+                                                navLat = a; navLon = b
+                                                navLabel = navLabel.ifBlank { "هدف" }
+                                            } else {
+                                                val z = navZoneInput.toIntOrNull() ?: 40
+                                                try {
+                                                    val ll = UtmGeo.toLatLon(a, b, z)
+                                                    navLat = ll.first; navLon = ll.second
+                                                    navLabel = navLabel.ifBlank { "هدف UTM" }
+                                                } catch (_: Exception) {
+                                                    status = "تبدیل UTM ناموفق"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = color)
+                            ) { Text("ثبت هدف") }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = navShowMap, onCheckedChange = { navShowMap = it })
+                            Text("نمایش هدف روی نقشه/ماهواره", fontSize = 12.sp, color = appearanceTextPrimary())
+                        }
+                        val hdg = compassHeading.value.toDouble()
+                        val brg = navBearing
+                        val dist = navDistM
+                        if (brg != null && dist != null) {
+                            val turn = com.adel.assistant.data.CompassMath.turnToTarget(hdg, brg)
+                            CompassDial(
+                                headingDeg = compassHeading.value,
+                                targetBearingDeg = brg.toFloat(),
+                                size = 120.dp,
+                                accent = color
+                            )
+                            Text(
+                                when {
+                                    dist < 1 -> String.format(java.util.Locale.US, "رسیدید — %.0f cm", dist * 100)
+                                    dist < 1000 -> String.format(java.util.Locale.US, "فاصله: %.1f m", dist)
+                                    else -> String.format(java.util.Locale.US, "فاصله: %.2f km", dist / 1000)
+                                },
+                                color = appearanceTextPrimary(),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                when {
+                                    kotlin.math.abs(turn) < 8 -> "رو به هدف"
+                                    turn > 0 -> String.format(java.util.Locale.US, "%.0f° به راست", turn)
+                                    else -> String.format(java.util.Locale.US, "%.0f° به چپ", -turn)
+                                },
+                                color = color,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                String.format(java.util.Locale.US, "آزیموت هدف: %.0f°  |  جهت فعلی: %.0f°", brg, hdg),
+                                fontSize = 11.sp, color = appearanceTextSecondary()
+                            )
+                        } else {
+                            Text("GPS و مختصات هدف را مشخص کنید", fontSize = 12.sp, color = appearanceTextSecondary())
+                        }
+                        if (navShowMap && navLat != null && navLon != null) {
+                            TextButton(onClick = {
+                                try {
+                                    val uri = android.net.Uri.parse(
+                                        String.format(java.util.Locale.US, "geo:%.6f,%.6f?q=%.6f,%.6f(%s)",
+                                            navLat, navLon, navLat, navLon,
+                                            java.net.URLEncoder.encode(navLabel.ifBlank { "هدف" }, "UTF-8"))
+                                    )
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+                                } catch (_: Exception) {
+                                    status = "نقشه باز نشد"
+                                }
+                            }) { Text("باز کردن در نقشه/ماهواره", color = color) }
                         }
                     }
                 }

@@ -431,8 +431,20 @@ object TunnelReportStore {
         km: Double,
         pointNo: String
     ): String? {
-        // اعلان ۳ متر مانده/گذشته از نقطه کددار — در صورت وجود
-        return null
+        if (km.isNaN()) return null
+        val s = normalizeSide(side)
+        // جهت کمتر: start یا شفت به سمت عدد کمتر
+        val towardLess = s == "start" || s.endsWith("less") ||
+            (s.contains("به") && s.contains("کم")) ||
+            s == "1" || s.endsWith("to1")
+        // اگر side مثل "2" و shaft "3" به سمت شفت کمتر باشد از نام side هم حدس بزن
+        val towardLess2 = when {
+            s == "start" || s == "end" -> s == "start"
+            s.toIntOrNull() != null && shaft.toIntOrNull() != null ->
+                (s.toIntOrNull() ?: 0) < (shaft.toIntOrNull() ?: 0)
+            else -> towardLess
+        }
+        return specialPointProximityAlert(context, km, towardLess = towardLess2, windowMeters = 3.0)
     }
 
     fun dailyProgressWarning(progressMeters: Double): String? = when {
@@ -608,8 +620,9 @@ object TunnelReportStore {
         val lengthM = lengthCm / 100.0
         val seg = kotlin.math.abs(neighbor.km - cur.km).coerceAtLeast(1e-9)
         val t = (lengthM / seg).coerceIn(0.0, 1.0)
-        val zInterp = cur.z + (neighbor.z - cur.z) * t
-        return (zInterp - cur.z) + 1.45
+        // نقطه اول/دوم بر اساس جهت: اختلاف تراز درون‌یابی + ۱٫۴۵
+        val dz = (neighbor.z - cur.z) * t
+        return dz + 1.45
     }
 
 

@@ -81,6 +81,7 @@ import com.adel.assistant.data.toDoubleOrNullFa
 import com.adel.assistant.ui.ScreenTopBar
 import com.adel.assistant.ui.PendingTunnelLookup
 import com.adel.assistant.navigation.Routes
+import com.adel.assistant.data.PendingNavigate
 import com.adel.assistant.ui.theme.Background
 import com.adel.assistant.ui.theme.Surface as SurfaceColor
 import com.adel.assistant.ui.theme.TextPrimary
@@ -1564,6 +1565,11 @@ fun TunnelExcavationMapScreen(color: Color, onBack: () -> Unit, onNavigate: (Str
                                 context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(neshan)))
                             } catch (_: Exception) {}
                         }) { Text("مسیریاب نشان", color = color) }
+                        TextButton(onClick = {
+                            PendingNavigate.setUtm("نقطه ${p.pointNo}", p.x, p.y, 40)
+                            infoTunnelPt = null
+                            onNavigate(Routes.TOOL_LOCATION)
+                        }) { Text("جهت‌یابی", color = color) }
                     }
                 }
             },

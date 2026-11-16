@@ -89,7 +89,7 @@ fun AppNavigation() {
             ChainageScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
         }
         composable(Routes.SURVEY_TUNNEL_EVENTS) {
-            TunnelPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
+            TunnelPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() }, onNavigate = { navController.navigate(it) })
         }
         composable(Routes.SURVEY_TUNNEL_EXCAVATION) {
             ExcavationPointsScreen(color = WorkPrimary, onBack = { navController.popBackStack() })
